@@ -2,11 +2,13 @@
 
 use apu::Apu;
 use cpu::{Cpu, AddressSpace};
+use ppu::Ppu;
 use rom::Rom;
 
 /// Contains everything connected to the CPU via one of the two address buses.
 struct Memory {
     apu: Apu,
+    ppu: Ppu,
     rom: Rom,
 }
 
@@ -19,6 +21,10 @@ impl AddressSpace for Memory {
         if bank == 0 {
             // FIXME are internal regs only in bank 0?
             match addr {
+                0x2100 ... 0x213f => {
+                    // PPU registers. Let it deal with the access.
+                    self.ppu.store(bank, addr, value)
+                }
                 0x2140 ... 0x217f => {
                     // APU IO registers. The APU has 4 IO regs which are mirrored.
                     // 2140 => f4
@@ -66,6 +72,7 @@ impl Snes {
             cpu: Cpu::new(Memory {
                 rom: rom,
                 apu: Apu::new(),
+                ppu: Ppu::new(),
             }),
         }
     }

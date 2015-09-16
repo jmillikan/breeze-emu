@@ -162,6 +162,10 @@ impl Rom {
                 // Cartridge RAM mapped to the low 8 pages
                 // (there's other stuff here, but that's handled much earlier than we are called)
                 match bank {
+                    0x00 ... 0x3f | 0x7e => {
+                        // First two pages of WRAM
+                        &mut self.ram[addr as usize]
+                    }
                     0x70 ... 0x7d => {
                         let a = bank as u32 * 0x8000 + addr as u32;
                         &mut self.ram[a as usize]
@@ -173,7 +177,7 @@ impl Rom {
                         &mut self.ram[start + a as usize]
                     }
                     _ => {
-                        // 0x00 ... 0x6f | 0x7e ... 0xfd
+                        // 0x40 ... 0x6f | 0x7e ... 0xfd
                         panic!("attempted to access unmapped address: {:02X}:{:04X}", bank, addr);
                     }
                 }
