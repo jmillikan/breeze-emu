@@ -181,11 +181,11 @@ impl Rom {
                 // LoROM is mapped to the higher 8 pages
                 0xfe => {
                     let a = addr as u32 - 0x8000;
-                    &mut self.rom[0x3f0000 + addr as usize]
+                    &mut self.rom[0x3f0000 + a as usize]
                 }
                 0xff => {
                     let a = addr as u32 - 0x8000;
-                    &mut self.rom[0x3f8000 + addr as usize]
+                    &mut self.rom[0x3f8000 + a as usize]
                 }
                 _ => {
                     // `% 0x80` because 0x80-0xFD mirrors 0x00-0x7D
