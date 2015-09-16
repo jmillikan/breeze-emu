@@ -188,8 +188,8 @@ impl Rom {
                     &mut self.rom[0x3f8000 + a as usize]
                 }
                 _ => {
-                    // `% 0x80` because 0x80-0xFD mirrors 0x00-0x7D
-                    let a = (bank as u32 % 0x80) * 0x8000 + addr as u32 - 0x8000;
+                    // `& !0x80` because 0x80-0xFD mirrors 0x00-0x7D
+                    let a = (bank as u32 & !0x80) * 0x8000 + addr as u32 - 0x8000;
                     &mut self.rom[a as usize]
                 }
             },
