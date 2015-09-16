@@ -38,6 +38,8 @@ impl StatusReg {
     fn zero(&self) -> bool { self.0 & ZERO_FLAG != 0}
     fn carry(&self) -> bool { self.0 & CARRY_FLAG != 0 }
     fn irq_disable(&self) -> bool { self.0 & IRQ_FLAG != 0 }
+    fn small_acc(&self) -> bool { self.0 & SMALL_ACC_FLAG != 0 }
+    fn small_index(&self) -> bool { self.0 & SMALL_INDEX_FLAG != 0 }
 
     fn set(&mut self, flag: u8, value: bool) {
         if value {
@@ -84,6 +86,7 @@ pub struct Cpu<T: AddressSpace> {
     /// banks (without manual bank switching).
     pc: U16,
     p: StatusReg,
+    emulation: bool,
 
     mem: T,
 }
@@ -112,6 +115,7 @@ impl<T: AddressSpace> Cpu<T> {
             pc: W(pc),
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg(SMALL_ACC_FLAG | SMALL_INDEX_FLAG | IRQ_FLAG),
+            emulation: true,
 
             mem: mem,
         }
@@ -160,7 +164,9 @@ impl<T: AddressSpace> Cpu<T> {
 
             match op {
                 0x78 => instr!(sei),
-                0x9C => instr!(stz absolute),
+                0x8d => instr!(sta absolute),
+                0x9c => instr!(stz absolute),
+                0xa9 => instr!(lda immediate),
                 _ => panic!("illegal opcode: {:02X}", op),
             }
         }
@@ -169,24 +175,47 @@ impl<T: AddressSpace> Cpu<T> {
 
 enum AddressingMode {
     Absolute(u16),
+    Immediate(u16), // only stores a u8 when in emulation mode
 }
 
 impl AddressingMode {
     /// Loads a byte from where this AM points to (or returns the immediate value)
     fn loadb<T: AddressSpace>(&self, cpu: &mut Cpu<T>) -> u8 {
         match *self {
-            AddressingMode::Absolute(addr) => {
-                cpu.mem.load(cpu.dbr.0, addr)
+            AddressingMode::Immediate(val) => val as u8,
+            _ => {
+                let (bank, addr) = self.address(cpu);
+                cpu.mem.load(bank, addr)
+            }
+        }
+    }
+
+    fn loadw<T: AddressSpace>(&self, cpu: &mut Cpu<T>) -> u16 {
+        match *self {
+            AddressingMode::Immediate(val) => val,
+            _ => {
+                let (bank, addr) = self.address(cpu);
+                assert!(addr < 0xffff, "loadw on bank boundary");
+
+                let lo = cpu.mem.load(bank, addr) as u16;
+                let hi = cpu.mem.load(bank, addr + 1) as u16;
+
+                (hi << 8) | lo
             }
         }
     }
 
     fn storeb<T: AddressSpace>(&self, cpu: &mut Cpu<T>, value: u8) {
-        match *self {
-            AddressingMode::Absolute(addr) => {
-                cpu.mem.store(cpu.dbr.0, addr, value)
-            }
-        }
+        let (bank, addr) = self.address(cpu);
+        cpu.mem.store(bank, addr, value);
+    }
+
+    fn storew<T: AddressSpace>(&self, cpu: &mut Cpu<T>, value: u16) {
+        let (bank, addr) = self.address(cpu);
+        assert!(addr < 0xffff, "loadw on bank boundary");
+
+        cpu.mem.store(bank, addr, value as u8);
+        cpu.mem.store(bank, addr, (value >> 8) as u8);
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
@@ -196,14 +225,20 @@ impl AddressingMode {
             AddressingMode::Absolute(addr) => {
                 (cpu.dbr.0, addr)
             }
+            AddressingMode::Immediate(_) =>
+                panic!("attempted to take the address of an immediate value (attempted store to \
+                    immediate?)")
         }
     }
 
     fn format<T: AddressSpace>(&self, cpu: &Cpu<T>) -> String {
         match *self {
-            AddressingMode::Absolute(addr) => {
-                format!("${:04X}", addr)
-            }
+            AddressingMode::Absolute(addr) => format!("${:04X}", addr),
+            AddressingMode::Immediate(val) => if cpu.emulation {
+                format!("#${:02X}", val)
+            } else {
+                format!("#${:04X}", val)
+            },
         }
     }
 }
@@ -213,6 +248,14 @@ impl<T: AddressSpace> Cpu<T> {
     fn absolute(&mut self) -> AddressingMode {
         let addr = self.fetchw();
         AddressingMode::Absolute(addr)
+    }
+    fn immediate(&mut self) -> AddressingMode {
+        let value = if self.emulation {
+            self.fetchb() as u16
+        } else {
+            self.fetchw()
+        };
+        AddressingMode::Immediate(value)
     }
 }
 
@@ -224,5 +267,19 @@ impl<T: AddressSpace> Cpu<T> {
 
     fn stz(&mut self, am: AddressingMode) {
         am.storeb(self, 0);
+    }
+
+    fn lda(&mut self, am: AddressingMode) {
+        self.a = W(am.loadw(self));
+    }
+
+    fn sta(&mut self, am: AddressingMode) {
+        if self.p.small_acc() {
+            let b = self.a.0 as u8;
+            am.storeb(self, b);
+        } else {
+            let w = self.a.0;
+            am.storew(self, w);
+        }
     }
 }

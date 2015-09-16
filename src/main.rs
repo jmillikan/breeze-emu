@@ -6,11 +6,13 @@ extern crate env_logger;
 use std::fs::File;
 use std::io::Read;
 
-use cpu::Cpu;
 use rom::Rom;
+use snes::Snes;
 
+mod apu;
 mod cpu;
 mod rom;
+mod snes;
 
 fn main() {
     env_logger::init().unwrap();
@@ -22,6 +24,6 @@ fn main() {
 
     let rom = Rom::load(&buf).unwrap();
 
-    let mut cpu = Cpu::new(rom);
-    cpu.run();
+    let mut snes = Snes::new(rom);
+    snes.run();
 }

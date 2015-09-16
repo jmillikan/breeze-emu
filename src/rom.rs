@@ -173,6 +173,7 @@ impl Rom {
                         &mut self.ram[start + a as usize]
                     }
                     _ => {
+                        // 0x00 ... 0x6f | 0x7e ... 0xfd
                         panic!("attempted to access unmapped address: {:02X}:{:04X}", bank, addr);
                     }
                 }
