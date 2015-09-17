@@ -171,16 +171,19 @@ impl Spc700 {
         let op = self.fetchb();
         match op {
             0x1d => instr!(dec_x "dec x"),
+            0x2f => instr!(bra "bra {}" rel),
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
+            0xba => instr!(movw_l "movw ya, {}" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
             0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
             0xcd => instr!(movx "mov x, {}" immediate),
             0xd0 => instr!(bne "bne {}" rel),
+            0xda => instr!(movw_s "movw {}, ya" direct),
             0xe8 => instr!(mova "mov a, {}" immediate),
             _ => {
                 instr!(ill "ill");
-                panic!("illegal opcode: {:02X}", op);
+                panic!("illegal APU opcode: {:02X}", op);
             }
         }
     }
@@ -188,6 +191,21 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    /// movw-load. Fetches a word from the addressing mode and puts it into Y and A
+    fn movw_l(&mut self, am: AddressingMode) {
+        let (lo, hi) = am.loadw(self);
+        self.y = lo;
+        self.a = hi;
+        self.psw.set_nz(hi);
+    }
+
+    /// movw-store. Stores Y/A at the given word address.
+    fn movw_s(&mut self, am: AddressingMode) {
+        let y = self.y;
+        let a = self.a;
+        am.storew(self, (y, a));
+    }
+
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // FIXME check if the order is correct
         let a = a.loadb(self);
@@ -196,6 +214,11 @@ impl Spc700 {
         let diff = a.wrapping_sub(b);
         self.psw.set_nz(diff);
         self.psw.set_carry(diff & 0x80 != 0);
+    }
+
+    fn bra(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        self.pc = a;
     }
 
     fn bne(&mut self, am: AddressingMode) {
@@ -256,9 +279,23 @@ impl AddressingMode {
         }
     }
 
+    /// Loads a word. Returns low and high byte.
+    fn loadw(self, spc: &mut Spc700) -> (u8, u8) {
+        let a = self.address(spc);
+        let lo = spc.load(a);
+        let hi = spc.load((a & 0xff00) | (a as u8 + 1) as u16); // wrap low byte XXX
+        (lo, hi)
+    }
+
     fn storeb(self, spc: &mut Spc700, value: u8) {
         let a = self.address(spc);
         spc.store(a, value);
+    }
+
+    fn storew(self, spc: &mut Spc700, (lo, hi): (u8, u8)) {
+        let a = self.address(spc);
+        spc.store(a, lo);
+        spc.store((a & 0xff00) | (a as u8 + 1) as u16, hi); // wrap low byte XXX
     }
 
     fn address(&self, spc: &Spc700) -> u16 {
@@ -347,7 +384,7 @@ const IPL_ROM: [u8; 64] = [
     0x10, 0xeb,         // bpl $0bb5
 
     // Load reg 2 ($f6) into y and reg 3 ($f7) into a
-    0xba, 0xf6,         // movw ya, $f6      :lbl0
+    0xba, 0xf6,         // movw ya, $f6     :lbl0
     // Write Y and A in memory at $00 and $01
     0xda, 0x00,         // movw $00, ya
     // Load reg 0 ($f4) into y, reg 1 ($f5) into a
