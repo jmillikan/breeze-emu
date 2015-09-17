@@ -124,6 +124,12 @@ impl Spc700 {
         self.load(pc)
     }
 
+    fn fetchw(&mut self) -> u16 {
+        let lo = self.fetchb() as u16;
+        let hi = self.fetchb() as u16;
+        (hi << 8) | lo
+    }
+
     fn trace_op(&self, pc: u16, opstr: &str) {
         trace!("{:04X}     {:14} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
@@ -171,17 +177,20 @@ impl Spc700 {
         let op = self.fetchb();
         match op {
             0x1d => instr!(dec_x "dec x"),
+            0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
-            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0x5d => instr!(mov_x_a "mov x, y"),
+            0x78 => instr!(cmp "cmp {}, {}" immediate direct),
             0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
             0xc4 => instr!(mov_lda "mov a, {}" direct),
             0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
-            0xcd => instr!(movx "mov x, {}" immediate),
+            0xcd => instr!(mov_ldx "mov x, {}" immediate),
             0xd0 => instr!(bne "bne {}" rel),
             0xda => instr!(movw_s "movw {}, ya" direct),
-            0xe8 => instr!(mova "mov a, {}" immediate),
+            0xdd => instr!(mov_a_y "mov a, y"),
+            0xe8 => instr!(mov_lda "mov a, {}" immediate),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal APU opcode: {:02X}", op);
@@ -202,6 +211,7 @@ impl Spc700 {
 
     /// movw-store. Stores Y/A at the given word address.
     fn movw_s(&mut self, am: AddressingMode) {
+        // No flags modified
         let y = self.y;
         let a = self.a;
         am.storew(self, (y, a));
@@ -233,32 +243,38 @@ impl Spc700 {
         self.x = self.psw.set_nz(self.x.wrapping_sub(1));
     }
 
-    /// Store a value
+    /// Copy a value (except registers)
     fn mov_sti(&mut self, src: AddressingMode, dest: AddressingMode) {
-        // NB: No NZ flag
+        // No flags modified
         let val = src.loadb(self);
         dest.storeb(self, val);
     }
     /// Load A (`mov a, {X}`)
     fn mov_lda(&mut self, am: AddressingMode) {
         let val = am.loadb(self);
-        self.a = val;
+        self.a = self.psw.set_nz(val);
+    }
+    /// Load x (`mov x, {X}`)
+    fn mov_ldx(&mut self, am: AddressingMode) {
+        let val = am.loadb(self);
+        self.x = self.psw.set_nz(val);
     }
     /// Store A wherever (`mov {X}, a`)
     fn mov_sta(&mut self, am: AddressingMode) {
+        // No flags modified
         let a = self.a;
+        debug!("STORE {:02X}", a);
         am.storeb(self, a);
     }
+    fn mov_a_y(&mut self) {
+        self.a = self.psw.set_nz(self.y);
+    }
+    fn mov_x_a(&mut self) {
+        self.x = self.psw.set_nz(self.a);
+    }
     fn mov_sp_x(&mut self) {
+        // No flags modified
         self.sp = self.x;
-    }
-    fn mova(&mut self, am: AddressingMode) {
-        let val = am.loadb(self);
-        self.a = self.psw.set_nz(val);
-    }
-    fn movx(&mut self, am: AddressingMode) {
-        let val = am.loadb(self);
-        self.x = self.psw.set_nz(val);
     }
     fn ill(&mut self) {}
 }
@@ -269,6 +285,8 @@ enum AddressingMode {
     Direct(u8),
     /// Where X points to (in page 0, $00 - $ff)
     IndirectX,
+    /// Absolute address + X (`[$abcd+X]`)
+    AbsoluteX(u16),
     Immediate(u8),
     /// Used for branch instructions
     Rel(i8),
@@ -317,7 +335,12 @@ impl AddressingMode {
             AddressingMode::IndirectX => {
                 spc.x as u16
             }
+            AddressingMode::AbsoluteX(abs) => {
+                // XXX wrapping?
+                abs + spc.x as u16
+            }
             AddressingMode::Rel(rel) => {
+                // FIXME wrapping is wrong here!
                 (spc.pc as i32 + rel as i32) as u16
             }
         }
@@ -327,6 +350,7 @@ impl AddressingMode {
         match *self {
             AddressingMode::Direct(offset) => format!("${:02X}", offset),
             AddressingMode::IndirectX => format!("(X)"),
+            AddressingMode::AbsoluteX(abs) => format!("[${:04X}+X]", abs),
             AddressingMode::Immediate(val) => format!("#${:02X}", val),
             AddressingMode::Rel(rel) => format!("{:+}", rel),
         }
@@ -340,6 +364,9 @@ impl Spc700 {
     }
     fn indirect_x(&mut self) -> AddressingMode {
         AddressingMode::IndirectX
+    }
+    fn absolute_x(&mut self) -> AddressingMode {
+        AddressingMode::AbsoluteX(self.fetchw())
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
@@ -367,10 +394,10 @@ const IPL_ROM: [u8; 64] = [
     0x8f, 0xbb, 0xf5,   // FFCC  mov $f5, #$bb
 
     // Wait until $cc is written to port 0 (reg $f4)
-    0x78, 0xcc, 0xf4,   // FFCF  cmp #$cc, #$f4   :wait_start
+    0x78, 0xcc, 0xf4,   // FFCF  cmp $f4, #$cc    :wait_start
     0xd0, 0xfb,         // FFD2  bne $ffcf        -> wait_start
 
-    0x2f, 0x19,         // FFD4  bra $ffef        -> lbl0
+    0x2f, 0x19,         // FFD4  bra $ffef        -> start
     //---------------
 
     // Wait until a non-zero value is in reg 0
@@ -390,7 +417,7 @@ const IPL_ROM: [u8; 64] = [
     0x10, 0xeb,         // FFED  bpl $ffda        -> loop
 
     // Load reg 2 ($f6) into y and reg 3 ($f7) into a
-    0xba, 0xf6,         // FFEF  movw ya, $f6     :lbl0
+    0xba, 0xf6,         // FFEF  movw ya, $f6     :start
     // Write Y and A in memory at $00 and $01
     0xda, 0x00,         // FFF1  movw $00, ya
     // Load reg 0 ($f4) into y, reg 1 ($f5) into a

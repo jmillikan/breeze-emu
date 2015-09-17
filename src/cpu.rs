@@ -255,10 +255,13 @@ impl<T: AddressSpace> Cpu<T> {
             0x18 => instr!(clc),
             0x1b => instr!(tcs),
             0x20 => instr!(jsr absolute),
+            0x28 => instr!(plp),
             0x2a => instr!(rol_a),
             0x2f => instr!(and absolute_long),
             0x48 => instr!(pha),
+            0x58 => instr!(cli),
             0x5b => instr!(tcd),
+            0x60 => instr!(rti),
             0x68 => instr!(pla),
             0x69 => instr!(adc immediate_acc),
             0x70 => instr!(bvs rel),
@@ -313,6 +316,12 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// Pull Processor Status Register
+    fn plp(&mut self) {
+        let p = self.popb();
+        self.p.0 = p;
+    }
+
     /// AND Accumulator with Memory (or immediate)
     fn and(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
@@ -475,6 +484,15 @@ impl<T: AddressSpace> Cpu<T> {
         self.pushb(p);
     }
 
+    /// Return from Subroutine
+    fn rti(&mut self) {
+        let pcl = self.popb() as u16;
+        let pch = self.popb() as u16;
+        let pbr = self.popb();
+        self.pbr = pbr;
+        self.pc = (pch << 8) | pcl;
+    }
+
     /// Jump to Subroutine
     fn jsr(&mut self, am: AddressingMode) {
         // Changes no flags
@@ -489,6 +507,11 @@ impl<T: AddressSpace> Cpu<T> {
 
         // JSR can't immediate. Absolute is handled by storing the address, not the value, in PC.
         self.pc = am.address(self).1;
+    }
+
+    /// Clear Interrupt Disable Flag (Enable IRQs)
+    fn cli(&mut self) {
+        self.p.set_irq_disable(false);
     }
 
     /// Disable IRQs
