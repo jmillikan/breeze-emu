@@ -218,8 +218,10 @@ impl<T: AddressSpace> Cpu<T> {
             0x9c => instr!(stz absolute),
             0xa0 => instr!(ldy immediate_index),
             0xa9 => instr!(lda immediate_acc),
+            0xaa => instr!(tax),
             0xb7 => instr!(lda indirect_long_idx),
             0xc2 => instr!(rep immediate8),
+            0xc8 => instr!(iny),
             0xcd => instr!(cmp absolute),
             0xd0 => instr!(bne rel),
             0xe2 => instr!(sep immediate8),
@@ -259,6 +261,31 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// Transfer Accumulator to Index Register X
+    fn tax(&mut self) {
+        let a = if self.p.small_acc() {
+            self.a & 0xff
+        } else {
+            self.a
+        };
+
+        if self.p.small_index() {
+            self.x = (self.x & 0xff00) | a;
+        } else {
+            self.x = a;
+        }
+    }
+
+    /// Increment Index Register Y
+    fn iny(&mut self) {
+        if self.p.small_index() {
+            self.y = (self.y & 0xff00) | (self.y as u8).wrapping_add(1) as u16;
+        } else {
+            self.y = self.p.set_nz(self.y.wrapping_add(1));
+        }
+    }
+
+    /// Push A on the stack
     fn pha(&mut self) {
         if self.p.small_acc() {
             let a = self.a as u8;
