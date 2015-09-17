@@ -233,8 +233,28 @@ impl<T: AddressSpace> Cpu<T> {
         );
     }
 
-    /// FIXME Temporary function to test the CPU emulation
-    pub fn dispatch(&mut self) {
+    /// Executes a single opcode and returns the number of master clock cycles spent doing that.
+    pub fn dispatch(&mut self) -> u8 {
+        // CPU cycles each opcode takes (not actually that simple)
+        static CYCLE_TABLE: [u8; 256] = [
+            7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
+            2,5,5,7,5,4,6,6, 2,4,2,2,6,4,7,5,   // $10 - $1f
+            6,6,8,4,3,3,5,6, 4,2,2,5,4,4,6,5,   // $20 - $2f
+            2,5,5,7,4,4,6,6, 2,4,2,2,4,4,7,5,   // $30 - $3f
+            7,6,2,4,7,3,5,6, 3,2,2,3,3,4,6,5,   // $40 - $4f
+            2,5,5,7,7,4,6,6, 2,4,3,2,4,4,7,5,   // $50 - $5f
+            7,6,6,4,3,3,5,6, 4,2,2,6,5,4,6,5,   // $60 - $6f
+            2,5,5,7,4,4,6,6, 2,4,4,2,6,2,7,5,   // $70 - $7f
+            2,6,3,4,3,3,3,2, 2,2,2,3,4,4,4,5,   // $80 - $8f
+            2,6,5,7,4,4,4,6, 2,5,2,2,3,5,5,5,   // $90 - $9f
+            2,6,2,4,3,3,3,6, 2,2,2,4,4,4,4,5,   // $a0 - $af
+            2,5,5,7,4,4,4,6, 2,4,2,2,4,4,4,5,   // $b0 - $bf
+            2,6,3,4,3,3,5,6, 2,2,2,3,4,4,6,5,   // $c0 - $cf
+            2,5,5,7,6,4,6,6, 2,4,3,3,6,4,7,5,   // $d0 - $df
+            2,6,3,4,3,3,5,6, 2,2,2,3,4,4,6,5,   // $e0 - $ef
+            2,5,5,7,5,4,6,6, 2,4,4,2,6,4,7,5,   // $f0 - $ff
+        ];
+
         let pc = self.pc;
 
         macro_rules! instr {
@@ -286,6 +306,9 @@ impl<T: AddressSpace> Cpu<T> {
                 panic!("illegal CPU opcode: {:02X}", op);
             }
         }
+
+        // Return master clock cycles used
+        CYCLE_TABLE[op as usize] * 6
     }
 
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing

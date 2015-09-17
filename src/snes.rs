@@ -100,6 +100,8 @@ impl Snes {
 
         while opcount > 0 {
             self.cpu.dispatch();
+            self.cpu.dispatch();
+            self.cpu.dispatch();
             self.cpu.mem.apu.tick();
 
             opcount -= 1;
