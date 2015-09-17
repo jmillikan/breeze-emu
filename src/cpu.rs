@@ -148,6 +148,14 @@ impl<T: AddressSpace> Cpu<T> {
         self.s = self.s.wrapping_sub(1);
     }
 
+    fn pushw(&mut self, value: u16) {
+        // FIXME is high or low pushed first? We'll push high first, since JSR does the same
+        let hi = (value >> 8) as u8;
+        let lo = value as u8;
+        self.pushb(hi);
+        self.pushb(lo);
+    }
+
     /// Enters/exits emulation mode
     fn set_emulation(&mut self, value: bool) {
         if !self.emulation && value {
@@ -201,6 +209,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x18 => instr!(clc),
             0x1b => instr!(tcs),
             0x20 => instr!(jsr absolute),
+            0x48 => instr!(pha),
             0x5b => instr!(tcd),
             0x78 => instr!(sei),
             0x80 => instr!(bra rel),
@@ -209,12 +218,16 @@ impl<T: AddressSpace> Cpu<T> {
             0x9c => instr!(stz absolute),
             0xa0 => instr!(ldy immediate_index),
             0xa9 => instr!(lda immediate_acc),
+            0xb7 => instr!(lda indirect_long_idx),
             0xc2 => instr!(rep immediate8),
             0xcd => instr!(cmp absolute),
             0xd0 => instr!(bne rel),
             0xe2 => instr!(sep immediate8),
             0xfb => instr!(xce),
-            _ => panic!("illegal opcode: {:02X}", op),
+            _ => {
+                instr!(ill);
+                panic!("illegal opcode: {:02X}", op);
+            }
         }
     }
 
@@ -246,6 +259,16 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    fn pha(&mut self) {
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            self.pushb(a);
+        } else {
+            let a = self.a;
+            self.pushw(a);
+        }
+    }
+
     fn bra(&mut self, am: AddressingMode) {
         let a = am.address(self);
         self.branch(a);
@@ -310,7 +333,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.a = am.loadw(self);
         }
 
-        // XXX is this correct (use 16-bit value in all cases)?
+        // XXX is this correct (use 16-bit value in all cases)? (probably not)
         self.p.set_nz(self.a);
     }
 
@@ -373,6 +396,8 @@ impl<T: AddressSpace> Cpu<T> {
     fn tcs(&mut self) {
         self.s = self.a;
     }
+
+    fn ill(&mut self) {}
 }
 
 enum AddressingMode {
@@ -384,6 +409,8 @@ enum AddressingMode {
     Direct(u8),
     /// PC-relative, used for jumps
     Rel(i8),
+    /// <val> + direct page register + Y
+    IndirectLongIdx(u8),
 }
 
 impl AddressingMode {
@@ -433,35 +460,50 @@ impl AddressingMode {
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
     /// immediate.
     fn address<T: AddressSpace>(&self, cpu: &Cpu<T>) -> (u8, u16) {
+        use cpu::AddressingMode::*;
+
+        // FIXME is something here dependant on register sizes?
+
         match *self {
-            AddressingMode::Absolute(addr) => {
+            Absolute(addr) => {
                 (cpu.dbr, addr)
             }
-            AddressingMode::Rel(rel) => {
+            Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
             }
-            AddressingMode::Direct(offset) => {
+            Direct(offset) => {
                 (0, cpu.d.wrapping_add(offset as u16))
             }
-            AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) =>
+            IndirectLongIdx(offset) => {
+                // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
+                let addr = cpu.d + offset as u16 + cpu.y;
+                (0, addr)
+            }
+            Immediate(_) | Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
                     immediate?)")
         }
     }
 
     fn format<T: AddressSpace>(&self, cpu: &Cpu<T>) -> String {
+        use cpu::AddressingMode::*;
+
         match *self {
-            AddressingMode::Immediate(val) => format!("#${:04X}", val),
-            AddressingMode::Immediate8(val) => format!("#${:02X}", val),
-            AddressingMode::Absolute(addr) => format!("${:04X}", addr),
-            AddressingMode::Rel(rel) => format!("{:+}", rel),
-            AddressingMode::Direct(offset) => format!("${:02X}", offset),
+            Immediate(val) => format!("#${:04X}", val),
+            Immediate8(val) => format!("#${:02X}", val),
+            Absolute(addr) => format!("${:04X}", addr),
+            Rel(rel) => format!("{:+}", rel),
+            Direct(offset) => format!("${:02X}", offset),
+            IndirectLongIdx(offset) => format!("[${:02X}],y", offset),
         }
     }
 }
 
 /// Addressing mode construction
 impl<T: AddressSpace> Cpu<T> {
+    fn indirect_long_idx(&mut self) -> AddressingMode {
+        AddressingMode::IndirectLongIdx(self.fetchb())
+    }
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())
     }
