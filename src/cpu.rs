@@ -1,11 +1,6 @@
 //! 65816 emulator. Does not emulate internal memory-mapped registers (these are meant to be
 //! provided via an implementation of `AddressSpace`).
 
-use std::num::Wrapping as W;
-
-pub type U8 = W<u8>;
-pub type U16 = W<u16>;
-pub type U32 = W<u32>;
 
 /// Abstraction over memory operations executed by the CPU. If these operations access an unmapped
 /// address, the methods in here will be used to perform the operation.
@@ -81,20 +76,20 @@ const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
 pub struct Cpu<T: AddressSpace> {
-    a: U16,
-    x: U16,
-    y: U16,
+    a: u16,
+    x: u16,
+    y: u16,
     /// Stack pointer
-    s: U16,
+    s: u16,
     /// Data bank register. Bank for all memory accesses.
-    dbr: U8,
+    dbr: u8,
     /// Program bank register. Opcodes are fetched from this bank.
-    pbr: U8,
+    pbr: u8,
     /// Direct (page) register. Address offset for all instruction using "direct addressing" mode.
-    d: U16,
+    d: u16,
     /// Program counter. Note that PBR is not changed by the CPU, so code can not span multiple
     /// banks (without manual bank switching).
-    pc: U16,
+    pc: u16,
     p: StatusReg,
     emulation: bool,
 
@@ -112,17 +107,17 @@ impl<T: AddressSpace> Cpu<T> {
 
         Cpu {
             // Undefined according to datasheet
-            a: W(0),
-            x: W(0),
-            y: W(0),
+            a: 0,
+            x: 0,
+            y: 0,
             // High byte set to 1 since we're now in emulation mode
-            s: W(0x0100),
+            s: 0x0100,
             // Initialized to 0
-            dbr: W(0),
-            d: W(0),
-            pbr: W(0),
+            dbr: 0,
+            d: 0,
+            pbr: 0,
             // Read from RESET vector above
-            pc: W(pc),
+            pc: pc,
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg(SMALL_ACC_FLAG | SMALL_INDEX_FLAG | IRQ_FLAG),
             emulation: true,
@@ -133,8 +128,9 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Fetches the byte PC points at, then increments PC
     fn fetchb(&mut self) -> u8 {
-        let b = self.mem.load(self.pbr.0, self.pc.0);
-        self.pc = self.pc + W(1);
+        let b = self.mem.load(self.pbr, self.pc);
+        self.pc = self.pc.wrapping_add(1);
+        if self.pc == 0 { warn!("pc overflow") }
         b
     }
 
@@ -147,8 +143,9 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Pushes a byte onto the stack and decrements the stack pointer
     fn pushb(&mut self, value: u8) {
-        self.mem.store(0, self.s.0, value);
-        self.s = self.s - W(1);
+        self.mem.store(0, self.s, value);
+        if self.s == 0 { warn!("stack overflow") }
+        self.s = self.s.wrapping_sub(1);
     }
 
     /// Enters/exits emulation mode
@@ -157,7 +154,7 @@ impl<T: AddressSpace> Cpu<T> {
             // Enter emulation mode
 
             // Set high byte of stack ptr to 0x01
-            self.s.0 = 0x0100 | (self.s.0 & 0xff);
+            self.s = 0x0100 | (self.s & 0xff);
         } else if self.emulation && !value {
             // Leave emulation mode (and enter native mode)
         }
@@ -166,17 +163,17 @@ impl<T: AddressSpace> Cpu<T> {
 
     fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
         trace!("{:02X}:{:04X}  {} {:10} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:02X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
-            self.pbr.0,
+            self.pbr,
             pc,
             op,
             am.map(|am| am.format(self)).unwrap_or(String::new()),
-            self.a.0,
-            self.x.0,
-            self.y.0,
-            self.s.0,
-            self.d.0,
-            self.dbr.0,
-            self.pbr.0,
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            self.d,
+            self.dbr,
+            self.pbr,
             self.emulation as u8,
             self.p.0,
         );
@@ -184,6 +181,10 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// FIXME Temporary function to test the CPU emulation
     pub fn run(&mut self) {
+        // this counts down until 0 and then exits
+        // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
+        let mut opcount = 300;
+
         let mut pc;
         macro_rules! instr {
             ( $name:ident ) => {{
@@ -197,8 +198,8 @@ impl<T: AddressSpace> Cpu<T> {
             }};
         }
 
-        loop {
-            pc = self.pc.0;
+        while opcount > 0 {
+            pc = self.pc;
             let op = self.fetchb();
 
             match op {
@@ -220,7 +221,11 @@ impl<T: AddressSpace> Cpu<T> {
                 0xfb => instr!(xce),
                 _ => panic!("illegal opcode: {:02X}", op),
             }
+
+            opcount -= 1;
         }
+
+        info!("EXITING")
     }
 
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing
@@ -246,7 +251,7 @@ impl<T: AddressSpace> Cpu<T> {
     fn branch_if(&mut self, cond: bool) {
         let rel = self.fetchb() as i8;
         if cond {
-            self.pc.0 = (self.pc.0 as i32).wrapping_add(rel as i32) as u16;
+            self.pc = (self.pc as i32).wrapping_add(rel as i32) as u16;
         }
     }
 }
@@ -262,11 +267,11 @@ impl<T: AddressSpace> Cpu<T> {
     /// Compare Accumulator with Memory
     fn cmp(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
-            let a = self.a.0 as u8;
+            let a = self.a as u8;
             let b = am.loadb(self);
             self.compare8(a, b);
         } else {
-            let a = self.a.0;
+            let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
         }
@@ -281,15 +286,15 @@ impl<T: AddressSpace> Cpu<T> {
     /// Jump to Subroutine
     fn jsr(&mut self, am: AddressingMode) {
         // UGH!!! Come on borrowck, you're supposed to *help*!
-        let pbr = self.pbr.0;
+        let pbr = self.pbr;
         self.pushb(pbr);
-        let pch = (self.pc.0 >> 8) as u8;
+        let pch = (self.pc >> 8) as u8;
         self.pushb(pch);
-        let pcl = self.pc.0 as u8;
+        let pcl = self.pc as u8;
         self.pushb(pcl);
 
         // JSR can't immediate. Absolute is handled by storing the address, not the value, in PC.
-        self.pc.0 = am.address(self).1;
+        self.pc = am.address(self).1;
     }
 
     /// Disable IRQs
@@ -305,33 +310,33 @@ impl<T: AddressSpace> Cpu<T> {
     /// Load accumulator from memory
     fn lda(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
-            self.a.0 = (self.a.0 & 0xff00) | am.loadb(self) as u16;
+            self.a = (self.a & 0xff00) | am.loadb(self) as u16;
         } else {
-            self.a.0 = am.loadw(self);
+            self.a = am.loadw(self);
         }
 
         // XXX is this correct (use 16-bit value in all cases)?
-        self.p.set_nz(self.a.0);
+        self.p.set_nz(self.a);
     }
 
     /// Load Y register from memory
     fn ldy(&mut self, am: AddressingMode) {
         if self.p.small_index() {
-            self.y.0 = (self.y.0 & 0xff00) | am.loadb(self) as u16;
+            self.y = (self.y & 0xff00) | am.loadb(self) as u16;
         } else {
-            self.y.0 = am.loadw(self);
+            self.y = am.loadw(self);
         }
 
-        self.p.set_nz(self.y.0);
+        self.p.set_nz(self.y);
     }
 
     /// Store accumulator to memory
     fn sta(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
-            let b = self.a.0 as u8;
+            let b = self.a as u8;
             am.storeb(self, b);
         } else {
-            let w = self.a.0;
+            let w = self.a;
             am.storew(self, w);
         }
     }
@@ -366,7 +371,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Transfer 16-bit Accumulator to Direct Page Register
     fn tcd(&mut self) {
-        self.d.0 = self.p.set_nz(self.a.0);
+        self.d = self.p.set_nz(self.a);
     }
 
     /// Transfer 16-bit Accumulator to Stack Pointer
@@ -405,6 +410,7 @@ impl AddressingMode {
             _ => {
                 let (bank, addr) = self.address(cpu);
                 assert!(addr < 0xffff, "loadw on bank boundary");
+                // ^ if this should be supported, make sure to fix the potential overflow below
 
                 let lo = cpu.mem.load(bank, addr) as u16;
                 let hi = cpu.mem.load(bank, addr + 1) as u16;
@@ -432,11 +438,10 @@ impl AddressingMode {
     fn address<T: AddressSpace>(&self, cpu: &Cpu<T>) -> (u8, u16) {
         match *self {
             AddressingMode::Absolute(addr) => {
-                (cpu.dbr.0, addr)
+                (cpu.dbr, addr)
             }
             AddressingMode::Direct(offset) => {
-                // FIXME figure out the damn wrapping stuff!
-                (0, cpu.d.0.wrapping_add(offset as u16))
+                (0, cpu.d.wrapping_add(offset as u16))
             }
             AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
