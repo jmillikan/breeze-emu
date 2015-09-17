@@ -154,8 +154,16 @@ impl<T: AddressSpace> Cpu<T> {
     /// Pushes a byte onto the stack and decrements the stack pointer
     fn pushb(&mut self, value: u8) {
         self.mem.store(0, self.s, value);
-        if self.s == 0 { warn!("stack overflow") }
-        self.s = self.s.wrapping_sub(1);
+        if self.emulation {
+            // stack must stay in 0x01xx
+            assert_eq!(self.s & 0xff00, 0x0100);
+            let s = self.s as u8;
+            if s == 0 { warn!("stack overflow") }
+            self.s = (self.s & 0xff00) | s.wrapping_sub(1) as u16;
+        } else {
+            if self.s == 0 { warn!("stack overflow") }
+            self.s = self.s.wrapping_sub(1);
+        }
     }
 
     fn pushw(&mut self, value: u16) {
@@ -167,8 +175,17 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     fn popb(&mut self) -> u8 {
-        if self.s == 0xffff { warn!("stack underflow") }
-        self.s = self.s.wrapping_add(1);
+        if self.emulation {
+            // stack must stay in 0x01xx
+            assert_eq!(self.s & 0xff00, 0x0100);
+            let s = self.s as u8;
+            if s == 0xff { warn!("stack underflow") }
+            self.s = (self.s & 0xff00) | s.wrapping_add(1) as u16;
+        } else {
+            if self.s == 0xffff { warn!("stack underflow") }
+            self.s = self.s.wrapping_add(1);
+        }
+
         self.mem.load(0, self.s)
     }
 
