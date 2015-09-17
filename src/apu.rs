@@ -63,6 +63,7 @@ impl StatusReg {
     fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
     fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0 }
     fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
+    fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
 
     fn set(&mut self, flag: u8, v: bool) {
         if v {
@@ -74,6 +75,7 @@ impl StatusReg {
 
     fn set_negative(&mut self, v: bool) { self.set(NEG_FLAG, v) }
     fn set_zero(&mut self, v: bool)     { self.set(ZERO_FLAG, v) }
+    fn set_carry(&mut self, v: bool)    { self.set(CARRY_FLAG, v) }
 
     fn set_nz(&mut self, val: u8) -> u8 {
         self.set_negative(val & 0x80 != 0);
@@ -153,11 +155,24 @@ impl Spc700 {
                 }
                 self.$name(am)
             }};
+            ( $name:ident $s:tt $am:ident $am2:ident ) => {{
+                use log::LogLevel::Trace;
+                let am = self.$am();
+                let am2 = self.$am2();
+                if log_enabled!(Trace) {
+                    let amfmt = am.format(self);
+                    let amfmt2 = am2.format(self);
+                    self.trace_op(pc, &format!(e!($s), amfmt, amfmt2));
+                }
+                self.$name(am, am2)
+            }};
         }
 
         let op = self.fetchb();
         match op {
             0x1d => instr!(dec_x "dec x"),
+            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
             0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
             0xcd => instr!(movx "mov x, {}" immediate),
@@ -173,6 +188,16 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
+        // FIXME check if the order is correct
+        let a = a.loadb(self);
+        let b = b.loadb(self);
+
+        let diff = a.wrapping_sub(b);
+        self.psw.set_nz(diff);
+        self.psw.set_carry(diff & 0x80 != 0);
+    }
+
     fn bne(&mut self, am: AddressingMode) {
         if !self.psw.zero() {
             let a = am.address(self);
@@ -184,6 +209,12 @@ impl Spc700 {
         self.x = self.psw.set_nz(self.x.wrapping_sub(1));
     }
 
+    /// Store an immediate value
+    fn mov_sti(&mut self, src: AddressingMode, dest: AddressingMode) {
+        // NB: No NZ flag
+        let val = src.loadb(self);
+        dest.storeb(self, val);
+    }
     /// Store A wherever
     fn mov_sta(&mut self, am: AddressingMode) {
         let a = self.a;
@@ -281,7 +312,7 @@ const IPL_ROM: [u8; 64] = [
     // Set up stack pointer at $01ef
     0xcd, 0xef,         // mov x, #$ef
     0xbd,               // mov sp, x
-    // Fill memory at $00-$ff with $00
+    // Fill memory at $00-$ff with $00 (also sets all registers to 0)
     0xe8, 0x00,         // mov a, #$00
     0xc6,               // mov (x), a       :fill_zero_page
     0x1d,               // dec x
