@@ -50,14 +50,24 @@ impl StatusReg {
     fn set_carry(&mut self, value: bool)       { self.set(CARRY_FLAG, value) }
     fn set_irq_disable(&mut self, value: bool) { self.set(IRQ_FLAG, value) }
 
-    fn set_nz(&mut self, value: u16) -> u16 {
-        if value == 0 {
+    fn set_nz(&mut self, val: u16) -> u16 {
+        if val == 0 {
             self.set_zero(true);
-        } else if value & 0x8000 != 0 {
+        } else if val & 0x8000 != 0 {
             self.set_negative(true);
         }
 
-        value
+        val
+    }
+
+    fn set_nz_8(&mut self, val: u8) -> u8 {
+        if val == 0 {
+            self.set_zero(true);
+        } else if val & 0x80 != 0 {
+            self.set_negative(true);
+        }
+
+        val
     }
 }
 
@@ -170,11 +180,17 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
-        trace!("{:02X}:{:04X}  {} {:10} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:02X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
+        use log::LogLevel::Trace;
+        if !log_enabled!(Trace) { return }
+
+        let opstr = format!("{} {}",
+            op,
+            am.map(|am| am.format(self)).unwrap_or(String::new())
+        );
+        trace!("{:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:02X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
             self.pbr,
             pc,
-            op,
-            am.map(|am| am.format(self)).unwrap_or(String::new()),
+            opstr,
             self.a,
             self.x,
             self.y,
@@ -209,6 +225,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x18 => instr!(clc),
             0x1b => instr!(tcs),
             0x20 => instr!(jsr absolute),
+            0x2a => instr!(rol_a),
             0x48 => instr!(pha),
             0x5b => instr!(tcd),
             0x78 => instr!(sei),
@@ -224,6 +241,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xc8 => instr!(iny),
             0xcd => instr!(cmp absolute),
             0xd0 => instr!(bne rel),
+            0xe0 => instr!(cpx immediate_index),
             0xe2 => instr!(sep immediate8),
             0xfb => instr!(xce),
             _ => {
@@ -261,6 +279,19 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// Rotate Accumulator Left
+    fn rol_a(&mut self) {
+        // Sets N, Z, and C
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            self.p.set_carry(self.a & 0x80 != 0);
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(a.rotate_left(1)) as u16;
+        } else {
+            self.p.set_carry(self.a & 0x8000 != 0);
+            self.a = self.p.set_nz(self.a.rotate_left(1));
+        }
+    }
+
     /// Transfer Accumulator to Index Register X
     fn tax(&mut self) {
         let a = if self.p.small_acc() {
@@ -319,6 +350,19 @@ impl<T: AddressSpace> Cpu<T> {
             let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
+        }
+    }
+
+    /// Compare Index Register X with Memory
+    fn cpx(&mut self, am: AddressingMode) {
+        if self.p.small_index() {
+            let val = am.loadb(self);
+            let x = self.x as u8;
+            self.compare8(x, val);
+        } else {
+            let val = am.loadw(self);
+            let x = self.x;
+            self.compare(x, val);
         }
     }
 
