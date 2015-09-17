@@ -165,7 +165,7 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
-        trace!("{:02X}:{:04X}  {} {:10} a:{:04X} x:{:04X} y:{:04X} s:{:04X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
+        trace!("{:02X}:{:04X}  {} {:10} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:02X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
             self.pbr.0,
             pc,
             op,
@@ -174,6 +174,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.x.0,
             self.y.0,
             self.s.0,
+            self.d.0,
             self.dbr.0,
             self.pbr.0,
             self.emulation as u8,
@@ -201,25 +202,82 @@ impl<T: AddressSpace> Cpu<T> {
             let op = self.fetchb();
 
             match op {
+                0x08 => instr!(php),
                 0x18 => instr!(clc),
                 0x1b => instr!(tcs),
                 0x20 => instr!(jsr absolute),
                 0x5b => instr!(tcd),
                 0x78 => instr!(sei),
+                0x85 => instr!(sta direct),
                 0x8d => instr!(sta absolute),
                 0x9c => instr!(stz absolute),
+                0xa0 => instr!(ldy immediate_index),
                 0xa9 => instr!(lda immediate_acc),
                 0xc2 => instr!(rep immediate8),
+                0xcd => instr!(cmp absolute),
+                0xd0 => instr!(bne),
                 0xe2 => instr!(sep immediate8),
                 0xfb => instr!(xce),
                 _ => panic!("illegal opcode: {:02X}", op),
             }
         }
     }
+
+    /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing
+    /// `a-b`. This method only works correctly for 16-bit values.
+    ///
+    /// The Z flag is set if both numbers are equal.
+    /// The C flag will be set to `a >= b`.
+    /// The N flag is set to the most significant bit of `a-b`.
+    fn compare(&mut self, a: u16, b: u16) {
+        self.p.set_zero(a == b);
+        self.p.set_carry(a >= b);
+        self.p.set_negative(a.wrapping_sub(b) & 0x8000 != 0);
+    }
+
+    /// Does the exact same thing as `compare`, but for 8-bit operands
+    fn compare8(&mut self, a: u8, b: u8) {
+        self.p.set_zero(a == b);
+        self.p.set_carry(a >= b);
+        self.p.set_negative(a.wrapping_sub(b) & 0x80 != 0);
+    }
+
+    /// Executes a PC-relative branch if `cond` is `true`.
+    fn branch_if(&mut self, cond: bool) {
+        let rel = self.fetchb() as i8;
+        if cond {
+            self.pc.0 = (self.pc.0 as i32).wrapping_add(rel as i32) as u16;
+        }
+    }
 }
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// Branch if Not Equal (Branch if Z = 0)
+    fn bne(&mut self) {
+        let cond = !self.p.zero();
+        self.branch_if(cond);
+    }
+
+    /// Compare Accumulator with Memory
+    fn cmp(&mut self, am: AddressingMode) {
+        if self.p.small_acc() {
+            let a = self.a.0 as u8;
+            let b = am.loadb(self);
+            self.compare8(a, b);
+        } else {
+            let a = self.a.0;
+            let b = am.loadw(self);
+            self.compare(a, b);
+        }
+    }
+
+    /// Push Processor Status Register
+    fn php(&mut self) {
+        let p = self.p.0;
+        self.pushb(p);
+    }
+
     /// Jump to Subroutine
     fn jsr(&mut self, am: AddressingMode) {
         // UGH!!! Come on borrowck, you're supposed to *help*!
@@ -247,13 +305,24 @@ impl<T: AddressSpace> Cpu<T> {
     /// Load accumulator from memory
     fn lda(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
-            self.a.0 = self.a.0 & 0xff00;
+            self.a.0 = (self.a.0 & 0xff00) | am.loadb(self) as u16;
         } else {
             self.a.0 = am.loadw(self);
         }
 
         // XXX is this correct (use 16-bit value in all cases)?
         self.p.set_nz(self.a.0);
+    }
+
+    /// Load Y register from memory
+    fn ldy(&mut self, am: AddressingMode) {
+        if self.p.small_index() {
+            self.y.0 = (self.y.0 & 0xff00) | am.loadb(self) as u16;
+        } else {
+            self.y.0 = am.loadw(self);
+        }
+
+        self.p.set_nz(self.y.0);
     }
 
     /// Store accumulator to memory
@@ -307,9 +376,12 @@ impl<T: AddressSpace> Cpu<T> {
 }
 
 enum AddressingMode {
-    Absolute(u16),
     Immediate(u16),
     Immediate8(u8),
+    /// Access absolute offset in the current data bank
+    Absolute(u16),
+    /// <val> + direct page register in bank 0
+    Direct(u8),
 }
 
 impl AddressingMode {
@@ -362,6 +434,10 @@ impl AddressingMode {
             AddressingMode::Absolute(addr) => {
                 (cpu.dbr.0, addr)
             }
+            AddressingMode::Direct(offset) => {
+                // FIXME figure out the damn wrapping stuff!
+                (0, cpu.d.0.wrapping_add(offset as u16))
+            }
             AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
                     immediate?)")
@@ -370,9 +446,10 @@ impl AddressingMode {
 
     fn format<T: AddressSpace>(&self, cpu: &Cpu<T>) -> String {
         match *self {
-            AddressingMode::Absolute(addr) => format!("${:04X}", addr),
             AddressingMode::Immediate(val) => format!("#${:04X}", val),
             AddressingMode::Immediate8(val) => format!("#${:02X}", val),
+            AddressingMode::Absolute(addr) => format!("${:04X}", addr),
+            AddressingMode::Direct(offset) => format!("${:02X}", offset),
         }
     }
 }
@@ -381,6 +458,9 @@ impl AddressingMode {
 impl<T: AddressSpace> Cpu<T> {
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())
+    }
+    fn direct(&mut self) -> AddressingMode {
+        AddressingMode::Direct(self.fetchb())
     }
     /// Immediate value with accumulator size
     fn immediate_acc(&mut self) -> AddressingMode {

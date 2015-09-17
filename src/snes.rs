@@ -14,7 +14,23 @@ struct Memory {
 
 impl AddressSpace for Memory {
     fn load(&mut self, bank: u8, addr: u16) -> u8 {
-        self.rom.load(bank, addr)
+        if bank == 0 {
+            // FIXME are internal regs only in bank 0?
+            match addr {
+                0x2140 ... 0x217f => {
+                    // APU IO registers. The APU has 4 IO regs which are mirrored.
+                    // 2140 => f4
+                    // 2141 => f5
+                    // 2142 => f6
+                    // 2143 => f7
+                    let reg = addr & 0b11;
+                    self.apu.load(reg as u8)
+                }
+                _ => self.rom.load(bank, addr)
+            }
+        } else {
+            self.rom.load(bank, addr)
+        }
     }
 
     fn store(&mut self, bank: u8, addr: u16, value: u8) {
@@ -31,7 +47,7 @@ impl AddressSpace for Memory {
                     // 2141 => f5
                     // 2142 => f6
                     // 2143 => f7
-                    let reg = (addr - 0x2140) & 0x11;
+                    let reg = addr & 0b11;
                     self.apu.store(reg as u8, value)
                 }
                 0x4200 => {

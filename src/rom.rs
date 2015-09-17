@@ -164,17 +164,17 @@ impl Rom {
                 match bank {
                     0x00 ... 0x3f | 0x7e => {
                         // First two pages of WRAM
-                        &mut self.ram[addr as usize]
+                        self.ram.get_mut(addr as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, addr as u32))
                     }
                     0x70 ... 0x7d => {
                         let a = bank as u32 * 0x8000 + addr as u32;
-                        &mut self.ram[a as usize]
+                        self.ram.get_mut(a as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, a))
                     }
                     0xfe ... 0xff => {
                         // last 64k of RAM
-                        let start = self.ram.len() - 64 * 1024;
-                        let a = (bank - 0xfe) as u32 * 0x8000 + addr as u32;
-                        &mut self.ram[start + a as usize]
+                        let start = self.ram.len() as u32 - 64 * 1024;
+                        let a = start + (bank - 0xfe) as u32 * 0x8000 + addr as u32;
+                        self.ram.get_mut(a as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, a))
                     }
                     _ => {
                         // 0x40 ... 0x6f | 0x7e ... 0xfd
@@ -185,17 +185,17 @@ impl Rom {
             0x8000 ... 0xffff => match bank {
                 // LoROM is mapped to the higher 8 pages
                 0xfe => {
-                    let a = addr as u32 - 0x8000;
-                    &mut self.rom[0x3f0000 + a as usize]
+                    let a = 0x3f0000 + addr as u32 - 0x8000;
+                    self.rom.get_mut(a as usize).unwrap_or_else(|| out_of_rom_bounds(bank, addr, a))
                 }
                 0xff => {
-                    let a = addr as u32 - 0x8000;
-                    &mut self.rom[0x3f8000 + a as usize]
+                    let a = 0x3f8000 + addr as u32 - 0x8000;
+                    self.rom.get_mut(a as usize).unwrap_or_else(|| out_of_rom_bounds(bank, addr, a))
                 }
                 _ => {
                     // `& !0x80` because 0x80-0xFD mirrors 0x00-0x7D
                     let a = (bank as u32 & !0x80) * 0x8000 + addr as u32 - 0x8000;
-                    &mut self.rom[a as usize]
+                    self.rom.get_mut(a as usize).unwrap_or_else(|| out_of_rom_bounds(bank, addr, a))
                 }
             },
             _ => unreachable!()
@@ -211,4 +211,14 @@ impl AddressSpace for Rom {
     fn store(&mut self, bank: u8, addr: u16, value: u8) {
         *self.resolve_addr(bank, addr) = value;
     }
+}
+
+fn out_of_ram_bounds(bank: u8, addr: u16, abs: u32) -> ! {
+    panic!("RAM access out of bounds at {:02X}:{:04X} -> {:04X}",
+        bank, addr, abs)
+}
+
+fn out_of_rom_bounds(bank: u8, addr: u16, abs: u32) -> ! {
+    panic!("LoROM access out of bounds at {:02X}:{:04X} -> {:06X}",
+        bank, addr, abs)
 }
