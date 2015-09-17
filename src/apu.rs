@@ -13,15 +13,14 @@ impl Apu {
     ///
     /// IO ports are mapped to internal registers 0xf4 - 0xf7
     pub fn store(&mut self, port: u8, value: u8) {
-        warn!("NYI: APU IO register store (port {}, value ${:02X})", port, value);
+        self.cpu.store(0xf4 + port as u16, value)
     }
 
     /// Load a byte from an IO port (0-3)
     ///
     /// IO ports are mapped to internal registers 0xf4 - 0xf7
     pub fn load(&mut self, port: u8) -> u8 {
-        warn!("NYI: APU IO register load (port {}); 0 will be returned", port);
-        0
+        self.cpu.load(0xf4 + port as u16)
     }
 
     // FIXME temp. function
@@ -62,7 +61,25 @@ const CARRY_FLAG: u8       = 1 << 0;
 
 impl StatusReg {
     fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
+    fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0 }
     fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
+
+    fn set(&mut self, flag: u8, v: bool) {
+        if v {
+            self.0 |= flag;
+        } else {
+            self.0 &= !flag;
+        }
+    }
+
+    fn set_negative(&mut self, v: bool) { self.set(NEG_FLAG, v) }
+    fn set_zero(&mut self, v: bool)     { self.set(ZERO_FLAG, v) }
+
+    fn set_nz(&mut self, val: u8) -> u8 {
+        self.set_negative(val & 0x80 != 0);
+        self.set_zero(val == 0);
+        val
+    }
 }
 
 impl Spc700 {
@@ -128,18 +145,23 @@ impl Spc700 {
                 self.$name()
             }};
             ( $name:ident $s:tt $am:ident ) => {{
+                use log::LogLevel::Trace;
                 let am = self.$am();
-                let amfmt = am.format(self);
-                self.trace_op(pc, &format!(e!($s), amfmt));
+                if log_enabled!(Trace) {
+                    let amfmt = am.format(self);
+                    self.trace_op(pc, &format!(e!($s), amfmt));
+                }
                 self.$name(am)
             }};
         }
 
         let op = self.fetchb();
         match op {
+            0x1d => instr!(dec_x "dec x"),
             0xbd => instr!(mov_sp_x "mov sp, x"),
             0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
             0xcd => instr!(movx "mov x, {}" immediate),
+            0xd0 => instr!(bne "bne {}" rel),
             0xe8 => instr!(mova "mov a, {}" immediate),
             _ => {
                 instr!(ill "ill");
@@ -151,6 +173,17 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    fn bne(&mut self, am: AddressingMode) {
+        if !self.psw.zero() {
+            let a = am.address(self);
+            self.pc = a;
+        }
+    }
+
+    fn dec_x(&mut self) {
+        self.x = self.psw.set_nz(self.x.wrapping_sub(1));
+    }
+
     /// Store A wherever
     fn mov_sta(&mut self, am: AddressingMode) {
         let a = self.a;
@@ -161,11 +194,11 @@ impl Spc700 {
     }
     fn mova(&mut self, am: AddressingMode) {
         let val = am.loadb(self);
-        self.a = val;
+        self.a = self.psw.set_nz(val);
     }
     fn movx(&mut self, am: AddressingMode) {
         let val = am.loadb(self);
-        self.x = val;
+        self.x = self.psw.set_nz(val);
     }
     fn ill(&mut self) {}
 }
@@ -177,6 +210,8 @@ enum AddressingMode {
     /// Where X points to (in page 0, $00 - $ff)
     IndirectX,
     Immediate(u8),
+    /// Used for branch instructions
+    Rel(i8),
 }
 
 impl AddressingMode {
@@ -208,6 +243,9 @@ impl AddressingMode {
             AddressingMode::IndirectX => {
                 spc.x as u16
             }
+            AddressingMode::Rel(rel) => {
+                (spc.pc as i32 + rel as i32) as u16
+            }
         }
     }
 
@@ -216,6 +254,7 @@ impl AddressingMode {
             AddressingMode::Direct(offset) => format!("${:02X}", offset),
             AddressingMode::IndirectX => format!("(X)"),
             AddressingMode::Immediate(val) => format!("#${:02X}", val),
+            AddressingMode::Rel(rel) => format!("{}", rel),
         }
     }
 }
@@ -230,6 +269,9 @@ impl Spc700 {
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
+    }
+    fn rel(&mut self) -> AddressingMode {
+        AddressingMode::Rel(self.fetchb() as i8)
     }
 }
 
