@@ -187,32 +187,42 @@ const IPL_ROM: [u8; 64] = [
     0x8f, 0xbb, 0xf5,   // mov $f5, #$bb
 
     // Wait until $cc is written to port 0 (reg $f4)
-    0x78, 0xcc, 0xf4,   // cmp #$cc, #$f4    :wait_start
+    0x78, 0xcc, 0xf4,   // cmp #$cc, #$f4   :wait_start
     0xd0, 0xfb,         // bne $0baa        -> wait_start
 
     0x2f, 0x19,         // bra $0bca        -> lbl0
+    //---------------
 
-    0xeb, 0xf4,         // mov y, $f4
-    0xd0, 0xfc,         // bne $0bb1
-    0x7e, 0xf4,         // cmp y, $f4
-    0xd0, 0x0b,         // bne $0bc4
+    // Wait until a non-zero value is in reg 0
+    0xeb, 0xf4,         // mov y, $f4       :recv
+    0xd0, 0xfc,         // bne $0bb1        -> recv
+
+    0x7e, 0xf4,         // cmp y, $f4       :loop
+    0xd0, 0x0b,         // bne $0bc4        -> lbl1
     0xe4, 0xf5,         // mov a, $f5
     0xcb, 0xf4,         // mov $f4, y
     0xd7, 0x00,         // mov [$00]+y, a
     0xfc,               // inc y
     0xd0, 0xf3,         // bne $0bb5
     0xab, 0x01,         // inc $01
-    0x10, 0xef,         // bpl $0bb5
+    0x10, 0xef,         // bpl $0bb5        :lbl1   -> loop
     0x7e, 0xf4,         // cmp y, $f4
     0x10, 0xeb,         // bpl $0bb5
 
+    // Load reg 2 ($f6) into y and reg 3 ($f7) into a
     0xba, 0xf6,         // movw ya, $f6      :lbl0
+    // Write Y and A in memory at $00 and $01
     0xda, 0x00,         // movw $00, ya
+    // Load reg 0 ($f4) into y, reg 1 ($f5) into a
     0xba, 0xf4,         // movw ya, $f4
+    // Write reg 1's value to reg 0
     0xc4, 0xf4,         // mov $f4, a
     0xdd,               // mov a, y
     0x5d,               // mov x, a
-    0xd0, 0xdb,         // bne $0bb1
+    // If reg 1's value is not 0, start the transmission loop
+    0xd0, 0xdb,         // bne $0bb1 (-37)  -> recv
+
+    // We're done, jump to $0000 (x is $00 here)
     0x1f, 0x00, 0x00,   // jmp [$0000]+x
 
     // reset vector is at 0xfffe and points to the start of the IPL ROM: 0xffc0
