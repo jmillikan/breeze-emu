@@ -271,36 +271,48 @@ impl<T: AddressSpace> Cpu<T> {
 
         let op = self.fetchb();
         match op {
+            // Stack operations
             0x08 => instr!(php),
-            0x18 => instr!(clc),
-            0x1b => instr!(tcs),
-            0x20 => instr!(jsr absolute),
             0x28 => instr!(plp),
+            0x48 => instr!(pha),
+            0x68 => instr!(pla),
+
+            // Processor status
+            0x18 => instr!(clc),
+            0x58 => instr!(cli),
+            0x78 => instr!(sei),
+            0xfb => instr!(xce),
+            0xc2 => instr!(rep immediate8),
+            0xe2 => instr!(sep immediate8),
+
+            // Arithmetic
             0x2a => instr!(rol_a),
             0x2f => instr!(and absolute_long),
-            0x48 => instr!(pha),
-            0x58 => instr!(cli),
-            0x5b => instr!(tcd),
-            0x60 => instr!(rti),
-            0x68 => instr!(pla),
             0x69 => instr!(adc immediate_acc),
-            0x70 => instr!(bvs rel),
-            0x78 => instr!(sei),
-            0x80 => instr!(bra rel),
+            0xc8 => instr!(iny),
+
+            // Register and memory transfers
+            0x5b => instr!(tcd),
+            0x1b => instr!(tcs),
+            0xaa => instr!(tax),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
+            0x9d => instr!(sta absolute_indexed_x),
             0x9c => instr!(stz absolute),
-            0xa0 => instr!(ldy immediate_index),
             0xa9 => instr!(lda immediate_acc),
-            0xaa => instr!(tax),
             0xb7 => instr!(lda indirect_long_idx),
-            0xc2 => instr!(rep immediate8),
-            0xc8 => instr!(iny),
+            0xa2 => instr!(ldx immediate_index),
+            0xa0 => instr!(ldy immediate_index),
+            0xac => instr!(ldy absolute),
+
+            // Comparisons and control flow
             0xcd => instr!(cmp absolute),
-            0xd0 => instr!(bne rel),
             0xe0 => instr!(cpx immediate_index),
-            0xe2 => instr!(sep immediate8),
-            0xfb => instr!(xce),
+            0x80 => instr!(bra rel),
+            0xd0 => instr!(bne rel),
+            0x70 => instr!(bvs rel),
+            0x20 => instr!(jsr absolute),
+            0x60 => instr!(rts),
             _ => {
                 instr!(ill);
                 panic!("illegal CPU opcode: {:02X}", op);
@@ -508,7 +520,7 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     /// Return from Subroutine
-    fn rti(&mut self) {
+    fn rts(&mut self) {
         let pcl = self.popb() as u16;
         let pch = self.popb() as u16;
         let pbr = self.popb();
@@ -572,6 +584,17 @@ impl<T: AddressSpace> Cpu<T> {
         }
     }
 
+    fn ldx(&mut self, am: AddressingMode) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = am.loadb(self);
+            self.x = (self.x & 0xff00) | self.p.set_nz_8(val) as u16;
+        } else {
+            let val = am.loadw(self);
+            self.x = self.p.set_nz(val);
+        }
+    }
+
     /// Store accumulator to memory
     fn sta(&mut self, am: AddressingMode) {
         // Changes no flags
@@ -630,14 +653,21 @@ enum AddressingMode {
     Immediate(u16),
     Immediate8(u8),
     /// Access absolute offset in the current data bank
+    /// (DBR, <val>)
     Absolute(u16),
     /// Access absolute offset in the specified data bank (DBR is not changed)
+    /// (<val0>, <val1>)
     AbsoluteLong(u8, u16),
+    /// (DBR, <val> + X)
+    AbsIndexedX(u16),
     /// <val> + direct page register in bank 0
+    /// (0, D + <val>)
     Direct(u8),
     /// PC-relative, used for jumps
+    /// (PBR, PC + <val>)
     Rel(i8),
-    /// <val> + direct page register + Y
+    /// "Direct Indirect Indexed Long [d],y"
+    /// (0, D + <val> + Y)
     IndirectLongIdx(u8),
 }
 
@@ -691,6 +721,7 @@ impl AddressingMode {
         use cpu::AddressingMode::*;
 
         // FIXME is something here dependant on register sizes?
+        // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
 
         match *self {
             Absolute(addr) => {
@@ -699,6 +730,9 @@ impl AddressingMode {
             AbsoluteLong(bank, addr) => {
                 (bank, addr)
             }
+            AbsIndexedX(offset) => {
+                (cpu.dbr, offset + cpu.x)
+            }
             Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
             }
@@ -706,7 +740,6 @@ impl AddressingMode {
                 (0, cpu.d.wrapping_add(offset as u16))
             }
             IndirectLongIdx(offset) => {
-                // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
                 let addr = cpu.d + offset as u16 + cpu.y;
                 (0, addr)
             }
@@ -724,6 +757,7 @@ impl AddressingMode {
             Immediate8(val) => format!("#${:02X}", val),
             Absolute(addr) => format!("${:04X}", addr),
             AbsoluteLong(bank, addr) => format!("${:02X}:{:04X}", bank, addr),
+            AbsIndexedX(offset) => format!("${:04X},x", offset),
             Rel(rel) => format!("{:+}", rel),
             Direct(offset) => format!("${:02X}", offset),
             IndirectLongIdx(offset) => format!("[${:02X}],y", offset),
@@ -743,6 +777,9 @@ impl<T: AddressSpace> Cpu<T> {
         let addr = self.fetchw();
         let bank = self.fetchb();
         AddressingMode::AbsoluteLong(bank, addr)
+    }
+    fn absolute_indexed_x(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedX(self.fetchw())
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
