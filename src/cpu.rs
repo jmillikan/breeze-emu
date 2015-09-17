@@ -239,10 +239,12 @@ impl<T: AddressSpace> Cpu<T> {
             0x1b => instr!(tcs),
             0x20 => instr!(jsr absolute),
             0x2a => instr!(rol_a),
+            0x2f => instr!(and absolute_long),
             0x48 => instr!(pha),
             0x5b => instr!(tcd),
             0x68 => instr!(pla),
             0x69 => instr!(adc immediate_acc),
+            0x70 => instr!(bvs rel),
             0x78 => instr!(sei),
             0x80 => instr!(bra rel),
             0x85 => instr!(sta direct),
@@ -294,6 +296,20 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// AND Accumulator with Memory (or immediate)
+    fn and(&mut self, am: AddressingMode) {
+        if self.p.small_acc() {
+            let val = am.loadb(self);
+            let res = self.a as u8 & val;
+            self.p.set_nz_8(res);
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            let val = am.loadw(self);
+            let res = self.a & val;
+            self.a = self.p.set_nz(res);
+        }
+    }
+
     /// Add With Carry
     fn adc(&mut self, am: AddressingMode) {
         // Sets N, V, C and Z
@@ -335,6 +351,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Transfer Accumulator to Index Register X
     fn tax(&mut self) {
+        // Changes N and Z
         let a = if self.p.small_acc() {
             self.a & 0xff
         } else {
@@ -342,16 +359,18 @@ impl<T: AddressSpace> Cpu<T> {
         };
 
         if self.p.small_index() {
-            self.x = (self.x & 0xff00) | a;
+            self.x = (self.x & 0xff00) | self.p.set_nz_8(a as u8) as u16;
         } else {
-            self.x = a;
+            self.x = self.p.set_nz(a);
         }
     }
 
     /// Increment Index Register Y
     fn iny(&mut self) {
+        // Changes N and Z (XXX really?)
         if self.p.small_index() {
-            self.y = (self.y & 0xff00) | (self.y as u8).wrapping_add(1) as u16;
+            let res = self.p.set_nz_8((self.y as u8).wrapping_add(1));
+            self.y = (self.y & 0xff00) | res as u16;
         } else {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
         }
@@ -359,6 +378,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Push A on the stack
     fn pha(&mut self) {
+        // No flags modified
         if self.p.small_acc() {
             let a = self.a as u8;
             self.pushb(a);
@@ -370,22 +390,35 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Pull Accumulator from stack
     fn pla(&mut self) {
+        // Changes N and Z
         if self.p.small_acc() {
             let a = self.popb();
-            self.a = (self.a & 0xff00) | a as u16;
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(a) as u16;
         } else {
             let a = self.popw();
-            self.a = a;
+            self.a = self.p.set_nz(a);
         }
     }
 
+    /// Branch if Overflow Set
+    fn bvs(&mut self, am: AddressingMode) {
+        // Changes no flags
+        if self.p.overflow() {
+            let a = am.address(self);
+            self.branch(a);
+        }
+    }
+
+    /// Branch always
     fn bra(&mut self, am: AddressingMode) {
+        // Changes no flags
         let a = am.address(self);
         self.branch(a);
     }
 
     /// Branch if Not Equal (Branch if Z = 0)
     fn bne(&mut self, am: AddressingMode) {
+        // Changes no flags
         if !self.p.zero() {
             let a = am.address(self);
             self.branch(a);
@@ -420,12 +453,15 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Push Processor Status Register
     fn php(&mut self) {
+        // Changes no flags
         let p = self.p.0;
         self.pushb(p);
     }
 
     /// Jump to Subroutine
     fn jsr(&mut self, am: AddressingMode) {
+        // Changes no flags
+
         // UGH!!! Come on borrowck, you're supposed to *help*!
         let pbr = self.pbr;
         self.pushb(pbr);
@@ -445,34 +481,37 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Store 0 to memory
     fn stz(&mut self, am: AddressingMode) {
+        // Changes no flags
         am.storeb(self, 0);
     }
 
     /// Load accumulator from memory
     fn lda(&mut self, am: AddressingMode) {
+        // Changes N and Z
         if self.p.small_acc() {
-            self.a = (self.a & 0xff00) | am.loadb(self) as u16;
+            let val = am.loadb(self);
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(val) as u16;
         } else {
-            self.a = am.loadw(self);
+            let val = am.loadw(self);
+            self.a = self.p.set_nz(val);
         }
-
-        // XXX is this correct (use 16-bit value in all cases)? (probably not)
-        self.p.set_nz(self.a);
     }
 
     /// Load Y register from memory
     fn ldy(&mut self, am: AddressingMode) {
+        // Changes N and Z
         if self.p.small_index() {
-            self.y = (self.y & 0xff00) | am.loadb(self) as u16;
+            let val = am.loadb(self);
+            self.y = (self.y & 0xff00) | self.p.set_nz_8(val) as u16;
         } else {
-            self.y = am.loadw(self);
+            let val = am.loadw(self);
+            self.y = self.p.set_nz(val);
         }
-
-        self.p.set_nz(self.y);
     }
 
     /// Store accumulator to memory
     fn sta(&mut self, am: AddressingMode) {
+        // Changes no flags
         if self.p.small_acc() {
             let b = self.a as u8;
             am.storeb(self, b);
@@ -489,6 +528,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Exchange carry and emulation flags
     fn xce(&mut self) {
+        // FIXME The Wiki says this also changes the M and X flag, what's up with that?
         let carry = self.p.carry();
         let e = self.emulation;
         self.p.set_carry(e);
@@ -528,6 +568,8 @@ enum AddressingMode {
     Immediate8(u8),
     /// Access absolute offset in the current data bank
     Absolute(u16),
+    /// Access absolute offset in the specified data bank (DBR is not changed)
+    AbsoluteLong(u8, u16),
     /// <val> + direct page register in bank 0
     Direct(u8),
     /// PC-relative, used for jumps
@@ -591,6 +633,9 @@ impl AddressingMode {
             Absolute(addr) => {
                 (cpu.dbr, addr)
             }
+            AbsoluteLong(bank, addr) => {
+                (bank, addr)
+            }
             Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
             }
@@ -615,6 +660,7 @@ impl AddressingMode {
             Immediate(val) => format!("#${:04X}", val),
             Immediate8(val) => format!("#${:02X}", val),
             Absolute(addr) => format!("${:04X}", addr),
+            AbsoluteLong(bank, addr) => format!("${:02X}:{:04X}", bank, addr),
             Rel(rel) => format!("{:+}", rel),
             Direct(offset) => format!("${:02X}", offset),
             IndirectLongIdx(offset) => format!("[${:02X}],y", offset),
@@ -629,6 +675,11 @@ impl<T: AddressSpace> Cpu<T> {
     }
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())
+    }
+    fn absolute_long(&mut self) -> AddressingMode {
+        let addr = self.fetchw();
+        let bank = self.fetchb();
+        AddressingMode::AbsoluteLong(bank, addr)
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
