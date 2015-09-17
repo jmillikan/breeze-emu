@@ -61,7 +61,8 @@ const ZERO_FLAG: u8        = 1 << 1;
 const CARRY_FLAG: u8       = 1 << 0;
 
 impl StatusReg {
-    fn negative(&self) -> bool { self.0 & NEG_FLAG != 0 }
+    fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
+    fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
 }
 
 impl Spc700 {
@@ -105,10 +106,14 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
-        trace!("{:04X}     {} {:10} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
+        let op_and_am = match am {
+            None => format!("{}", op),
+            Some(am) => format!("{}, {}", op, am.format(self)),
+        };
+
+        trace!("{:04X}     {:14} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
-            op,
-            am.map(|am| am.format(self)).unwrap_or(String::new()),
+            op_and_am,
             self.a,
             self.x,
             self.y,
@@ -121,22 +126,26 @@ impl Spc700 {
     pub fn dispatch(&mut self) {
         let pc = self.pc;
 
+        macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
-            ( $name:ident ) => {{
-                self.trace_op(pc, stringify!($name), None);
+            ( $name:ident $s:tt ) => {{
+                self.trace_op(pc, e!($s), None);
                 self.$name()
             }};
-            ( $name:ident $am:ident ) => {{
+            ( $name:ident $s:tt $am:ident ) => {{
                 let am = self.$am();
-                self.trace_op(pc, stringify!($name), Some(&am));
+                self.trace_op(pc, e!($s), Some(&am));
                 self.$name(am)
             }};
         }
 
         let op = self.fetchb();
         match op {
+            0xbd => instr!(mov_sp_x "mov sp, x"),
+            0xcd => instr!(movx "mov x" immediate),
+            0xe8 => instr!(mova "mov a" immediate),
             _ => {
-                instr!(ill);
+                instr!(ill "ill");
                 panic!("illegal opcode: {:02X}", op);
             }
         }
@@ -145,6 +154,17 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    fn mov_sp_x(&mut self) {
+        self.sp = self.x;
+    }
+    fn mova(&mut self, am: AddressingMode) {
+        let val = am.loadb(self);
+        self.a = val;
+    }
+    fn movx(&mut self, am: AddressingMode) {
+        let val = am.loadb(self);
+        self.x = val;
+    }
     fn ill(&mut self) {}
 }
 
@@ -152,12 +172,37 @@ impl Spc700 {
 enum AddressingMode {
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     Direct(u8),
+    Immediate(u8),
 }
 
 impl AddressingMode {
+    fn loadb(self, spc: &mut Spc700) -> u8 {
+        match self {
+            AddressingMode::Immediate(val) => val,
+            _ => {
+                let addr = self.address(spc);
+                spc.load(addr)
+            }
+        }
+    }
+
+    fn address(&self, spc: &Spc700) -> u16 {
+        match *self {
+            AddressingMode::Immediate(_) => panic!("attempted to get address of immediate"),
+            AddressingMode::Direct(offset) => {
+                if spc.psw.direct_page() {
+                    offset as u16 + 0x100
+                } else {
+                    offset as u16
+                }
+            }
+        }
+    }
+
     fn format(&self, spc: &Spc700) -> String {
         match *self {
-            AddressingMode::Direct(offset) => format!("${:02}", offset),
+            AddressingMode::Direct(offset) => format!("${:02X}", offset),
+            AddressingMode::Immediate(val) => format!("#${:02X}", val),
         }
     }
 }
@@ -166,6 +211,9 @@ impl AddressingMode {
 impl Spc700 {
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())
+    }
+    fn immediate(&mut self) -> AddressingMode {
+        AddressingMode::Immediate(self.fetchb())
     }
 }
 
