@@ -222,7 +222,7 @@ impl<T: AddressSpace> Cpu<T> {
 impl<T: AddressSpace> Cpu<T> {
     /// Jump to Subroutine
     fn jsr(&mut self, am: AddressingMode) {
-        // UGH!!! Come on borrock, you're supposed to *help*!
+        // UGH!!! Come on borrowck, you're supposed to *help*!
         let pbr = self.pbr.0;
         self.pushb(pbr);
         let pch = (self.pc.0 >> 8) as u8;
