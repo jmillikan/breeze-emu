@@ -166,6 +166,19 @@ impl<T: AddressSpace> Cpu<T> {
         self.pushb(lo);
     }
 
+    fn popb(&mut self) -> u8 {
+        if self.s == 0xffff { warn!("stack underflow") }
+        self.s = self.s.wrapping_add(1);
+        self.mem.load(0, self.s)
+    }
+
+    fn popw(&mut self) -> u16 {
+        // FIXME see pushw. we pop low first, then high.
+        let lo = self.popb() as u16;
+        let hi = self.popb() as u16;
+        (hi << 8) | lo
+    }
+
     /// Enters/exits emulation mode
     fn set_emulation(&mut self, value: bool) {
         if !self.emulation && value {
@@ -228,6 +241,8 @@ impl<T: AddressSpace> Cpu<T> {
             0x2a => instr!(rol_a),
             0x48 => instr!(pha),
             0x5b => instr!(tcd),
+            0x68 => instr!(pla),
+            0x69 => instr!(adc immediate_acc),
             0x78 => instr!(sei),
             0x80 => instr!(bra rel),
             0x85 => instr!(sta direct),
@@ -279,6 +294,32 @@ impl<T: AddressSpace> Cpu<T> {
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    /// Add With Carry
+    fn adc(&mut self, am: AddressingMode) {
+        // Sets N, V, C and Z
+        // FIXME is this correct? double-check this!
+        let c = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            let val = am.loadb(self);
+            let res = a as u16 + val as u16 + c;
+            self.p.set_carry(res > 255);
+            let res = res as u8;
+            self.p.set_overflow((a ^ val) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
+
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            let a = self.a;
+            let val = am.loadw(self);
+            let res = a as u32 + val as u32 + c as u32;
+            self.p.set_carry(res > 65535);
+            let res = res as u16;
+            self.p.set_overflow((a ^ val) & 0x8000 == 0 && (a ^ res) & 0x8000 == 0x8000);
+
+            self.a = res;
+        }
+    }
+
     /// Rotate Accumulator Left
     fn rol_a(&mut self) {
         // Sets N, Z, and C
@@ -324,6 +365,17 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.a;
             self.pushw(a);
+        }
+    }
+
+    /// Pull Accumulator from stack
+    fn pla(&mut self) {
+        if self.p.small_acc() {
+            let a = self.popb();
+            self.a = (self.a & 0xff00) | a as u16;
+        } else {
+            let a = self.popw();
+            self.a = a;
         }
     }
 
