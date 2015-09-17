@@ -203,6 +203,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x20 => instr!(jsr absolute),
             0x5b => instr!(tcd),
             0x78 => instr!(sei),
+            0x80 => instr!(bra rel),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
             0x9c => instr!(stz absolute),
@@ -210,7 +211,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xa9 => instr!(lda immediate_acc),
             0xc2 => instr!(rep immediate8),
             0xcd => instr!(cmp absolute),
-            0xd0 => instr!(bne),
+            0xd0 => instr!(bne rel),
             0xe2 => instr!(sep immediate8),
             0xfb => instr!(xce),
             _ => panic!("illegal opcode: {:02X}", op),
@@ -236,21 +237,26 @@ impl<T: AddressSpace> Cpu<T> {
         self.p.set_negative(a.wrapping_sub(b) & 0x80 != 0);
     }
 
-    /// Executes a PC-relative branch if `cond` is `true`.
-    fn branch_if(&mut self, cond: bool) {
-        let rel = self.fetchb() as i8;
-        if cond {
-            self.pc = (self.pc as i32).wrapping_add(rel as i32) as u16;
-        }
+    /// Branch to an absolute address
+    fn branch(&mut self, target: (u8, u16)) {
+        self.pbr = target.0;
+        self.pc = target.1;
     }
 }
 
 /// Opcode implementations
 impl<T: AddressSpace> Cpu<T> {
+    fn bra(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        self.branch(a);
+    }
+
     /// Branch if Not Equal (Branch if Z = 0)
-    fn bne(&mut self) {
-        let cond = !self.p.zero();
-        self.branch_if(cond);
+    fn bne(&mut self, am: AddressingMode) {
+        if !self.p.zero() {
+            let a = am.address(self);
+            self.branch(a);
+        }
     }
 
     /// Compare Accumulator with Memory
@@ -376,6 +382,8 @@ enum AddressingMode {
     Absolute(u16),
     /// <val> + direct page register in bank 0
     Direct(u8),
+    /// PC-relative, used for jumps
+    Rel(i8),
 }
 
 impl AddressingMode {
@@ -429,6 +437,9 @@ impl AddressingMode {
             AddressingMode::Absolute(addr) => {
                 (cpu.dbr, addr)
             }
+            AddressingMode::Rel(rel) => {
+                (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
+            }
             AddressingMode::Direct(offset) => {
                 (0, cpu.d.wrapping_add(offset as u16))
             }
@@ -443,6 +454,7 @@ impl AddressingMode {
             AddressingMode::Immediate(val) => format!("#${:04X}", val),
             AddressingMode::Immediate8(val) => format!("#${:02X}", val),
             AddressingMode::Absolute(addr) => format!("${:04X}", addr),
+            AddressingMode::Rel(rel) => format!("{:+}", rel),
             AddressingMode::Direct(offset) => format!("${:02X}", offset),
         }
     }
@@ -452,6 +464,9 @@ impl AddressingMode {
 impl<T: AddressSpace> Cpu<T> {
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())
+    }
+    fn rel(&mut self) -> AddressingMode {
+        AddressingMode::Rel(self.fetchb() as i8)
     }
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())

@@ -285,7 +285,7 @@ impl AddressingMode {
             AddressingMode::Direct(offset) => format!("${:02X}", offset),
             AddressingMode::IndirectX => format!("(X)"),
             AddressingMode::Immediate(val) => format!("#${:02X}", val),
-            AddressingMode::Rel(rel) => format!("{}", rel),
+            AddressingMode::Rel(rel) => format!("{:+}", rel),
         }
     }
 }
