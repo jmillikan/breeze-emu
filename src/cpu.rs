@@ -93,7 +93,7 @@ pub struct Cpu<T: AddressSpace> {
     p: StatusReg,
     emulation: bool,
 
-    mem: T,
+    pub mem: T,
 }
 
 impl<T: AddressSpace> Cpu<T> {
@@ -180,12 +180,9 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     /// FIXME Temporary function to test the CPU emulation
-    pub fn run(&mut self) {
-        // this counts down until 0 and then exits
-        // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
-        let mut opcount = 300;
+    pub fn dispatch(&mut self) {
+        let pc = self.pc;
 
-        let mut pc;
         macro_rules! instr {
             ( $name:ident ) => {{
                 self.trace_op(pc, stringify!($name), None);
@@ -198,34 +195,26 @@ impl<T: AddressSpace> Cpu<T> {
             }};
         }
 
-        while opcount > 0 {
-            pc = self.pc;
-            let op = self.fetchb();
-
-            match op {
-                0x08 => instr!(php),
-                0x18 => instr!(clc),
-                0x1b => instr!(tcs),
-                0x20 => instr!(jsr absolute),
-                0x5b => instr!(tcd),
-                0x78 => instr!(sei),
-                0x85 => instr!(sta direct),
-                0x8d => instr!(sta absolute),
-                0x9c => instr!(stz absolute),
-                0xa0 => instr!(ldy immediate_index),
-                0xa9 => instr!(lda immediate_acc),
-                0xc2 => instr!(rep immediate8),
-                0xcd => instr!(cmp absolute),
-                0xd0 => instr!(bne),
-                0xe2 => instr!(sep immediate8),
-                0xfb => instr!(xce),
-                _ => panic!("illegal opcode: {:02X}", op),
-            }
-
-            opcount -= 1;
+        let op = self.fetchb();
+        match op {
+            0x08 => instr!(php),
+            0x18 => instr!(clc),
+            0x1b => instr!(tcs),
+            0x20 => instr!(jsr absolute),
+            0x5b => instr!(tcd),
+            0x78 => instr!(sei),
+            0x85 => instr!(sta direct),
+            0x8d => instr!(sta absolute),
+            0x9c => instr!(stz absolute),
+            0xa0 => instr!(ldy immediate_index),
+            0xa9 => instr!(lda immediate_acc),
+            0xc2 => instr!(rep immediate8),
+            0xcd => instr!(cmp absolute),
+            0xd0 => instr!(bne),
+            0xe2 => instr!(sep immediate8),
+            0xfb => instr!(xce),
+            _ => panic!("illegal opcode: {:02X}", op),
         }
-
-        info!("EXITING")
     }
 
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing

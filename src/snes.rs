@@ -94,6 +94,17 @@ impl Snes {
     }
 
     pub fn run(&mut self) {
-        self.cpu.run()
+        // this counts down until 0 and then exits
+        // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
+        let mut opcount = 300;
+
+        while opcount > 0 {
+            self.cpu.dispatch();
+            self.cpu.mem.apu.tick();
+
+            opcount -= 1;
+        }
+
+        info!("EXITING");
     }
 }
