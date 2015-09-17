@@ -105,15 +105,10 @@ impl Spc700 {
         self.load(pc)
     }
 
-    fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
-        let op_and_am = match am {
-            None => format!("{}", op),
-            Some(am) => format!("{}, {}", op, am.format(self)),
-        };
-
+    fn trace_op(&self, pc: u16, opstr: &str) {
         trace!("{:04X}     {:14} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
-            op_and_am,
+            opstr,
             self.a,
             self.x,
             self.y,
@@ -129,12 +124,13 @@ impl Spc700 {
         macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
             ( $name:ident $s:tt ) => {{
-                self.trace_op(pc, e!($s), None);
+                self.trace_op(pc, e!($s));
                 self.$name()
             }};
             ( $name:ident $s:tt $am:ident ) => {{
                 let am = self.$am();
-                self.trace_op(pc, e!($s), Some(&am));
+                let amfmt = am.format(self);
+                self.trace_op(pc, &format!(e!($s), amfmt));
                 self.$name(am)
             }};
         }
@@ -142,8 +138,9 @@ impl Spc700 {
         let op = self.fetchb();
         match op {
             0xbd => instr!(mov_sp_x "mov sp, x"),
-            0xcd => instr!(movx "mov x" immediate),
-            0xe8 => instr!(mova "mov a" immediate),
+            0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
+            0xcd => instr!(movx "mov x, {}" immediate),
+            0xe8 => instr!(mova "mov a, {}" immediate),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal opcode: {:02X}", op);
@@ -154,6 +151,11 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    /// Store A wherever
+    fn mov_sta(&mut self, am: AddressingMode) {
+        let a = self.a;
+        am.storeb(self, a);
+    }
     fn mov_sp_x(&mut self) {
         self.sp = self.x;
     }
@@ -172,6 +174,8 @@ impl Spc700 {
 enum AddressingMode {
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     Direct(u8),
+    /// Where X points to (in page 0, $00 - $ff)
+    IndirectX,
     Immediate(u8),
 }
 
@@ -186,6 +190,11 @@ impl AddressingMode {
         }
     }
 
+    fn storeb(self, spc: &mut Spc700, value: u8) {
+        let a = self.address(spc);
+        spc.store(a, value);
+    }
+
     fn address(&self, spc: &Spc700) -> u16 {
         match *self {
             AddressingMode::Immediate(_) => panic!("attempted to get address of immediate"),
@@ -196,12 +205,16 @@ impl AddressingMode {
                     offset as u16
                 }
             }
+            AddressingMode::IndirectX => {
+                spc.x as u16
+            }
         }
     }
 
     fn format(&self, spc: &Spc700) -> String {
         match *self {
             AddressingMode::Direct(offset) => format!("${:02X}", offset),
+            AddressingMode::IndirectX => format!("(X)"),
             AddressingMode::Immediate(val) => format!("#${:02X}", val),
         }
     }
@@ -211,6 +224,9 @@ impl AddressingMode {
 impl Spc700 {
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())
+    }
+    fn indirect_x(&mut self) -> AddressingMode {
+        AddressingMode::IndirectX
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
@@ -223,11 +239,11 @@ const IPL_ROM: [u8; 64] = [
     // Set up stack pointer at $01ef
     0xcd, 0xef,         // mov x, #$ef
     0xbd,               // mov sp, x
-    // Fill the stack with $00
+    // Fill memory at $00-$ff with $00
     0xe8, 0x00,         // mov a, #$00
-    0xc6,               // mov (x), a       :fill_stack
+    0xc6,               // mov (x), a       :fill_zero_page
     0x1d,               // dec x
-    0xd0, 0xfc,         // bne $0ba0        -> fill_stack
+    0xd0, 0xfc,         // bne $0ba0        -> fill_zero_page
 
     // Write 0xaabb to ports 0 and 1 (registers $f4 and $f5)
     // This is the "ready" signal. The main CPU will wait until it sees it.
@@ -271,7 +287,7 @@ const IPL_ROM: [u8; 64] = [
     0xd0, 0xdb,         // bne $0bb1 (-37)  -> recv
 
     // We're done, jump to $0000 (x is $00 here)
-    0x1f, 0x00, 0x00,   // jmp [$0000]+x
+    0x1f, 0x00, 0x00,   // jmp [$0000+x]
 
     // reset vector is at 0xfffe and points to the start of the IPL ROM: 0xffc0
     0xc0, 0xff,
