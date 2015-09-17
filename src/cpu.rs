@@ -280,7 +280,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xfb => instr!(xce),
             _ => {
                 instr!(ill);
-                panic!("illegal opcode: {:02X}", op);
+                panic!("illegal CPU opcode: {:02X}", op);
             }
         }
     }
