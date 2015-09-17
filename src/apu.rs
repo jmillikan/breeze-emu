@@ -66,12 +66,17 @@ impl StatusReg {
 
 impl Spc700 {
     fn new() -> Spc700 {
-        const MEM_SIZE: u16 = !0;
-        const IPL_START: u16 = MEM_SIZE - 64;
+        const MEM_SIZE: usize = 65536;
+        const IPL_START: usize = MEM_SIZE - 64;
+
         let mut mem = vec![0; MEM_SIZE as usize];
         for i in 0..64 {
             mem[IPL_START as usize + i] = IPL_ROM[i];
         }
+
+        let pcl = mem[RESET_VEC as usize] as u16;
+        let pch = mem[RESET_VEC as usize + 1] as u16;
+        let pc = (pch << 8) | pcl;
 
         Spc700 {
             mem: mem,
@@ -79,7 +84,7 @@ impl Spc700 {
             x: 0,
             y: 0,
             sp: 0,
-            pc: RESET_VEC,
+            pc: pc,
             psw: StatusReg(0),  // FIXME is 0 correct`?
         }
     }
@@ -130,33 +135,86 @@ impl Spc700 {
 
         let op = self.fetchb();
         match op {
-            _ => instr!(ill)
+            _ => {
+                instr!(ill);
+                panic!("illegal opcode: {:02X}", op);
+            }
         }
     }
 }
 
 /// Opcode implementations
 impl Spc700 {
-    fn ill(&mut self) {
-        panic!("illegal opcode")
-    }
+    fn ill(&mut self) {}
 }
 
-const IPL_ROM: [u8; 64] = [0; 64];
 
 enum AddressingMode {
-
+    /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
+    Direct(u8),
 }
 
 impl AddressingMode {
     fn format(&self, spc: &Spc700) -> String {
         match *self {
-
+            AddressingMode::Direct(offset) => format!("${:02}", offset),
         }
     }
 }
 
 /// Addressing mode construction
 impl Spc700 {
-
+    fn direct(&mut self) -> AddressingMode {
+        AddressingMode::Direct(self.fetchb())
+    }
 }
+
+const IPL_ROM: [u8; 64] = [
+    // NOTE: mov operands are `dest, source`
+
+    // Set up stack pointer at $01ef
+    0xcd, 0xef,         // mov x, #$ef
+    0xbd,               // mov sp, x
+    // Fill the stack with $00
+    0xe8, 0x00,         // mov a, #$00
+    0xc6,               // mov (x), a       :fill_stack
+    0x1d,               // dec x
+    0xd0, 0xfc,         // bne $0ba0        -> fill_stack
+
+    // Write 0xaabb to ports 0 and 1 (registers $f4 and $f5)
+    // This is the "ready" signal. The main CPU will wait until it sees it.
+    0x8f, 0xaa, 0xf4,   // mov $f4, #$aa
+    0x8f, 0xbb, 0xf5,   // mov $f5, #$bb
+
+    // Wait until $cc is written to port 0 (reg $f4)
+    0x78, 0xcc, 0xf4,   // cmp #$cc, #$f4    :wait_start
+    0xd0, 0xfb,         // bne $0baa        -> wait_start
+
+    0x2f, 0x19,         // bra $0bca        -> lbl0
+
+    0xeb, 0xf4,         // mov y, $f4
+    0xd0, 0xfc,         // bne $0bb1
+    0x7e, 0xf4,         // cmp y, $f4
+    0xd0, 0x0b,         // bne $0bc4
+    0xe4, 0xf5,         // mov a, $f5
+    0xcb, 0xf4,         // mov $f4, y
+    0xd7, 0x00,         // mov [$00]+y, a
+    0xfc,               // inc y
+    0xd0, 0xf3,         // bne $0bb5
+    0xab, 0x01,         // inc $01
+    0x10, 0xef,         // bpl $0bb5
+    0x7e, 0xf4,         // cmp y, $f4
+    0x10, 0xeb,         // bpl $0bb5
+
+    0xba, 0xf6,         // movw ya, $f6      :lbl0
+    0xda, 0x00,         // movw $00, ya
+    0xba, 0xf4,         // movw ya, $f4
+    0xc4, 0xf4,         // mov $f4, a
+    0xdd,               // mov a, y
+    0x5d,               // mov x, a
+    0xd0, 0xdb,         // bne $0bb1
+    0x1f, 0x00, 0x00,   // jmp [$0000]+x
+
+    // reset vector is at 0xfffe and points to the start of the IPL ROM: 0xffc0
+    0xc0, 0xff,
+];
