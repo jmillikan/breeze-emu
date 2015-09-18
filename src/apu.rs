@@ -195,7 +195,8 @@ impl Spc700 {
 
         let op = self.fetchb();
         match op {
-            0x1d => instr!(dec_x "dec x"),
+            0x1d => instr!(dec "dec {}" x),
+            0xfc => instr!(inc "inc {}" y),
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
@@ -273,8 +274,13 @@ impl Spc700 {
         }
     }
 
-    fn dec_x(&mut self) {
-        self.x = self.psw.set_nz(self.x.wrapping_sub(1));
+    fn dec(&mut self, am: AddressingMode) {
+        let val = am.clone().loadb(self);
+        am.storeb(self, val.wrapping_sub(1));
+    }
+    fn inc(&mut self, am: AddressingMode) {
+        let val = am.clone().loadb(self);
+        am.storeb(self, val.wrapping_add(1));
     }
 
     /// Copy a byte
