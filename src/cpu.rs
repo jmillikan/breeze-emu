@@ -602,21 +602,11 @@ impl<T: AddressSpace> Cpu<T> {
         self.pc = am.address(self).1;
     }
 
-    /// Clear Interrupt Disable Flag (Enable IRQs)
-    fn cli(&mut self) {
-        self.p.set_irq_disable(false);
-    }
-
-    /// Disable IRQs
-    fn sei(&mut self) {
-        self.p.set_irq_disable(true);
-    }
+    fn cli(&mut self) { self.p.set_irq_disable(false) }
+    fn sei(&mut self) { self.p.set_irq_disable(true) }
 
     /// Store 0 to memory
-    fn stz(&mut self, am: AddressingMode) {
-        // Changes no flags
-        am.storeb(self, 0);
-    }
+    fn stz(&mut self, am: AddressingMode) { am.storeb(self, 0) }
 
     /// Load accumulator from memory
     fn lda(&mut self, am: AddressingMode) {
@@ -665,10 +655,7 @@ impl<T: AddressSpace> Cpu<T> {
         }
     }
 
-    /// Clear carry
     fn clc(&mut self) { self.p.set_carry(false); }
-
-    /// Set Carry Flag
     fn sec(&mut self) { self.p.set_carry(true); }
 
     /// Exchange carry and emulation flags
@@ -804,7 +791,7 @@ impl AddressingMode {
         assert!(addr < 0xffff, "loadw on bank boundary");
 
         cpu.mem.store(bank, addr, value as u8);
-        cpu.mem.store(bank, addr, (value >> 8) as u8);
+        cpu.mem.store(bank, addr + 1, (value >> 8) as u8);
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is

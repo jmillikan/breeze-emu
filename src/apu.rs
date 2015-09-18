@@ -11,18 +11,21 @@ impl Apu {
 
     /// Store a byte in an IO port (0-3)
     ///
-    /// IO ports are mapped to internal registers 0xf4 - 0xf7
+    /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
     pub fn store(&mut self, port: u8, value: u8) {
         debug_assert!(port < 4);
-        self.cpu.store(0xf4 + port as u16, value)
+        debug!("STORE TO APU: ${:02X} (${:04X}) = ${:02X}", 0xf4 + port, 0x2140 + port as u16, value);
+        self.cpu.io_vals[port as usize] = value;
     }
 
     /// Load a byte from an IO port (0-3)
     ///
-    /// IO ports are mapped to internal registers 0xf4 - 0xf7
+    /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
     pub fn load(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
-        self.cpu.load(0xf4 + port as u16)
+        let val = self.cpu.mem[0xf4 + port as usize];
+        debug!("LOAD FROM APU: ${:02X} (${:04X}) = ${:02X}", 0xf4 + port, 0x2140 + port as u16, val);
+        val
     }
 
     // FIXME temp. function
@@ -39,6 +42,10 @@ struct Spc700 {
     // 64KB of RAM (FIXME use a fixed-size array)
     // (this is not the address space!)
     mem: Vec<u8>,
+
+    /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
+    /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
+    io_vals: [u8; 4],
 
     a: u8,
     x: u8,
@@ -102,6 +109,7 @@ impl Spc700 {
 
         Spc700 {
             mem: mem,
+            io_vals: [0; 4],
             a: 0,
             x: 0,
             y: 0,
@@ -112,7 +120,10 @@ impl Spc700 {
     }
 
     fn load(&mut self, addr: u16) -> u8 {
-        self.mem[addr as usize]
+        match addr {
+            0xf4 ... 0xf7 => self.io_vals[addr as usize - 0xf4],
+            _ => self.mem[addr as usize],
+        }
     }
 
     fn store(&mut self, addr: u16, val: u8) {
@@ -181,7 +192,7 @@ impl Spc700 {
             0x1d => instr!(dec_x "dec x"),
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
-            0x5d => instr!(mov_x_a "mov x, y"),
+            0x5d => instr!(mov_x_a "mov x, a"),
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
             0xba => instr!(movw_l "movw ya, {}" direct),
@@ -204,14 +215,18 @@ impl Spc700 {
 /// Opcode implementations
 impl Spc700 {
     /// movw-load. Fetches a word from the addressing mode and puts it into Y and A
+    /// (`movw ya, {X}`)
     fn movw_l(&mut self, am: AddressingMode) {
         let (lo, hi) = am.loadw(self);
         self.y = lo;
         self.a = hi;
         self.psw.set_nz(hi);
+
+        debug!("LOADW got ${:02X}{:02X}", lo, hi);
     }
 
     /// movw-store. Stores Y/A at the given word address.
+    /// (`movw {X}, ya`)
     fn movw_s(&mut self, am: AddressingMode) {
         // No flags modified
         let y = self.y;
@@ -263,9 +278,9 @@ impl Spc700 {
     }
     /// Store A wherever (`mov {X}, a`)
     fn mov_sta(&mut self, am: AddressingMode) {
-        // No flags modified
+        // No flags modified. This reads the destination first.
         let a = self.a;
-        debug!("STORE {:02X}", a);
+        am.clone().loadb(self);
         am.storeb(self, a);
     }
     fn mov_a_y(&mut self) {
@@ -281,7 +296,11 @@ impl Spc700 {
     fn ill(&mut self) {}
 }
 
-
+/// An addressing mode of the SPC700.
+///
+/// As a safety measure, the `loadb` and `storeb` methods take the mode by value. We derive `Clone`
+/// to make multiple uses explicit.
+#[derive(Clone)]
 enum AddressingMode {
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     Direct(u8),
@@ -307,9 +326,18 @@ impl AddressingMode {
 
     /// Loads a word. Returns low and high byte.
     fn loadw(self, spc: &mut Spc700) -> (u8, u8) {
-        let a = self.address(spc);
-        let lo = spc.load(a);
-        let hi = spc.load((a & 0xff00) | (a as u8 + 1) as u16); // wrap low byte XXX
+        let addr = self.address(spc);
+        let addr2;  // address of second (high) byte
+        if let AddressingMode::Direct(_) = self {
+            // Direct Page access will wrap in the page
+            addr2 = (addr & 0xff00) | (addr as u8).wrapping_add(1) as u16;   // low byte wraps
+        } else {
+            // FIXME wrapping
+            addr2 = addr + 1;
+        }
+
+        let lo = spc.load(addr);
+        let hi = spc.load(addr2);
         (lo, hi)
     }
 
@@ -319,9 +347,18 @@ impl AddressingMode {
     }
 
     fn storew(self, spc: &mut Spc700, (lo, hi): (u8, u8)) {
-        let a = self.address(spc);
-        spc.store(a, lo);
-        spc.store((a & 0xff00) | (a as u8 + 1) as u16, hi); // wrap low byte XXX
+        let addr = self.address(spc);
+        let addr2;  // address of second (high) byte
+        if let AddressingMode::Direct(_) = self {
+            // Direct Page access will wrap in the page
+            addr2 = (addr & 0xff00) | (addr as u8).wrapping_add(1) as u16;   // low byte wraps
+        } else {
+            // FIXME wrapping
+            addr2 = addr + 1;
+        }
+
+        spc.store(addr, lo);
+        spc.store(addr2, hi);
     }
 
     fn address(&self, spc: &Spc700) -> u16 {

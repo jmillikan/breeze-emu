@@ -65,14 +65,14 @@ impl AddressSpace for Memory {
                     }
                     0x4200 => {
                         // NMITIMEN - NMI/IRQ enable
-                        // E--HV---J
+                        // E-HV---J
                         // E: Enable NMI
                         // H: Enable IRQ on H-Counter
                         // V: Enable IRQ on V-Counter
                         // J: Enable Auto-Joypad-Read
                         if value & 0x80 != 0 { panic!("NYI: NMI") }
-                        if value & 0x10 != 0 { panic!("NYI: IRQ-H") }
-                        if value & 0x08 != 0 { panic!("NYI: IRQ-V") }
+                        if value & 0x20 != 0 { panic!("NYI: IRQ-H") }
+                        if value & 0x10 != 0 { panic!("NYI: IRQ-V") }
                         if value & 0x01 != 0 { panic!("NYI: Auto-Joypad-Read") }
                     }
                     0x420b => {
@@ -114,10 +114,9 @@ impl Snes {
     pub fn run(&mut self) {
         // this counts down until 0 and then exits
         // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
-        let mut opcount = 1000;
+        let mut opcount = 1500;
 
         while opcount > 0 {
-            self.cpu.dispatch();
             self.cpu.dispatch();
             self.cpu.dispatch();
             self.cpu.mem.apu.tick();
