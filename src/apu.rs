@@ -126,6 +126,12 @@ impl Spc700 {
         }
     }
 
+    fn loadw(&mut self, addr: u16) -> u16 {
+        let lo = self.load(addr) as u16;
+        let hi = self.load(addr + 1) as u16;
+        (hi << 8) | lo
+    }
+
     fn store(&mut self, addr: u16, val: u8) {
         self.mem[addr as usize] = val;
     }
@@ -194,6 +200,7 @@ impl Spc700 {
             0x2f => instr!(bra "bra {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0x7e => instr!(cmp "cmp {1}, {0}" direct y),
             0xbd => instr!(mov_sp_x "mov sp, x"),
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
             // NB: Moves into registers will always set N and Z
@@ -202,9 +209,12 @@ impl Spc700 {
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xe8 => instr!(mov "mov {1}, {0}" immediate a),
             0xcd => instr!(mov "mov {1}, {0}" immediate x),
+            0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
+            0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
+            0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             _ => {
@@ -241,6 +251,7 @@ impl Spc700 {
     }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
+        // Sets N, Z and C
         // FIXME check if the order is correct
         let a = a.loadb(self);
         let b = b.loadb(self);
@@ -289,8 +300,17 @@ enum AddressingMode {
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     Direct(u8),
     /// Where X points to (in page 0, $00 - $ff)
+    /// Address = `X`
     IndirectX,
+    /// Fetch the word address at a direct address (this is the "indirect" part), then index the
+    /// fetched address with Y.
+    /// Address = `[D + <val>] + Y`
+    IndirectIndexed(u8),
+    /// Index direct address with X, then "indirect" by fetching the word address stored there.
+    /// Address = `[D + <val> + X]`
+    IndexedIndirect(u8),
     /// Absolute address + X (`[$abcd+X]`)
+    /// (only used for `JMP`)
     AbsoluteX(u16),
     /// Used for branch instructions
     Rel(i8),
@@ -366,30 +386,30 @@ impl AddressingMode {
         spc.store(addr2, hi);
     }
 
-    fn address(&self, spc: &Spc700) -> u16 {
+    fn address(&self, spc: &mut Spc700) -> u16 {
         use apu::AddressingMode::*;
 
+        fn direct(offset: u16, dp: bool) -> u16 {
+            offset + match dp {
+                true => 0x100,
+                false => 0,
+            }
+        }
+
+        // FIXME wrapping is (intentionally) wrong here!
         match *self {
             Immediate(_) => panic!("attempted to get address of immediate"),
             A | X | Y => panic!("attempted to get address of register"),
-            Direct(offset) => {
-                if spc.psw.direct_page() {
-                    offset as u16 + 0x100
-                } else {
-                    offset as u16
-                }
+            Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
+            IndirectX => spc.x as u16,
+            IndirectIndexed(offset) => {
+                let addr_ptr = direct(offset as u16, spc.psw.direct_page());
+                let addr = spc.loadw(addr_ptr) + spc.x as u16;
+                addr
             }
-            IndirectX => {
-                spc.x as u16
-            }
-            AbsoluteX(abs) => {
-                // XXX wrapping?
-                abs + spc.x as u16
-            }
-            Rel(rel) => {
-                // FIXME wrapping is wrong here!
-                (spc.pc as i32 + rel as i32) as u16
-            }
+            IndexedIndirect(offset) => panic!("NYI"),
+            AbsoluteX(abs) => abs + spc.x as u16,
+            Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
         }
     }
 
@@ -397,14 +417,16 @@ impl AddressingMode {
         use apu::AddressingMode::*;
 
         match *self {
-            A =>              "a".to_owned(),
-            X =>              "x".to_owned(),
-            Y =>              "y".to_owned(),
-            Immediate(val) => format!("#${:02X}", val),
-            Direct(offset) => format!("${:02X}", offset),
-            IndirectX =>      format!("(X)"),
-            AbsoluteX(abs) => format!("[${:04X}+X]", abs),
-            Rel(rel) =>       format!("{:+}", rel),
+            A =>                       "a".to_owned(),
+            X =>                       "x".to_owned(),
+            Y =>                       "y".to_owned(),
+            Immediate(val) =>          format!("#${:02X}", val),
+            Direct(offset) =>          format!("${:02X}", offset),
+            IndirectX =>               format!("(X)"),
+            IndirectIndexed(offset) => format!("[${:02X}]+Y", offset),
+            IndexedIndirect(offset) => format!("[${:02X}+X]", offset),
+            AbsoluteX(abs) =>          format!("[${:04X}+X]", abs),
+            Rel(rel) =>                format!("{:+}", rel),
         }
     }
 }
@@ -416,6 +438,12 @@ impl Spc700 {
     }
     fn indirect_x(&mut self) -> AddressingMode {
         AddressingMode::IndirectX
+    }
+    fn indirect_indexed(&mut self) -> AddressingMode {
+        AddressingMode::IndirectIndexed(self.fetchb())
+    }
+    fn indexed_indirect(&mut self) -> AddressingMode {
+        AddressingMode::IndexedIndirect(self.fetchb())
     }
     fn absolute_x(&mut self) -> AddressingMode {
         AddressingMode::AbsoluteX(self.fetchw())
