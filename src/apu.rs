@@ -203,7 +203,7 @@ impl Spc700 {
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
 
-            0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
+            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
@@ -331,9 +331,9 @@ enum AddressingMode {
     /// Index direct address with X, then "indirect" by fetching the word address stored there.
     /// Address = `[D + <val> + X]`
     IndexedIndirect(u8),
-    /// Absolute address + X (`[$abcd+X]`)
+    /// Fetch the target word address from an absolute address + X (`[$abcd+X]`)
     /// (only used for `JMP`)
-    AbsoluteX(u16),
+    AbsIndexedIndirect(u16),
     /// Used for branch instructions
     Rel(i8),
     A,
@@ -431,7 +431,11 @@ impl AddressingMode {
                 addr
             }
             IndexedIndirect(offset) => panic!("NYI"),
-            AbsoluteX(abs) => abs + spc.x as u16,
+            AbsIndexedIndirect(abs) => {
+                let addr_ptr = abs + spc.x as u16;
+                let addr = spc.loadw(addr_ptr);
+                addr
+            }
             Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
         }
     }
@@ -448,7 +452,7 @@ impl AddressingMode {
             IndirectX =>               format!("(X)"),
             IndirectIndexed(offset) => format!("[${:02X}]+Y", offset),
             IndexedIndirect(offset) => format!("[${:02X}+X]", offset),
-            AbsoluteX(abs) =>          format!("[${:04X}+X]", abs),
+            AbsIndexedIndirect(abs) => format!("[${:04X}+X]", abs),
             Rel(rel) =>                format!("{:+}", rel),
         }
     }
@@ -468,8 +472,8 @@ impl Spc700 {
     fn indexed_indirect(&mut self) -> AddressingMode {
         AddressingMode::IndexedIndirect(self.fetchb())
     }
-    fn absolute_x(&mut self) -> AddressingMode {
-        AddressingMode::AbsoluteX(self.fetchw())
+    fn abs_indexed_indirect(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedIndirect(self.fetchw())
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
@@ -488,7 +492,7 @@ impl Spc700 {
     }
 }
 
-const IPL_ROM: [u8; 64] = [
+static IPL_ROM: [u8; 64] = [
     // NOTE: mov operands are `dest, source`
 
     // Set up stack pointer at $01ef
