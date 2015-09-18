@@ -97,6 +97,8 @@ pub struct Cpu<T: AddressSpace> {
     p: StatusReg,
     emulation: bool,
 
+    pub trace: bool,
+
     pub mem: T,
 }
 
@@ -125,6 +127,7 @@ impl<T: AddressSpace> Cpu<T> {
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg(SMALL_ACC_FLAG | SMALL_INDEX_FLAG | IRQ_FLAG),
             emulation: true,
+            trace: false,
 
             mem: mem,
         }
@@ -207,7 +210,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
         use log::LogLevel::Trace;
-        if !log_enabled!(Trace) { return }
+        if !log_enabled!(Trace) || !self.trace { return }
 
         let opstr = format!("{} {}",
             op,

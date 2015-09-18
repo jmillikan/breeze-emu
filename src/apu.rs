@@ -1,5 +1,5 @@
 pub struct Apu {
-    cpu: Spc700,
+    pub cpu: Spc700,
 }
 
 impl Apu {
@@ -14,7 +14,6 @@ impl Apu {
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
     pub fn store(&mut self, port: u8, value: u8) {
         debug_assert!(port < 4);
-        debug!("STORE TO APU: ${:02X} (${:04X}) = ${:02X}", 0xf4 + port, 0x2140 + port as u16, value);
         self.cpu.io_vals[port as usize] = value;
     }
 
@@ -24,7 +23,6 @@ impl Apu {
     pub fn load(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
         let val = self.cpu.mem[0xf4 + port as usize];
-        debug!("LOAD FROM APU: ${:02X} (${:04X}) = ${:02X}", 0xf4 + port, 0x2140 + port as u16, val);
         val
     }
 
@@ -38,7 +36,7 @@ impl Apu {
 /// 64 KB of RAM. The last 64 Bytes in it's address space are mapped to the "IPL ROM", which
 /// contains a small piece of startup code that allows the main CPU to transfer a program to the
 /// APU (we just copy the IPL ROM into the RAM and make it read-write).
-struct Spc700 {
+pub struct Spc700 {
     // 64KB of RAM (FIXME use a fixed-size array)
     // (this is not the address space!)
     mem: Vec<u8>,
@@ -53,6 +51,8 @@ struct Spc700 {
     sp: u8,
     pc: u16,
     psw: StatusReg,
+
+    pub trace: bool,
 }
 
 const RESET_VEC: u16 = 0xFFFE;
@@ -116,6 +116,7 @@ impl Spc700 {
             sp: 0,
             pc: pc,
             psw: StatusReg(0),  // FIXME is 0 correct`?
+            trace: false,
         }
     }
 
@@ -168,13 +169,16 @@ impl Spc700 {
         macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
             ( $name:ident $s:tt ) => {{
-                self.trace_op(pc, e!($s));
+                use log::LogLevel::Trace;
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, e!($s));
+                }
                 self.$name()
             }};
             ( $name:ident $s:tt $am:ident ) => {{
                 use log::LogLevel::Trace;
                 let am = self.$am();
-                if log_enabled!(Trace) {
+                if log_enabled!(Trace) && self.trace {
                     let amfmt = am.format(self);
                     self.trace_op(pc, &format!(e!($s), amfmt));
                 }
@@ -184,7 +188,7 @@ impl Spc700 {
                 use log::LogLevel::Trace;
                 let am = self.$am();
                 let am2 = self.$am2();
-                if log_enabled!(Trace) {
+                if log_enabled!(Trace) && self.trace {
                     let amfmt = am.format(self);
                     let amfmt2 = am2.format(self);
                     self.trace_op(pc, &format!(e!($s), amfmt, amfmt2));
@@ -242,7 +246,7 @@ impl Spc700 {
         self.a = lo;
         self.psw.set_nz(hi);
 
-        debug!("LOADW got ${:02X}{:02X}", hi, lo);
+        //trace!("LOADW got ${:02X}{:02X}", hi, lo);
     }
 
     /// movw-store. Stores Y/A at the given word address.

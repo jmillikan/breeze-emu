@@ -112,15 +112,23 @@ impl Snes {
     }
 
     pub fn run(&mut self) {
+        const TRACE_START: usize = 3800;
+        const OP_LIMIT: usize = 4700;
+
         // this counts down until 0 and then exits
         // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
-        let mut opcount = 1500;
+        let mut opcount = 0;
 
-        while opcount > 0 {
+        loop {
             self.cpu.dispatch();
             self.cpu.mem.apu.tick();
 
-            opcount -= 1;
+            opcount += 1;
+            if opcount == TRACE_START {
+                self.cpu.trace = true;
+                self.cpu.mem.apu.cpu.trace = true;
+            }
+            if opcount == OP_LIMIT { break }
         }
 
         info!("EXITING");
