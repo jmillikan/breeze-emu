@@ -286,6 +286,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x2a => instr!(rol_a),
             0x2f => instr!(and absolute_long),
             0x69 => instr!(adc immediate_acc),
+            0xe9 => instr!(sbc immediate_acc),
             0xc8 => instr!(iny),
             0xca => instr!(dex),
 
@@ -293,6 +294,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x5b => instr!(tcd),
             0x1b => instr!(tcs),
             0xaa => instr!(tax),
+            0xa8 => instr!(tay),
             0x98 => instr!(tya),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
@@ -311,6 +313,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xe0 => instr!(cpx immediate_index),
             0x80 => instr!(bra rel),
             0xd0 => instr!(bne rel),
+            0x10 => instr!(bpl rel),
             0x70 => instr!(bvs rel),
             0x20 => instr!(jsr absolute),
             0x60 => instr!(rts),
@@ -387,14 +390,33 @@ impl<T: AddressSpace> Cpu<T> {
 
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
         } else {
-            let a = self.a;
             let val = am.loadw(self);
-            let res = a as u32 + val as u32 + c as u32;
+            let res = self.a as u32 + val as u32 + c as u32;
             self.p.set_carry(res > 65535);
             let res = res as u16;
-            self.p.set_overflow((a ^ val) & 0x8000 == 0 && (a ^ res) & 0x8000 == 0x8000);
+            self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
 
             self.a = self.p.set_nz(res);
+        }
+    }
+
+    /// Subtract with Borrow from Accumulator
+    fn sbc(&mut self, am: AddressingMode) {
+        // XXX Changes N, Z, C according to datasheet, but also V according to wiki
+        let c = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            let v = am.loadb(self);
+            let res = a as i16 - v as i16 - c;
+            self.p.set_carry(res < 0);
+
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+        } else {
+            let v = am.loadw(self);
+            let res = self.a as i32 - v as i32 - c as i32;
+            self.p.set_carry(res < 0);
+
+            self.a = self.p.set_nz(res as u16);
         }
     }
 
@@ -414,16 +436,19 @@ impl<T: AddressSpace> Cpu<T> {
     /// Transfer Accumulator to Index Register X
     fn tax(&mut self) {
         // Changes N and Z
-        let a = if self.p.small_acc() {
-            self.a & 0xff
-        } else {
-            self.a
-        };
-
         if self.p.small_index() {
-            self.x = (self.x & 0xff00) | self.p.set_nz_8(a as u8) as u16;
+            self.x = (self.x & 0xff00) | self.p.set_nz_8(self.a as u8) as u16;
         } else {
-            self.x = self.p.set_nz(a);
+            self.x = self.p.set_nz(self.a);
+        }
+    }
+
+    fn tay(&mut self) {
+        // Changes N and Z
+        if self.p.small_index() {
+            self.y = (self.y & 0xff00) | self.p.set_nz_8(self.a as u8) as u16;
+        } else {
+            self.y = self.p.set_nz(self.a);
         }
     }
 
@@ -481,6 +506,15 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.popw();
             self.a = self.p.set_nz(a);
+        }
+    }
+
+    /// Branch if Plus (N = 0)
+    fn bpl(&mut self, am: AddressingMode) {
+        // Changes no flags
+        if !self.p.negative() {
+            let a = am.address(self);
+            self.branch(a);
         }
     }
 
