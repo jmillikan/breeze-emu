@@ -212,10 +212,12 @@ impl Spc700 {
             // Control flow and comparisons
             0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
+            0xf0 => instr!(beq "beq {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
 
             0x3f => instr!(call "call {}" abs),
+            0x6f => instr!(ret "ret"),
 
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
@@ -236,9 +238,11 @@ impl Spc700 {
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0xdd => instr!(mov "mov {1}, {0}" y a),
+            0xcb => instr!(mov "mov {1}, {0}" y direct),
+            0xcc => instr!(mov "mov {1}, {0}" y abs),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
-            0xcb => instr!(mov "mov {1}, {0}" y direct),
+            0xec => instr!(mov "mov {1}, {0}" abs y),
             0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
@@ -266,6 +270,19 @@ impl Spc700 {
         self.pushb(lo);
     }
 
+    fn popb(&mut self) -> u8 {
+        self.sp += 1;
+        let sp = 0x0100 | self.sp as u16;
+        self.load(sp)
+    }
+
+    /// Pops the low byte, then the high byte
+    fn popw(&mut self) -> u16 {
+        let lo = self.popb() as u16;
+        let hi = self.popb() as u16;
+        (hi << 8) | lo
+    }
+
     /// Performs a call: Pushed PCh and PCl onto the stack and sets PC to `addr`.
     fn call_addr(&mut self, addr: u16) {
         let pc = self.pc;
@@ -276,6 +293,10 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    fn ret(&mut self) {
+        let pc = self.popw();
+        self.pc = pc;
+    }
     fn call(&mut self, am: AddressingMode) {
         let addr = am.address(self);
         self.call_addr(addr);
@@ -330,6 +351,13 @@ impl Spc700 {
     fn bra(&mut self, am: AddressingMode) {
         let a = am.address(self);
         self.pc = a;
+    }
+
+    fn beq(&mut self, am: AddressingMode) {
+        if self.psw.zero() {
+            let a = am.address(self);
+            self.pc = a;
+        }
     }
 
     fn bne(&mut self, am: AddressingMode) {
