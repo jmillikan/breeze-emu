@@ -215,6 +215,8 @@ impl Spc700 {
             0xd0 => instr!(bne "bne {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
 
+            0x3f => instr!(call "call {}" abs),
+
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
             0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
@@ -226,6 +228,7 @@ impl Spc700 {
             0xe8 => instr!(mov "mov {1}, {0}" immediate a),
             0xcd => instr!(mov "mov {1}, {0}" immediate x),
             0x5d => instr!(mov "mov {1}, {0}" a x),
+            0xfd => instr!(mov "mov {1}, {0}" a y),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
             0xc5 => instr!(mov "mov {1}, {0}" a abs),
             0xd5 => instr!(mov "mov {1}, {0}" a abs_indexed_x),
@@ -236,6 +239,7 @@ impl Spc700 {
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
+            0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
@@ -246,10 +250,37 @@ impl Spc700 {
             }
         }
     }
+
+    fn pushb(&mut self, b: u8) {
+        let sp = 0x0100 | self.sp as u16;
+        self.store(sp, b);
+        // FIXME This wraps, but we'll let it crash
+        self.sp -= 1;
+    }
+
+    /// Pushes the high byte, then the low byte
+    fn pushw(&mut self, w: u16) {
+        let lo = w as u8;
+        let hi = (w >> 8) as u8;
+        self.pushb(hi);
+        self.pushb(lo);
+    }
+
+    /// Performs a call: Pushed PCh and PCl onto the stack and sets PC to `addr`.
+    fn call_addr(&mut self, addr: u16) {
+        let pc = self.pc;
+        self.pushw(pc);
+        self.pc = addr;
+    }
 }
 
 /// Opcode implementations
 impl Spc700 {
+    fn call(&mut self, am: AddressingMode) {
+        let addr = am.address(self);
+        self.call_addr(addr);
+    }
+
     /// Clear direct page bit
     fn clrp(&mut self) { self.psw.set_direct_page(false) }
 
