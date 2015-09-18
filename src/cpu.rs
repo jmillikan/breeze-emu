@@ -288,6 +288,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x2f => instr!(and absolute_long),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
+            0x1a => instr!(ina),
             0xc8 => instr!(iny),
             0xca => instr!(dex),
 
@@ -494,6 +495,16 @@ impl<T: AddressSpace> Cpu<T> {
             self.a = (self.a & 0xff00) | self.p.set_nz_8(self.y as u8) as u16;
         } else {
             self.a = self.p.set_nz(self.y);
+        }
+    }
+
+    /// Increment accumulator
+    fn ina(&mut self) {
+        if self.p.small_acc() {
+            let res = self.p.set_nz_8((self.a as u8).wrapping_add(1));
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            self.a = self.p.set_nz(self.a.wrapping_add(1));
         }
     }
 

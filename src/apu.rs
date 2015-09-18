@@ -197,12 +197,15 @@ impl Spc700 {
         match op {
             0x1d => instr!(dec "dec {}" x),
             0xfc => instr!(inc "inc {}" y),
+
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
+            0x10 => instr!(bpl "bpl {}" rel),
+
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
-            0xbd => instr!(mov_sp_x "mov sp, x"),
+
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
             // NB: Moves into registers will always set N and Z
             0x5d => instr!(mov "mov {1}, {0}" a x),
@@ -218,6 +221,7 @@ impl Spc700 {
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
+            0xbd => instr!(mov_sp_x "mov sp, x"),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal APU opcode: {:02X}", op);
@@ -269,6 +273,13 @@ impl Spc700 {
 
     fn bne(&mut self, am: AddressingMode) {
         if !self.psw.zero() {
+            let a = am.address(self);
+            self.pc = a;
+        }
+    }
+
+    fn bpl(&mut self, am: AddressingMode) {
+        if !self.psw.negative() {
             let a = am.address(self);
             self.pc = a;
         }
