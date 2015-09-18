@@ -49,6 +49,8 @@ impl StatusReg {
     fn set_zero(&mut self, value: bool)        { self.set(ZERO_FLAG, value) }
     fn set_carry(&mut self, value: bool)       { self.set(CARRY_FLAG, value) }
     fn set_irq_disable(&mut self, value: bool) { self.set(IRQ_FLAG, value) }
+    fn set_small_acc(&mut self, value: bool)   { self.set(SMALL_ACC_FLAG, value) }
+    fn set_small_index(&mut self, value: bool) { self.set(SMALL_INDEX_FLAG, value) }
 
     fn set_nz(&mut self, val: u16) -> u16 {
         self.set_zero(val == 0);
@@ -193,8 +195,10 @@ impl<T: AddressSpace> Cpu<T> {
         if !self.emulation && value {
             // Enter emulation mode
 
-            // Set high byte of stack ptr to 0x01
+            // Set high byte of stack ptr to 0x01 and set M/X bits to make A,X and Y 8-bit
             self.s = 0x0100 | (self.s & 0xff);
+            self.p.set_small_acc(true);
+            self.p.set_small_index(true);
         } else if self.emulation && !value {
             // Leave emulation mode (and enter native mode)
         }
@@ -378,7 +382,7 @@ impl<T: AddressSpace> Cpu<T> {
             let res = res as u8;
             self.p.set_overflow((a ^ val) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
 
-            self.a = (self.a & 0xff00) | res as u16;
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
         } else {
             let a = self.a;
             let val = am.loadw(self);
@@ -387,7 +391,7 @@ impl<T: AddressSpace> Cpu<T> {
             let res = res as u16;
             self.p.set_overflow((a ^ val) & 0x8000 == 0 && (a ^ res) & 0x8000 == 0x8000);
 
-            self.a = res;
+            self.a = self.p.set_nz(res);
         }
     }
 
@@ -620,7 +624,6 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Exchange carry and emulation flags
     fn xce(&mut self) {
-        // FIXME The Wiki says this also changes the M and X flag, what's up with that?
         let carry = self.p.carry();
         let e = self.emulation;
         self.p.set_carry(e);
@@ -649,7 +652,14 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Transfer 16-bit Accumulator to Stack Pointer
     fn tcs(&mut self) {
-        self.s = self.a;
+        if self.emulation {
+            // "When in the Emulation mode, a 01 is forced into SH. In this case, the B Accumulator
+            // will not be loaded into SH during a TCS instruction."
+            // S = 16-bit A; B = High byte of S
+            self.s = 0x0100 | (self.a & 0xff);
+        } else {
+            self.s = self.a;
+        }
     }
 
     fn ill(&mut self) {}
@@ -690,7 +700,8 @@ enum AddressingMode {
     // (DBR, D + <val> + Y)  [D+<val> wraps]
 
     /// "Direct Indirect Indexed Long/Long Indexed-[d],y"
-    /// (0, D + <val> + Y)
+    /// (bank, addr) := load(D + <val>)
+    /// (bank, addr + Y)
     IndirectLongIdx(u8),
 
     // "Direct Indirect Long-[d]"

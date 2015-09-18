@@ -13,6 +13,7 @@ impl Apu {
     ///
     /// IO ports are mapped to internal registers 0xf4 - 0xf7
     pub fn store(&mut self, port: u8, value: u8) {
+        debug_assert!(port < 4);
         self.cpu.store(0xf4 + port as u16, value)
     }
 
@@ -20,6 +21,7 @@ impl Apu {
     ///
     /// IO ports are mapped to internal registers 0xf4 - 0xf7
     pub fn load(&mut self, port: u8) -> u8 {
+        debug_assert!(port < 4);
         self.cpu.load(0xf4 + port as u16)
     }
 
@@ -121,7 +123,7 @@ impl Spc700 {
         let pc = self.pc;
         self.pc += 1;
 
-        self.load(pc)
+        self.mem[pc as usize]
     }
 
     fn fetchw(&mut self) -> u16 {
@@ -180,7 +182,7 @@ impl Spc700 {
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0x5d => instr!(mov_x_a "mov x, y"),
-            0x78 => instr!(cmp "cmp {}, {}" immediate direct),
+            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
@@ -382,7 +384,7 @@ const IPL_ROM: [u8; 64] = [
     // Set up stack pointer at $01ef
     0xcd, 0xef,         // FFC0  mov x, #$ef
     0xbd,               // FFC2  mov sp, x
-    // Fill memory at $00-$ff with $00 (also sets all registers to 0)
+    // Fill memory at $00-$ef with $00 (also sets all registers to 0)
     0xe8, 0x00,         // FFC3  mov a, #$00
     0xc6,               // FFC5  mov (x), a       :fill_zero_page
     0x1d,               // FFC6  dec x
