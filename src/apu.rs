@@ -59,14 +59,14 @@ const RESET_VEC: u16 = 0xFFFE;
 
 // PSW - Program Status Word
 struct StatusReg(u8);
-const NEG_FLAG: u8         = 1 << 7;
-const OVERFLOW_FLAG: u8    = 1 << 6;
-const DIRECT_PAGE_FLAG: u8 = 1 << 5;
+const NEG_FLAG: u8         = 0x80;
+const OVERFLOW_FLAG: u8    = 0x40;
+const DIRECT_PAGE_FLAG: u8 = 0x20;
 //
-const HALF_CARRY_FLAG: u8  = 1 << 3;
+const HALF_CARRY_FLAG: u8  = 0x08;
 //
-const ZERO_FLAG: u8        = 1 << 1;
-const CARRY_FLAG: u8       = 1 << 0;
+const ZERO_FLAG: u8        = 0x02;
+const CARRY_FLAG: u8       = 0x01;
 
 impl StatusReg {
     fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
@@ -82,9 +82,10 @@ impl StatusReg {
         }
     }
 
-    fn set_negative(&mut self, v: bool) { self.set(NEG_FLAG, v) }
-    fn set_zero(&mut self, v: bool)     { self.set(ZERO_FLAG, v) }
-    fn set_carry(&mut self, v: bool)    { self.set(CARRY_FLAG, v) }
+    fn set_negative(&mut self, v: bool)    { self.set(NEG_FLAG, v) }
+    fn set_zero(&mut self, v: bool)        { self.set(ZERO_FLAG, v) }
+    fn set_carry(&mut self, v: bool)       { self.set(CARRY_FLAG, v) }
+    fn set_direct_page(&mut self, v: bool) { self.set(DIRECT_PAGE_FLAG, v) }
 
     fn set_nz(&mut self, val: u8) -> u8 {
         self.set_negative(val & 0x80 != 0);
@@ -199,10 +200,15 @@ impl Spc700 {
 
         let op = self.fetchb();
         match op {
+            // Processor status
+            0x20 => instr!(clrp "clrp"),
+
+            // Arithmetic
             0x1d => instr!(dec "dec {}" x),
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
 
+            // Control flow and comparisons
             0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
@@ -211,22 +217,25 @@ impl Spc700 {
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
 
+            // "mov"
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
             // NB: Moves into registers will always set N and Z
-            0x5d => instr!(mov "mov {1}, {0}" a x),
             0x8f => instr!(mov "mov {1}, {0}" immediate direct),
-            0xdd => instr!(mov "mov {1}, {0}" y a),
             0xe8 => instr!(mov "mov {1}, {0}" immediate a),
             0xcd => instr!(mov "mov {1}, {0}" immediate x),
-            0xe4 => instr!(mov "mov {1}, {0}" direct a),
-            0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0x5d => instr!(mov "mov {1}, {0}" a x),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
-            0xcb => instr!(mov "mov {1}, {0}" y direct),
+            0xc5 => instr!(mov "mov {1}, {0}" a abs),
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
+            0xdd => instr!(mov "mov {1}, {0}" y a),
+            0xe4 => instr!(mov "mov {1}, {0}" direct a),
+            0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
+            0xaf => instr!(mov_xinc "mov x++, a"),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal APU opcode at {:04X}: {:02X}", pc, op);
@@ -237,6 +246,18 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    /// Clear direct page bit
+    fn clrp(&mut self) { self.psw.set_direct_page(false) }
+
+    /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
+    fn mov_xinc(&mut self) {
+        // No flags changed
+        let addr = self.x as u16;
+        let a = self.a;
+        self.store(addr, a);
+        self.x += 1;
+    }
+
     /// movw-load. Fetches a word from the addressing mode and puts it into Y and A
     /// (`movw ya, {X}`)
     fn movw_l(&mut self, am: AddressingMode) {
@@ -320,20 +341,24 @@ impl Spc700 {
 enum AddressingMode {
     Immediate(u8),
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
+    /// Address = `D + $ab`
     Direct(u8),
     /// Where X points to (in page 0, $00 - $ff)
     /// Address = `X`
     IndirectX,
     /// Fetch the word address at a direct address (this is the "indirect" part), then index the
     /// fetched address with Y.
-    /// Address = `[D + <val>] + Y`
+    /// Address = `[D + $ab] + Y`
     IndirectIndexed(u8),
     /// Index direct address with X, then "indirect" by fetching the word address stored there.
-    /// Address = `[D + <val> + X]`
+    /// Address = `[D + $ab + X]`
     IndexedIndirect(u8),
     /// Fetch the target word address from an absolute address + X (`[$abcd+X]`)
     /// (only used for `JMP`)
     AbsIndexedIndirect(u16),
+    /// Absolute address
+    /// Address = `$abcd`
+    Abs(u16),
     /// Used for branch instructions
     Rel(i8),
     A,
@@ -436,6 +461,7 @@ impl AddressingMode {
                 let addr = spc.loadw(addr_ptr);
                 addr
             }
+            Abs(addr) => addr,
             Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
         }
     }
@@ -453,6 +479,7 @@ impl AddressingMode {
             IndirectIndexed(offset) => format!("[${:02X}]+Y", offset),
             IndexedIndirect(offset) => format!("[${:02X}+X]", offset),
             AbsIndexedIndirect(abs) => format!("[${:04X}+X]", abs),
+            Abs(addr) =>               format!("${:04X}", addr),
             Rel(rel) =>                format!("{:+}", rel),
         }
     }
@@ -474,6 +501,9 @@ impl Spc700 {
     }
     fn abs_indexed_indirect(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedIndirect(self.fetchw())
+    }
+    fn abs(&mut self) -> AddressingMode {
+        AddressingMode::Abs(self.fetchw())
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
