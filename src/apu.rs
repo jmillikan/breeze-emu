@@ -205,6 +205,7 @@ impl Spc700 {
 
             // Arithmetic
             0x1d => instr!(dec "dec {}" x),
+            0x3d => instr!(inc "inx {}" x),
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
 
@@ -216,6 +217,7 @@ impl Spc700 {
 
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
+            0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
 
             // "mov"
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
@@ -226,6 +228,8 @@ impl Spc700 {
             0x5d => instr!(mov "mov {1}, {0}" a x),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
             0xc5 => instr!(mov "mov {1}, {0}" a abs),
+            0xd5 => instr!(mov "mov {1}, {0}" a abs_indexed_x),
+            0xd6 => instr!(mov "mov {1}, {0}" a abs_indexed_y),
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0xdd => instr!(mov "mov {1}, {0}" y a),
@@ -359,6 +363,10 @@ enum AddressingMode {
     /// Absolute address
     /// Address = `$abcd`
     Abs(u16),
+    /// Address = `$abcd+X`
+    AbsIndexedX(u16),
+    /// Address = `$abcd+Y`
+    AbsIndexedY(u16),
     /// Used for branch instructions
     Rel(i8),
     A,
@@ -462,6 +470,8 @@ impl AddressingMode {
                 addr
             }
             Abs(addr) => addr,
+            AbsIndexedX(addr) => addr + spc.x as u16,
+            AbsIndexedY(addr) => addr + spc.y as u16,
             Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
         }
     }
@@ -479,7 +489,10 @@ impl AddressingMode {
             IndirectIndexed(offset) => format!("[${:02X}]+Y", offset),
             IndexedIndirect(offset) => format!("[${:02X}+X]", offset),
             AbsIndexedIndirect(abs) => format!("[${:04X}+X]", abs),
+            // FIXME consider using `!abcd` notation for abs instead of `$abcd`
             Abs(addr) =>               format!("${:04X}", addr),
+            AbsIndexedX(addr) =>       format!("${:04X}+X", addr),
+            AbsIndexedY(addr) =>       format!("${:04X}+Y", addr),
             Rel(rel) =>                format!("{:+}", rel),
         }
     }
@@ -504,6 +517,12 @@ impl Spc700 {
     }
     fn abs(&mut self) -> AddressingMode {
         AddressingMode::Abs(self.fetchw())
+    }
+    fn abs_indexed_x(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedX(self.fetchw())
+    }
+    fn abs_indexed_y(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedY(self.fetchw())
     }
     fn immediate(&mut self) -> AddressingMode {
         AddressingMode::Immediate(self.fetchb())
