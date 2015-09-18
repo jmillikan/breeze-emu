@@ -201,6 +201,7 @@ impl Spc700 {
         match op {
             0x1d => instr!(dec "dec {}" x),
             0xfc => instr!(inc "inc {}" y),
+            0xab => instr!(inc "inc {}" direct),
 
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),

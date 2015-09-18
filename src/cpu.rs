@@ -202,9 +202,12 @@ impl<T: AddressSpace> Cpu<T> {
             self.s = 0x0100 | (self.s & 0xff);
             self.p.set_small_acc(true);
             self.p.set_small_index(true);
-        } else if self.emulation && !value {
-            // Leave emulation mode (and enter native mode)
+            // "If the Index Select Bit (X) equals one, both registers will be 8 bits wide, and the
+            // high byte is forced to zero"
+            self.x &= 0xff;
+            self.y &= 0xff;
         }
+
         self.emulation = value;
     }
 
@@ -358,6 +361,18 @@ impl<T: AddressSpace> Cpu<T> {
         self.pbr = target.0;
         self.pc = target.1;
     }
+
+    /// Changes the status register.
+    fn set_p(&mut self, new: u8) {
+        let small_idx = self.p.small_index();
+        self.p.0 = new;
+        if !small_idx && self.p.small_index() {
+            // "If the Index Select Bit (X) equals one, both registers will be 8 bits wide, and the
+            // high byte is forced to zero"
+            self.x &= 0xff;
+            self.y &= 0xff;
+        }
+    }
 }
 
 /// Opcode implementations
@@ -365,7 +380,7 @@ impl<T: AddressSpace> Cpu<T> {
     /// Pull Processor Status Register
     fn plp(&mut self) {
         let p = self.popb();
-        self.p.0 = p;
+        self.set_p(p);
     }
 
     /// AND Accumulator with Memory (or immediate)
@@ -720,13 +735,15 @@ impl<T: AddressSpace> Cpu<T> {
     /// as 8-bit)
     fn rep(&mut self, am: AddressingMode) {
         assert!(!self.emulation);
-        self.p.0 &= !am.loadb(self);
+        let p = self.p.0 & !am.loadb(self);
+        self.set_p(p);
     }
 
     /// Set Processor Status Bits
     fn sep(&mut self, am: AddressingMode) {
         assert!(!self.emulation);
-        self.p.0 |= am.loadb(self);
+        let p = self.p.0 | am.loadb(self);
+        self.set_p(p);
     }
 
     /// Transfer 16-bit Accumulator to Direct Page Register
@@ -749,8 +766,8 @@ impl<T: AddressSpace> Cpu<T> {
     fn ill(&mut self) {}
 }
 
-/// As a safety measure, the laod and store methods take the mode by value and consume it. Using
-/// the same object twice requires `.clone()` (`Copy` isn't implemented).
+/// As a safety measure, the load and store methods take the mode by value and consume it. Using
+/// the same object twice requires an explicit `.clone()` (`Copy` isn't implemented).
 #[derive(Clone)]
 enum AddressingMode {
     Immediate(u16),
@@ -894,7 +911,6 @@ impl AddressingMode {
 
                 let bank = (eff_addr >> 16) as u8;
                 let addr = eff_addr as u16;
-                debug!("addr_ptr: ${:04X}, base: ${:06X}, eff: ${:02X}:{:04X}", addr_ptr, base_address, bank, addr);
                 (bank, addr)
             }
             Immediate(_) | Immediate8(_) =>

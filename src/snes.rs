@@ -5,6 +5,8 @@ use cpu::{Cpu, AddressSpace};
 use ppu::Ppu;
 use rom::Rom;
 
+const WRAM_SIZE: usize = 128 * 1024;
+
 /// Contains everything connected to the CPU via one of the two address buses.
 struct Memory {
     apu: Apu,
@@ -106,28 +108,30 @@ impl Snes {
                 rom: rom,
                 apu: Apu::new(),
                 ppu: Ppu::new(),
-                wram: vec![0; 128 * 1024],
+                wram: vec![0; WRAM_SIZE],
             }),
         }
     }
 
     pub fn run(&mut self) {
-        const TRACE_START: usize = 3800;
-        const OP_LIMIT: usize = 4700;
+        /// Start tracing at this opcode (0 to trace everything)
+        const TRACE_START: u32 = 26200;
+        /// Exit after this number of iterations
+        const OP_LIMIT: u32 = 26500;
 
-        // this counts down until 0 and then exits
-        // backstory: powershell isn't able to Ctrl+C the emulator once it runs. (i'm serious)
-        let mut opcount = 0;
+        let mut opcount: u32 = 0;
 
         loop {
-            self.cpu.dispatch();
-            self.cpu.mem.apu.tick();
-
-            opcount += 1;
             if opcount == TRACE_START {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.cpu.trace = true;
             }
+
+            self.cpu.dispatch();
+            self.cpu.dispatch();
+            self.cpu.mem.apu.tick();
+
+            opcount += 1;
             if opcount == OP_LIMIT { break }
         }
 
