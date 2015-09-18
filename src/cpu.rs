@@ -302,6 +302,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
             0x9c => instr!(stz absolute),
+            0x74 => instr!(stz direct_indexed_x),
             0xa9 => instr!(lda immediate_acc),
             0xb7 => instr!(lda indirect_long_idx),
             0xa2 => instr!(ldx immediate_index),
@@ -742,6 +743,9 @@ enum AddressingMode {
     /// <val> + direct page register in bank 0
     /// (0, D + <val>)
     Direct(u8),
+    /// "Direct Indexed with X-d,x"
+    /// (0, D + <val> + X)
+    DirectIndexedX(u8),
     /// "Program Counter Relative-r"
     /// Used for jumps
     /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
@@ -835,6 +839,9 @@ impl AddressingMode {
             Direct(offset) => {
                 (0, cpu.d.wrapping_add(offset as u16))
             }
+            DirectIndexedX(offset) => {
+                (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
+            }
             IndirectLongIdx(offset) => {
                 // "The 24-bit base address is pointed to by the sum of the second byte of the
                 // instruction and the Direct Register. The effective address is this 24-bit base
@@ -870,6 +877,7 @@ impl AddressingMode {
             AbsIndexedX(offset) =>         format!("${:04X},x", offset),
             Rel(rel) =>                    format!("{:+}", rel),
             Direct(offset) =>              format!("${:02X}", offset),
+            DirectIndexedX(offset) =>      format!("${:02X},x", offset),
             IndirectLongIdx(offset) =>     format!("[${:02X}],y", offset),
         }
     }
@@ -901,6 +909,9 @@ impl<T: AddressSpace> Cpu<T> {
     }
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())
+    }
+    fn direct_indexed_x(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndexedX(self.fetchb())
     }
     /// Immediate value with accumulator size
     fn immediate_acc(&mut self) -> AddressingMode {
