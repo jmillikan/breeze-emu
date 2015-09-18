@@ -284,6 +284,7 @@ impl<T: AddressSpace> Cpu<T> {
 
             // Arithmetic
             0x2a => instr!(rol_a),
+            0x7e => instr!(ror absolute_indexed_x),
             0x2f => instr!(and absolute_long),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
@@ -296,6 +297,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
             0x98 => instr!(tya),
+            0xeb => instr!(xba),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
@@ -435,6 +437,35 @@ impl<T: AddressSpace> Cpu<T> {
             let res = self.a.rotate_left(1) | c as u16;
             self.a = self.p.set_nz(res);
         }
+    }
+
+    /// Rotate Memory Right
+    fn ror(&mut self, am: AddressingMode) {
+        // Sets N, Z, and C. Memory width can be changed. C is used to fill the leftmost bit.
+        // The `AddressingMode` is used for both loading and storing the value (Read-Modify-Write
+        // instruction)
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let val = am.clone().loadb(self);
+            self.p.set_carry(val & 0x80 != 0);
+            let res = self.p.set_nz_8(val.rotate_right(1) | c);
+            am.storeb(self, res);
+        } else {
+            let val = am.clone().loadw(self);
+            self.p.set_carry(val & 0x8000 != 0);
+            let res = self.p.set_nz(val.rotate_right(1) | c as u16);
+            am.storew(self, res);
+        }
+    }
+
+    /// Exchange B with A (B is the MSB of the accumulator, A is the LSB)
+    fn xba(&mut self) {
+        // Changes N and Z (FIXME How exactly?)
+        // FIXME the datasheet claims that this only does "B -> A", which seems odd, given the name
+        // FIXME WHAT AM I
+        let lo = self.a & 0xff;
+        let hi = self.a >> 8;
+        self.a = (lo << 8) | self.p.set_nz_8(hi as u8) as u16;
     }
 
     /// Transfer Accumulator to Index Register X
@@ -704,6 +735,9 @@ impl<T: AddressSpace> Cpu<T> {
     fn ill(&mut self) {}
 }
 
+/// As a safety measure, the laod and store methods take the mode by value and consume it. Using
+/// the same object twice requires `.clone()` (`Copy` isn't implemented).
+#[derive(Clone)]
 enum AddressingMode {
     Immediate(u16),
     Immediate8(u8),
