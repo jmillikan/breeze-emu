@@ -162,10 +162,6 @@ impl Rom {
                 // Cartridge RAM mapped to the low 8 pages
                 // (there's other stuff here, but that's handled much earlier than we are called)
                 match bank {
-                    0x00 ... 0x3f | 0x7e => {
-                        // First two pages of WRAM
-                        self.ram.get_mut(addr as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, addr as u32))
-                    }
                     0x70 ... 0x7d => {
                         let a = bank as u32 * 0x8000 + addr as u32;
                         self.ram.get_mut(a as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, a))

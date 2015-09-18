@@ -213,7 +213,7 @@ impl<T: AddressSpace> Cpu<T> {
             op,
             am.map(|am| am.format(self)).unwrap_or(String::new())
         );
-        trace!("{:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:02X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
+        trace!("{:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
             self.pbr,
             pc,
             opstr,
@@ -790,6 +790,7 @@ impl AddressingMode {
 
                 let bank = (eff_addr >> 16) as u8;
                 let addr = eff_addr as u16;
+                debug!("addr_ptr: ${:04X}, base: ${:06X}, eff: ${:02X}:{:04X}", addr_ptr, base_address, bank, addr);
                 (bank, addr)
             }
             Immediate(_) | Immediate8(_) =>
