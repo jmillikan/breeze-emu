@@ -32,39 +32,12 @@ impl Apu {
     }
 }
 
-/// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
-/// 64 KB of RAM. The last 64 Bytes in it's address space are mapped to the "IPL ROM", which
-/// contains a small piece of startup code that allows the main CPU to transfer a program to the
-/// APU (we just copy the IPL ROM into the RAM and make it read-write).
-pub struct Spc700 {
-    // 64KB of RAM (FIXME use a fixed-size array)
-    // (this is not the address space!)
-    mem: Vec<u8>,
 
-    /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
-    /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
-    io_vals: [u8; 4],
-
-    a: u8,
-    x: u8,
-    y: u8,
-    sp: u8,
-    pc: u16,
-    psw: StatusReg,
-
-    pub trace: bool,
-}
-
-const RESET_VEC: u16 = 0xFFFE;
-
-// PSW - Program Status Word
 struct StatusReg(u8);
 const NEG_FLAG: u8         = 0x80;
 const OVERFLOW_FLAG: u8    = 0x40;
 const DIRECT_PAGE_FLAG: u8 = 0x20;
-//
 const HALF_CARRY_FLAG: u8  = 0x08;
-//
 const ZERO_FLAG: u8        = 0x02;
 const CARRY_FLAG: u8       = 0x01;
 
@@ -75,10 +48,9 @@ impl StatusReg {
     fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
 
     fn set(&mut self, flag: u8, v: bool) {
-        if v {
-            self.0 |= flag;
-        } else {
-            self.0 &= !flag;
+        match v {
+            true => self.0 |= flag,
+            false => self.0 &= !flag,
         }
     }
 
@@ -94,12 +66,44 @@ impl StatusReg {
     }
 }
 
+const RAM_SIZE: usize = 65536;
+const RESET_VEC: u16 = 0xFFFE;
+
+/// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
+/// 64 KB of RAM. The last 64 Bytes in its address space are mapped to the "IPL ROM", which
+/// contains a small piece of startup code that allows the main CPU to transfer a program to the
+/// APU (we just copy the IPL ROM into the RAM and make it read-write).
+pub struct Spc700 {
+    // 64KB of RAM
+    // (this is not the address space, even though both are 64KB!)
+    mem: [u8; RAM_SIZE],
+
+    /// $f0 - Testing register
+    reg_test: u8,
+    /// $f1 - Control register
+    reg_ctrl: u8,
+    reg_dsp_addr: u8,
+    reg_dsp_data: u8,
+    /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
+    /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
+    /// $f4 - $f7
+    io_vals: [u8; 4],
+
+    a: u8,
+    x: u8,
+    y: u8,
+    sp: u8,
+    pc: u16,
+    psw: StatusReg,
+
+    pub trace: bool,
+}
+
 impl Spc700 {
     fn new() -> Spc700 {
-        const MEM_SIZE: usize = 65536;
-        const IPL_START: usize = MEM_SIZE - 64;
+        const IPL_START: usize = RAM_SIZE - 64;
 
-        let mut mem = vec![0; MEM_SIZE as usize];
+        let mut mem = [0; RAM_SIZE as usize];
         for i in 0..64 {
             mem[IPL_START as usize + i] = IPL_ROM[i];
         }
@@ -110,6 +114,10 @@ impl Spc700 {
 
         Spc700 {
             mem: mem,
+            reg_test: 0x0a,
+            reg_ctrl: 0xb0,
+            reg_dsp_addr: 0,
+            reg_dsp_data: 0,
             io_vals: [0; 4],
             a: 0,
             x: 0,
@@ -123,8 +131,31 @@ impl Spc700 {
 
     fn load(&mut self, addr: u16) -> u8 {
         match addr {
+            0xf0 | 0xf1 | 0xfa ... 0xfc =>
+                panic!("APU attempted read from write-only register ${:02X}", addr),
+            0xf2 => self.reg_dsp_addr,
+            0xf3 => panic!("NYI: DSP data reg: there is no DSP :("),
             0xf4 ... 0xf7 => self.io_vals[addr as usize - 0xf4],
+            0xfa ... 0xff => panic!("NYI: Timer/Counter"),
+            // NB: $f8 and $f9 are regular RAM
             _ => self.mem[addr as usize],
+        }
+    }
+
+    fn store(&mut self, addr: u16, val: u8) {
+        match addr {
+            0xf0 => {
+                assert!(val == 0x0a,
+                    "SPC wrote {:02X} to testing register (as a safety measure, \
+                     only $0a is allowed)", 0);
+            }
+            0xf1 => panic!("NYI: APU control register"),
+            0xf2 => self.reg_dsp_addr = val,
+            0xf3 => panic!("NYI: DSP data register: there is no DSP :("),
+            0xfa ... 0xfc => panic!("NYI: APU Timer control (reg ${:02X})", addr),
+            0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:02X}", addr),
+            // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
+            _ => self.mem[addr as usize] = val,
         }
     }
 
@@ -132,10 +163,6 @@ impl Spc700 {
         let lo = self.load(addr) as u16;
         let hi = self.load(addr + 1) as u16;
         (hi << 8) | lo
-    }
-
-    fn store(&mut self, addr: u16, val: u8) {
-        self.mem[addr as usize] = val;
     }
 
     fn fetchb(&mut self) -> u8 {
@@ -314,11 +341,10 @@ impl Spc700 {
         self.x += 1;
     }
 
-    /// movw-load. Fetches a word from the addressing mode and puts it into Y and A
+    /// movw-load. Fetches a word from the addressing mode and puts it into Y (high) and A (low)
     /// (`movw ya, {X}`)
     fn movw_l(&mut self, am: AddressingMode) {
         // FIXME Are the flags set right?
-        // A=low; Y=high
         let (lo, hi) = am.loadw(self);
         self.y = hi;
         self.a = lo;
@@ -653,7 +679,7 @@ static IPL_ROM: [u8; 64] = [
     // If reg 1's value is not 0, start the transmission loop
     0xd0, 0xdb,         // FFF9  bne $ffd6 (-37)  -> recv
 
-    // We're done, jump to $0000 (x is $00 here)
+    // We're done, jump to the address we just received and stored in $0000 (x is 0 here)
     0x1f, 0x00, 0x00,   // FFFB  jmp [$0000+x]
 
     // reset vector is at 0xfffe and points to the start of the IPL ROM: 0xffc0
