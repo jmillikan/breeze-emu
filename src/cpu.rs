@@ -423,14 +423,17 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Rotate Accumulator Left
     fn rol_a(&mut self) {
-        // Sets N, Z, and C
+        // Sets N, Z, and C. C is used to fill the rightmost bit.
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
         if self.p.small_acc() {
             let a = self.a as u8;
             self.p.set_carry(self.a & 0x80 != 0);
-            self.a = (self.a & 0xff00) | self.p.set_nz_8(a.rotate_left(1)) as u16;
+            let res = a.rotate_left(1) | c;
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
         } else {
             self.p.set_carry(self.a & 0x8000 != 0);
-            self.a = self.p.set_nz(self.a.rotate_left(1));
+            let res = self.a.rotate_left(1) | c as u16;
+            self.a = self.p.set_nz(res);
         }
     }
 
@@ -788,7 +791,7 @@ impl AddressingMode {
 
     fn storew<T: AddressSpace>(self, cpu: &mut Cpu<T>, value: u16) {
         let (bank, addr) = self.address(cpu);
-        assert!(addr < 0xffff, "loadw on bank boundary");
+        assert!(addr < 0xffff, "storew on bank boundary");
 
         cpu.mem.store(bank, addr, value as u8);
         cpu.mem.store(bank, addr + 1, (value >> 8) as u8);

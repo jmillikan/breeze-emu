@@ -134,7 +134,7 @@ impl Spc700 {
         let pc = self.pc;
         self.pc += 1;
 
-        self.mem[pc as usize]
+        self.load(pc)
     }
 
     fn fetchw(&mut self) -> u16 {
@@ -197,13 +197,14 @@ impl Spc700 {
             0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
-            0xc4 => instr!(mov_lda "mov a, {}" direct),
-            0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
-            0xcd => instr!(mov_ldx "mov x, {}" immediate),
-            0xd0 => instr!(bne "bne {}" rel),
-            0xda => instr!(movw_s "movw {}, ya" direct),
             0xdd => instr!(mov_a_y "mov a, y"),
             0xe8 => instr!(mov_lda "mov a, {}" immediate),
+            0xcd => instr!(mov_ldx "mov x, {}" immediate),
+            0xeb => instr!(mov_ldy "mov y, {}" direct),
+            0xc4 => instr!(mov_sta "mov {}, a" direct),
+            0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
+            0xd0 => instr!(bne "bne {}" rel),
+            0xda => instr!(movw_s "movw {}, ya" direct),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal APU opcode: {:02X}", op);
@@ -217,21 +218,24 @@ impl Spc700 {
     /// movw-load. Fetches a word from the addressing mode and puts it into Y and A
     /// (`movw ya, {X}`)
     fn movw_l(&mut self, am: AddressingMode) {
+        // FIXME Are the flags set right?
+        // A=low; Y=high
         let (lo, hi) = am.loadw(self);
-        self.y = lo;
-        self.a = hi;
+        self.y = hi;
+        self.a = lo;
         self.psw.set_nz(hi);
 
-        debug!("LOADW got ${:02X}{:02X}", lo, hi);
+        debug!("LOADW got ${:02X}{:02X}", hi, lo);
     }
 
     /// movw-store. Stores Y/A at the given word address.
     /// (`movw {X}, ya`)
     fn movw_s(&mut self, am: AddressingMode) {
-        // No flags modified
+        // No flags modified, A=low, Y=high, Reads the low byte first
         let y = self.y;
         let a = self.a;
-        am.storew(self, (y, a));
+        am.clone().loadb(self);
+        am.storew(self, (a, y));
     }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
@@ -275,6 +279,11 @@ impl Spc700 {
     fn mov_ldx(&mut self, am: AddressingMode) {
         let val = am.loadb(self);
         self.x = self.psw.set_nz(val);
+    }
+    /// Load y (`mov y, {X}`)
+    fn mov_ldy(&mut self, am: AddressingMode) {
+        let val = am.loadb(self);
+        self.y = self.psw.set_nz(val);
     }
     /// Store A wherever (`mov {X}, a`)
     fn mov_sta(&mut self, am: AddressingMode) {
