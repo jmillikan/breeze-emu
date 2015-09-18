@@ -192,18 +192,20 @@ impl Spc700 {
             0x1d => instr!(dec_x "dec x"),
             0x1f => instr!(bra "jmp {}" absolute_x),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
-            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
-            0xba => instr!(movw_l "movw ya, {}" direct),
-            0x5d => instr!(mov_x_a "mov x, a"),
-            0x8f => instr!(mov_sti "mov {1}, {0}" immediate direct),
-            0xbd => instr!(mov_sp_x "mov sp, x"),
-            0xdd => instr!(mov_a_y "mov a, y"),
-            0xe8 => instr!(mov_lda "mov a, {}" immediate),
-            0xcd => instr!(mov_ldx "mov x, {}" immediate),
-            0xeb => instr!(mov_ldy "mov y, {}" direct),
-            0xc4 => instr!(mov_sta "mov {}, a" direct),
-            0xc6 => instr!(mov_sta "mov {}, a" indirect_x),
             0xd0 => instr!(bne "bne {}" rel),
+            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0xbd => instr!(mov_sp_x "mov sp, x"),
+            // NB: For moves, "a x" means "mov x, a" or "a -> x"
+            // NB: Moves into registers will always set N and Z
+            0x5d => instr!(mov "mov {1}, {0}" a x),
+            0x8f => instr!(mov "mov {1}, {0}" immediate direct),
+            0xdd => instr!(mov "mov {1}, {0}" y a),
+            0xe8 => instr!(mov "mov {1}, {0}" immediate a),
+            0xcd => instr!(mov "mov {1}, {0}" immediate x),
+            0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0xc4 => instr!(mov "mov {1}, {0}" a direct),
+            0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
+            0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             _ => {
                 instr!(ill "ill");
@@ -264,39 +266,11 @@ impl Spc700 {
         self.x = self.psw.set_nz(self.x.wrapping_sub(1));
     }
 
-    /// Copy a value (except registers)
-    fn mov_sti(&mut self, src: AddressingMode, dest: AddressingMode) {
+    /// Copy a byte
+    fn mov(&mut self, src: AddressingMode, dest: AddressingMode) {
         // No flags modified
         let val = src.loadb(self);
         dest.storeb(self, val);
-    }
-    /// Load A (`mov a, {X}`)
-    fn mov_lda(&mut self, am: AddressingMode) {
-        let val = am.loadb(self);
-        self.a = self.psw.set_nz(val);
-    }
-    /// Load x (`mov x, {X}`)
-    fn mov_ldx(&mut self, am: AddressingMode) {
-        let val = am.loadb(self);
-        self.x = self.psw.set_nz(val);
-    }
-    /// Load y (`mov y, {X}`)
-    fn mov_ldy(&mut self, am: AddressingMode) {
-        let val = am.loadb(self);
-        self.y = self.psw.set_nz(val);
-    }
-    /// Store A wherever (`mov {X}, a`)
-    fn mov_sta(&mut self, am: AddressingMode) {
-        // No flags modified. This reads the destination first.
-        let a = self.a;
-        am.clone().loadb(self);
-        am.storeb(self, a);
-    }
-    fn mov_a_y(&mut self) {
-        self.a = self.psw.set_nz(self.y);
-    }
-    fn mov_x_a(&mut self) {
-        self.x = self.psw.set_nz(self.a);
     }
     fn mov_sp_x(&mut self) {
         // No flags modified
