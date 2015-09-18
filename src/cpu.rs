@@ -51,22 +51,14 @@ impl StatusReg {
     fn set_irq_disable(&mut self, value: bool) { self.set(IRQ_FLAG, value) }
 
     fn set_nz(&mut self, val: u16) -> u16 {
-        if val == 0 {
-            self.set_zero(true);
-        } else if val & 0x8000 != 0 {
-            self.set_negative(true);
-        }
-
+        self.set_zero(val == 0);
+        self.set_negative(val & 0x8000 != 0);
         val
     }
 
     fn set_nz_8(&mut self, val: u8) -> u8 {
-        if val == 0 {
-            self.set_zero(true);
-        } else if val & 0x80 != 0 {
-            self.set_negative(true);
-        }
-
+        self.set_zero(val == 0);
+        self.set_negative(val & 0x80 != 0);
         val
     }
 }
@@ -290,6 +282,7 @@ impl<T: AddressSpace> Cpu<T> {
             0x2f => instr!(and absolute_long),
             0x69 => instr!(adc immediate_acc),
             0xc8 => instr!(iny),
+            0xca => instr!(dex),
 
             // Register and memory transfers
             0x5b => instr!(tcd),
@@ -297,6 +290,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xaa => instr!(tax),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
+            0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
             0x9c => instr!(stz absolute),
             0xa9 => instr!(lda immediate_acc),
@@ -428,12 +422,24 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Increment Index Register Y
     fn iny(&mut self) {
-        // Changes N and Z (XXX really?)
+        // Changes N and Z
         if self.p.small_index() {
             let res = self.p.set_nz_8((self.y as u8).wrapping_add(1));
             self.y = (self.y & 0xff00) | res as u16;
         } else {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
+        }
+    }
+
+    fn dex(&mut self) {
+        // Changes N and Z
+        // NB According to the datasheet, this writes the result to A, not X! But since this
+        // doesn't make sense when looking at the way it's used, I'm going to ignore the datasheet
+        if self.p.small_index() {
+            let res = self.p.set_nz_8((self.x as u8).wrapping_sub(1));
+            self.x = (self.x & 0xff00) | res as u16;
+        } else {
+            self.x = self.p.set_nz(self.x.wrapping_sub(1));
         }
     }
 
@@ -652,23 +658,43 @@ impl<T: AddressSpace> Cpu<T> {
 enum AddressingMode {
     Immediate(u16),
     Immediate8(u8),
+    /// "Absolute-a"
     /// Access absolute offset in the current data bank
     /// (DBR, <val>)
     Absolute(u16),
+
+    // "Absolute Indexed Indirect-(a,x)"
+
+    /// "Absolute Indexed with X-a,x"
+    /// (DBR, <val> + X)
+    AbsIndexedX(u16),
+
+    // "Absolute Indexed with Y-a,y"
+    // "Absolute Indirect-(a)" (PC?)
+    // "Absolute Long Indexed With X-al,x" - Absolute Long + X
+
+    /// "Absolute Long-al"
     /// Access absolute offset in the specified data bank (DBR is not changed)
     /// (<val0>, <val1>)
     AbsoluteLong(u8, u16),
-    /// (DBR, <val> + X)
-    AbsIndexedX(u16),
+    /// "Direct-d"
     /// <val> + direct page register in bank 0
     /// (0, D + <val>)
     Direct(u8),
-    /// PC-relative, used for jumps
-    /// (PBR, PC + <val>)
+    /// "Program Counter Relative-r"
+    /// Used for jumps
+    /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
     Rel(i8),
-    /// "Direct Indirect Indexed Long [d],y"
+
+    // "Direct Indirect Indexed-(d),y" - Indirect-Y
+    // (DBR, D + <val> + Y)  [D+<val> wraps]
+
+    /// "Direct Indirect Indexed Long/Long Indexed-[d],y"
     /// (0, D + <val> + Y)
     IndirectLongIdx(u8),
+
+    // "Direct Indirect Long-[d]"
+    // (0, D + <val>)
 }
 
 impl AddressingMode {
@@ -717,7 +743,7 @@ impl AddressingMode {
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
     /// immediate.
-    fn address<T: AddressSpace>(&self, cpu: &Cpu<T>) -> (u8, u16) {
+    fn address<T: AddressSpace>(&self, cpu: &mut Cpu<T>) -> (u8, u16) {
         use cpu::AddressingMode::*;
 
         // FIXME is something here dependant on register sizes?
@@ -740,8 +766,20 @@ impl AddressingMode {
                 (0, cpu.d.wrapping_add(offset as u16))
             }
             IndirectLongIdx(offset) => {
-                let addr = cpu.d + offset as u16 + cpu.y;
-                (0, addr)
+                // "The 24-bit base address is pointed to by the sum of the second byte of the
+                // instruction and the Direct Register. The effective address is this 24-bit base
+                // address plus the Y Index Register."
+                let addr_ptr = cpu.d.wrapping_add(offset as u16);
+                let lo = cpu.mem.load(0, addr_ptr) as u32;
+                let hi = cpu.mem.load(0, addr_ptr + 1) as u32;
+                let bank = cpu.mem.load(0, addr_ptr + 2) as u32;
+                let base_address = (bank << 16) | (hi << 8) | lo;
+                let eff_addr = base_address + cpu.y as u32;
+                assert!(eff_addr & 0xff000000 == 0, "address overflow");
+
+                let bank = (eff_addr >> 16) as u8;
+                let addr = eff_addr as u16;
+                (bank, addr)
             }
             Immediate(_) | Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
@@ -753,14 +791,14 @@ impl AddressingMode {
         use cpu::AddressingMode::*;
 
         match *self {
-            Immediate(val) => format!("#${:04X}", val),
-            Immediate8(val) => format!("#${:02X}", val),
-            Absolute(addr) => format!("${:04X}", addr),
+            Immediate(val) =>           format!("#${:04X}", val),
+            Immediate8(val) =>          format!("#${:02X}", val),
+            Absolute(addr) =>           format!("${:04X}", addr),
             AbsoluteLong(bank, addr) => format!("${:02X}:{:04X}", bank, addr),
-            AbsIndexedX(offset) => format!("${:04X},x", offset),
-            Rel(rel) => format!("{:+}", rel),
-            Direct(offset) => format!("${:02X}", offset),
-            IndirectLongIdx(offset) => format!("[${:02X}],y", offset),
+            AbsIndexedX(offset) =>      format!("${:04X},x", offset),
+            Rel(rel) =>                 format!("{:+}", rel),
+            Direct(offset) =>           format!("${:02X}", offset),
+            IndirectLongIdx(offset) =>  format!("[${:02X}],y", offset),
         }
     }
 }

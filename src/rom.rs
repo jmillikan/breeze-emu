@@ -209,6 +209,9 @@ impl AddressSpace for Rom {
     }
 
     fn store(&mut self, bank: u8, addr: u16, value: u8) {
+        if addr >= 0x8000 {
+            panic!("attempted to write ${:02X} to ROM (${:02X}:{:04X})", value, bank, addr);
+        }
         *self.resolve_addr(bank, addr) = value;
     }
 }
