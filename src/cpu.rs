@@ -275,6 +275,7 @@ impl<T: AddressSpace> Cpu<T> {
 
             // Processor status
             0x18 => instr!(clc),
+            0x38 => instr!(sec),
             0x58 => instr!(cli),
             0x78 => instr!(sei),
             0xfb => instr!(xce),
@@ -292,10 +293,12 @@ impl<T: AddressSpace> Cpu<T> {
             0x5b => instr!(tcd),
             0x1b => instr!(tcs),
             0xaa => instr!(tax),
+            0x98 => instr!(tya),
             0x85 => instr!(sta direct),
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
+            0x9f => instr!(sta absolute_long_indexed_x),
             0x9c => instr!(stz absolute),
             0xa9 => instr!(lda immediate_acc),
             0xb7 => instr!(lda indirect_long_idx),
@@ -421,6 +424,16 @@ impl<T: AddressSpace> Cpu<T> {
             self.x = (self.x & 0xff00) | self.p.set_nz_8(a as u8) as u16;
         } else {
             self.x = self.p.set_nz(a);
+        }
+    }
+
+    /// Transfer Index Register Y to Accumulator
+    fn tya(&mut self) {
+        // Changes N and Z
+        if self.p.small_acc() {
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(self.y as u8) as u16;
+        } else {
+            self.a = self.p.set_nz(self.y);
         }
     }
 
@@ -618,9 +631,10 @@ impl<T: AddressSpace> Cpu<T> {
     }
 
     /// Clear carry
-    fn clc(&mut self) {
-        self.p.set_carry(false);
-    }
+    fn clc(&mut self) { self.p.set_carry(false); }
+
+    /// Set Carry Flag
+    fn sec(&mut self) { self.p.set_carry(true); }
 
     /// Exchange carry and emulation flags
     fn xce(&mut self) {
@@ -681,7 +695,10 @@ enum AddressingMode {
 
     // "Absolute Indexed with Y-a,y"
     // "Absolute Indirect-(a)" (PC?)
-    // "Absolute Long Indexed With X-al,x" - Absolute Long + X
+
+    /// "Absolute Long Indexed With X-al,x" - Absolute Long + X
+    /// (<val0>, <val1> + X)
+    AbsLongIndexedX(u8, u16),
 
     /// "Absolute Long-al"
     /// Access absolute offset in the specified data bank (DBR is not changed)
@@ -767,6 +784,14 @@ impl AddressingMode {
             AbsoluteLong(bank, addr) => {
                 (bank, addr)
             }
+            AbsLongIndexedX(bank, addr) => {
+                let a = ((bank as u32) << 16) | addr as u32;
+                let eff_addr = a + cpu.x as u32;
+                assert!(eff_addr & 0xff000000 == 0, "address overflow");
+                let bank = eff_addr >> 16;
+                let addr = eff_addr as u16;
+                (bank as u8, addr)
+            }
             AbsIndexedX(offset) => {
                 (cpu.dbr, offset + cpu.x)
             }
@@ -803,14 +828,15 @@ impl AddressingMode {
         use cpu::AddressingMode::*;
 
         match *self {
-            Immediate(val) =>           format!("#${:04X}", val),
-            Immediate8(val) =>          format!("#${:02X}", val),
-            Absolute(addr) =>           format!("${:04X}", addr),
-            AbsoluteLong(bank, addr) => format!("${:02X}:{:04X}", bank, addr),
-            AbsIndexedX(offset) =>      format!("${:04X},x", offset),
-            Rel(rel) =>                 format!("{:+}", rel),
-            Direct(offset) =>           format!("${:02X}", offset),
-            IndirectLongIdx(offset) =>  format!("[${:02X}],y", offset),
+            Immediate(val) =>              format!("#${:04X}", val),
+            Immediate8(val) =>             format!("#${:02X}", val),
+            Absolute(addr) =>              format!("${:04X}", addr),
+            AbsoluteLong(bank, addr) =>    format!("${:02X}:{:04X}", bank, addr),
+            AbsLongIndexedX(bank, addr) => format!("${:02X}:{:04X},x", bank, addr),
+            AbsIndexedX(offset) =>         format!("${:04X},x", offset),
+            Rel(rel) =>                    format!("{:+}", rel),
+            Direct(offset) =>              format!("${:02X}", offset),
+            IndirectLongIdx(offset) =>     format!("[${:02X}],y", offset),
         }
     }
 }
@@ -830,6 +856,11 @@ impl<T: AddressSpace> Cpu<T> {
     }
     fn absolute_indexed_x(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedX(self.fetchw())
+    }
+    fn absolute_long_indexed_x(&mut self) -> AddressingMode {
+        let addr = self.fetchw();
+        let bank = self.fetchb();
+        AddressingMode::AbsLongIndexedX(bank, addr)
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
