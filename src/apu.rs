@@ -229,7 +229,7 @@ impl Spc700 {
             0xbd => instr!(mov_sp_x "mov sp, x"),
             _ => {
                 instr!(ill "ill");
-                panic!("illegal APU opcode: {:02X}", op);
+                panic!("illegal APU opcode at {:04X}: {:02X}", pc, op);
             }
         }
     }
@@ -425,8 +425,9 @@ impl AddressingMode {
             Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
             IndirectX => spc.x as u16,
             IndirectIndexed(offset) => {
+                // [d]+Y
                 let addr_ptr = direct(offset as u16, spc.psw.direct_page());
-                let addr = spc.loadw(addr_ptr) + spc.x as u16;
+                let addr = spc.loadw(addr_ptr) + spc.y as u16;
                 addr
             }
             IndexedIndirect(offset) => panic!("NYI"),

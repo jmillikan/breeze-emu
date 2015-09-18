@@ -322,6 +322,7 @@ impl<T: AddressSpace> Cpu<T> {
             0xcd => instr!(cmp absolute),
             0xe0 => instr!(cpx immediate_index),
             0x80 => instr!(bra rel),
+            0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
             0x70 => instr!(bvs rel),
@@ -596,6 +597,14 @@ impl<T: AddressSpace> Cpu<T> {
         // Changes no flags
         let a = am.address(self);
         self.branch(a);
+    }
+
+    /// Branch if Equal
+    fn beq(&mut self, am: AddressingMode) {
+        if self.p.zero() {
+            let a = am.address(self);
+            self.branch(a);
+        }
     }
 
     /// Branch if Not Equal (Branch if Z = 0)

@@ -115,9 +115,9 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Start tracing at this opcode (0 to trace everything)
-        const TRACE_START: u32 = 26200;
+        const TRACE_START: u32 = 84500;
         /// Exit after this number of iterations
-        const OP_LIMIT: u32 = 26500;
+        const OP_LIMIT: u32 = 85000;
 
         let mut opcount: u32 = 0;
 
@@ -127,6 +127,7 @@ impl Snes {
                 self.cpu.mem.apu.cpu.trace = true;
             }
 
+            self.cpu.dispatch();
             self.cpu.dispatch();
             self.cpu.dispatch();
             self.cpu.mem.apu.tick();
