@@ -6,6 +6,44 @@ pub type Apu = Spc700;
 const RAM_SIZE: usize = 65536;
 const RESET_VEC: u16 = 0xFFFE;
 
+#[derive(Copy, Clone, Default, Debug)]
+struct Timer {
+    enabled: bool,
+    div: u8,
+    val: u8,
+    /// Counted up at the same speed as the APU runs. When it reaches 128 (Timer 0/1) or 16
+    /// (Timer 2), this is reset and stage1 is incremented.
+    stage0: u8,
+    /// Counted up at the timer's frequency. When this reaches `div`, it is reset and `val`
+    /// (stage3) incremented. Since `div=0` is interpreted as 256, this is a `u16`.
+    stage1: u16,
+}
+
+impl Timer {
+    fn new() -> Timer { Timer::default() }
+
+    /// Update the timer, applying a base-divisor (128 for Timer 0/1, 16 for Timer 2)
+    fn update(&mut self, base_div: u8, cy: u8) {
+        self.stage0 += cy;
+        self.stage1 += self.stage0 as u16 / base_div as u16;
+        self.stage0 %= base_div;
+
+        let real_div: u16 = if self.div == 0 { 256 } else { self.div as u16 };
+        self.val += (self.stage1 / real_div) as u8;
+        self.stage1 %= real_div;
+        self.val &= 0x0f;   // It's a 4-bit counter
+    }
+
+    fn set_enable(&mut self, enable: bool) {
+        if !self.enabled && enable {
+            self.stage1 = 0;
+            self.val = 0;
+        }
+
+        self.enabled = enable;
+    }
+}
+
 /// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
 /// 64 KB of RAM. The last 64 Bytes in its address space are mapped to the "IPL ROM", which
 /// contains a small piece of startup code that allows the main CPU to transfer a program to the
@@ -17,25 +55,13 @@ pub struct Spc700 {
 
     /// $f0 - Testing register
     reg_test: u8,
-    /// $f1 - Control register
-    reg_ctrl: u8,
     /// $f2 - DSP address selection ($f3 - DSP data)
     reg_dsp_addr: u8,
     /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
     /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
     /// $f4 - $f7
     io_vals: [u8; 4],
-    /// Timer 0 (8kHz) divider
-    /// $00: Divide by 256
-    /// $01 - $ff: Divide by value
-    /*t0div: u8,
-    /// Timer 1 (8kHz) divider
-    t1div: u8,
-    /// Timer 2 (64kHz) divider
-    t2div: u8,
-    t0val: u8,
-    t1val: u8,
-    t2val: u8,*/
+    timers: [Timer; 3],
 
     dsp: Dsp,
 
@@ -68,9 +94,9 @@ impl Spc700 {
         Spc700 {
             mem: mem,
             reg_test: 0x0a,
-            reg_ctrl: 0xb0,
             reg_dsp_addr: 0,
             io_vals: [0; 4],
+            timers: [Timer::new(); 3],
             dsp: Dsp::new(),
             a: 0,
             x: 0,
@@ -100,7 +126,6 @@ impl Spc700 {
         val
     }
 }
-
 
 struct StatusReg(u8);
 const NEG_FLAG: u8         = 0x80;
@@ -143,7 +168,9 @@ impl Spc700 {
             0xf2 => self.reg_dsp_addr,
             0xf3 => self.dsp.load(self.reg_dsp_addr),
             0xf4 ... 0xf7 => self.io_vals[addr as usize - 0xf4],
-            0xfa ... 0xff => panic!("NYI: Timer/Counter"),
+            0xfd => self.timers[0].val,
+            0xfe => self.timers[1].val,
+            0xff => self.timers[2].val,
             // NB: $f8 and $f9 are regular RAM
             _ => self.mem[addr as usize],
         }
@@ -153,13 +180,28 @@ impl Spc700 {
         match addr {
             0xf0 => {
                 assert!(val == 0x0a,
-                    "SPC wrote {:02X} to testing register (as a safety measure, \
+                    "SPC wrote ${:02X} to testing register (as a safety measure, \
                      only $0a is allowed)", 0);
             }
-            0xf1 => panic!("NYI: APU control register"),
+            0xf1 => {
+                self.timers[0].set_enable(val & 0x01 != 0);
+                self.timers[1].set_enable(val & 0x02 != 0);
+                self.timers[2].set_enable(val & 0x04 != 0);
+                if val & 0x10 != 0 {
+                    self.io_vals[0] = 0;
+                    self.io_vals[1] = 0;
+                }
+                if val & 0x20 != 0 {
+                    self.io_vals[2] = 0;
+                    self.io_vals[3] = 0;
+                }
+                // FIXME bit 7 can toggle IPL ROM and RAM
+            },
             0xf2 => self.reg_dsp_addr = val,
             0xf3 => self.dsp.store(self.reg_dsp_addr, val),
-            0xfa ... 0xfc => panic!("NYI: APU Timer control (reg ${:02X})", addr),
+            0xfa => self.timers[0].div = val,
+            0xfb => self.timers[1].div = val,
+            0xfc => self.timers[2].div = val,
             0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:02X}", addr),
             // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
             _ => self.mem[addr as usize] = val,
@@ -305,10 +347,13 @@ impl Spc700 {
             0xaf => instr!(mov_xinc "mov x++, a"),
             _ => {
                 instr!(ill "ill");
-                panic!("illegal APU opcode at {:04X}: {:02X}", pc, op);
+                panic!("illegal APU opcode at ${:04X}: ${:02X}", pc, op);
             }
         }
 
+        self.timers[0].update(128, self.cy);
+        self.timers[1].update(128, self.cy);
+        self.timers[2].update(16, self.cy);
         self.cy
     }
 
