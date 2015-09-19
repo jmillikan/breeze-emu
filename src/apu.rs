@@ -46,6 +46,8 @@ pub struct Spc700 {
     pc: u16,
     psw: StatusReg,
 
+    cy: u8,
+
     pub trace: bool,
 }
 
@@ -76,6 +78,7 @@ impl Spc700 {
             sp: 0,
             pc: pc,
             psw: StatusReg(0),  // FIXME is 0 correct`?
+            cy: 0,
             trace: false,
         }
     }
@@ -95,11 +98,6 @@ impl Spc700 {
         debug_assert!(port < 4);
         let val = self.mem[0xf4 + port as usize];
         val
-    }
-
-    // FIXME temp. function
-    pub fn tick(&mut self) {
-        self.dispatch()
     }
 }
 
@@ -199,8 +197,28 @@ impl Spc700 {
         );
     }
 
-    // FIXME temporary function, executes a single opcode
-    pub fn dispatch(&mut self) {
+    pub fn dispatch(&mut self) -> u8 {
+        // Cond. branches: +2 cycles if branch is taken
+        static CYCLE_TABLE: [u8; 256] = [
+            2,8,4,5,3,4,3,6, 2,6,5,4,5,4,6,8,   // $00-$0f
+            2,8,4,5,4,5,5,6, 5,5,6,5,2,2,4,6,   // $10-$1f
+            2,8,4,5,3,4,3,6, 2,6,5,4,5,4,5,4,   // $20-$2f
+            2,8,4,5,4,5,5,6, 5,5,6,5,2,2,3,8,   // $30-$3f
+            2,8,4,5,3,4,3,6, 2,6,4,4,5,4,6,6,   // $40-$4f
+            2,8,4,5,4,5,5,6, 5,5,4,5,2,2,4,3,   // $50-$5f
+            2,8,4,5,3,4,3,6, 2,6,4,4,5,4,5,5,   // $60-$6f
+            2,8,4,5,4,5,5,6, 5,5,5,5,2,2,3,6,   // $70-$7f
+            2,8,4,5,3,4,3,6, 2,6,5,4,5,2,4,5,   // $80-$8f
+
+            2,8,4,5,4,5,5,6, 5,5,5,5,2,2,12,5,  // $90-$9f
+            3,8,4,5,3,4,3,6, 2,6,4,4,5,2,4,4,   // $a0-$af
+            2,8,4,5,4,5,5,6, 5,5,5,5,2,2,3,4,   // $b0-$bf
+            3,8,4,5,4,5,4,7, 2,5,6,4,5,2,4,9,   // $c0-$cf
+            2,8,4,5,5,6,6,7, 4,5,5,5,2,2,6,3,   // $d0-$df
+            2,8,4,5,3,4,3,6, 2,4,5,3,4,3,4,4,   // $e0-$ef (last one is SLEEP, unknown timing)
+            2,8,4,5,4,5,5,6, 3,4,5,4,2,2,4,4,   // $f0-$ff (last one is STOP, unknown timing)
+        ];
+
         let pc = self.pc;
 
         macro_rules!e{($e:expr)=>($e)}
@@ -235,6 +253,7 @@ impl Spc700 {
         }
 
         let op = self.fetchb();
+        self.cy = CYCLE_TABLE[op as usize];
         match op {
             // Processor status
             0x20 => instr!(clrp "clrp"),
@@ -289,6 +308,8 @@ impl Spc700 {
                 panic!("illegal APU opcode at {:04X}: {:02X}", pc, op);
             }
         }
+
+        self.cy
     }
 
     fn pushb(&mut self, b: u8) {
@@ -391,6 +412,7 @@ impl Spc700 {
         if self.psw.zero() {
             let a = am.address(self);
             self.pc = a;
+            self.cy += 2;
         }
     }
 
@@ -398,6 +420,7 @@ impl Spc700 {
         if !self.psw.zero() {
             let a = am.address(self);
             self.pc = a;
+            self.cy += 2;
         }
     }
 
@@ -405,6 +428,7 @@ impl Spc700 {
         if !self.psw.negative() {
             let a = am.address(self);
             self.pc = a;
+            self.cy += 2;
         }
     }
 

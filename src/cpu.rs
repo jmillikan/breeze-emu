@@ -97,8 +97,9 @@ pub struct Cpu<T: AddressSpace> {
     p: StatusReg,
     emulation: bool,
 
-    pub trace: bool,
+    cy: u8,
 
+    pub trace: bool,
     pub mem: T,
 }
 
@@ -127,8 +128,8 @@ impl<T: AddressSpace> Cpu<T> {
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg(SMALL_ACC_FLAG | SMALL_INDEX_FLAG | IRQ_FLAG),
             emulation: true,
+            cy: 0,
             trace: false,
-
             mem: mem,
         }
     }
@@ -235,7 +236,7 @@ impl<T: AddressSpace> Cpu<T> {
         );
     }
 
-    /// Executes a single opcode and returns the number of master clock cycles spent doing that.
+    /// Executes a single opcode and returns the number of internal CPU clock cycles used.
     pub fn dispatch(&mut self) -> u8 {
         // CPU cycles each opcode takes (FIXME: not actually this simple)
         static CYCLE_TABLE: [u8; 256] = [
@@ -272,6 +273,7 @@ impl<T: AddressSpace> Cpu<T> {
         }
 
         let op = self.fetchb();
+        self.cy = CYCLE_TABLE[op as usize];
         match op {
             // Stack operations
             0x08 => instr!(php),
@@ -334,8 +336,7 @@ impl<T: AddressSpace> Cpu<T> {
             }
         }
 
-        // Return master clock cycles used
-        CYCLE_TABLE[op as usize] * 6
+        self.cy
     }
 
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing
@@ -395,6 +396,7 @@ impl<T: AddressSpace> Cpu<T> {
             let val = am.loadw(self);
             let res = self.a & val;
             self.a = self.p.set_nz(res);
+            self.cy += 1;
         }
     }
 
@@ -420,6 +422,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
 
             self.a = self.p.set_nz(res);
+            self.cy += 1;
         }
     }
 
@@ -440,6 +443,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(res < 0);
 
             self.a = self.p.set_nz(res as u16);
+            self.cy += 1;
         }
     }
 
@@ -456,6 +460,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(self.a & 0x8000 != 0);
             let res = self.a.rotate_left(1) | c as u16;
             self.a = self.p.set_nz(res);
+            self.cy += 1;
         }
     }
 
@@ -475,6 +480,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(val & 0x8000 != 0);
             let res = self.p.set_nz(val.rotate_right(1) | c as u16);
             am.storew(self, res);
+            self.cy += 1;
         }
     }
 
@@ -524,6 +530,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.a = (self.a & 0xff00) | res as u16;
         } else {
             self.a = self.p.set_nz(self.a.wrapping_add(1));
+            self.cy += 1;
         }
     }
 
@@ -535,6 +542,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.y = (self.y & 0xff00) | res as u16;
         } else {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
+            self.cy += 1;
         }
     }
 
@@ -547,6 +555,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.x = (self.x & 0xff00) | res as u16;
         } else {
             self.x = self.p.set_nz(self.x.wrapping_sub(1));
+            self.cy += 1;
         }
     }
 
@@ -559,6 +568,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.a;
             self.pushw(a);
+            self.cy += 1;
         }
     }
 
@@ -571,6 +581,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.popw();
             self.a = self.p.set_nz(a);
+            self.cy += 1;
         }
     }
 
@@ -580,6 +591,7 @@ impl<T: AddressSpace> Cpu<T> {
         if !self.p.negative() {
             let a = am.address(self);
             self.branch(a);
+            self.cy += 2;
         }
     }
 
@@ -589,6 +601,7 @@ impl<T: AddressSpace> Cpu<T> {
         if self.p.overflow() {
             let a = am.address(self);
             self.branch(a);
+            self.cy += 2;
         }
     }
 
@@ -604,6 +617,7 @@ impl<T: AddressSpace> Cpu<T> {
         if self.p.zero() {
             let a = am.address(self);
             self.branch(a);
+            self.cy += 2;
         }
     }
 
@@ -613,6 +627,7 @@ impl<T: AddressSpace> Cpu<T> {
         if !self.p.zero() {
             let a = am.address(self);
             self.branch(a);
+            self.cy += 2;
         }
     }
 
@@ -626,6 +641,7 @@ impl<T: AddressSpace> Cpu<T> {
             let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
+            self.cy += 1;
         }
     }
 
@@ -639,6 +655,7 @@ impl<T: AddressSpace> Cpu<T> {
             let val = am.loadw(self);
             let x = self.x;
             self.compare(x, val);
+            self.cy += 1;
         }
     }
 
@@ -689,6 +706,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.a = self.p.set_nz(val);
+            self.cy += 1;
         }
     }
 
@@ -701,6 +719,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.y = self.p.set_nz(val);
+            self.cy += 1;
         }
     }
 
@@ -712,6 +731,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.x = self.p.set_nz(val);
+            self.cy += 1;
         }
     }
 
@@ -724,6 +744,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let w = self.a;
             am.storew(self, w);
+            self.cy += 1;
         }
     }
 

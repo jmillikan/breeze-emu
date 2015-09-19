@@ -114,26 +114,44 @@ impl Snes {
     }
 
     pub fn run(&mut self) {
-        /// Start tracing at this opcode (0 to trace everything)
-        const TRACE_START: u32 = 87000;
-        /// Exit after this number of iterations
-        const OP_LIMIT: u32 = 87100;
+        /// Start tracing at this master cycle (0 to trace everything)
+        const TRACE_START: u64 = 6_530_000;
+        /// Exit after this number of master clock cycles
+        const CY_LIMIT: u64 = 6_540_000;
 
-        let mut opcount: u32 = 0;
+        const MASTER_CLOCK_FREQ: i32 = 21_477_000;
+        const CPU_DIVIDER: i32 = 8; // FIXME WRONG! Take variable IO speed into account!
+        const CPU_CLOCK_FREQ: i32 = MASTER_CLOCK_FREQ / CPU_DIVIDER;
+        /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
+        /// resonator instead of a quartz).
+        const APU_CLOCK_FREQ: i32 = 1_024_000;
+        /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
+        /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
+        /// might not be critical, but better safe than sorry).
+        const APU_DIVIDER: i32 = 21;
 
-        loop {
-            if opcount == TRACE_START {
+        // Master cycle counter, used only for debugging atm
+        let mut master_cy: u64 = 0;
+        // Master clock cycles for the APU not yet accounted for (can be negative)
+        let mut apu_master_cy_debt = 0;
+
+        while master_cy < CY_LIMIT {
+            if master_cy >= TRACE_START {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
             }
 
-            self.cpu.dispatch();
-            self.cpu.dispatch();
-            self.cpu.dispatch();
-            self.cpu.mem.apu.tick();
+            // Run a CPU instruction and calculate the master cycles elapsed
+            let cpu_master_cy = self.cpu.dispatch() as i32 * CPU_DIVIDER;
+            master_cy += cpu_master_cy as u64;
 
-            opcount += 1;
-            if opcount == OP_LIMIT { break }
+            // Now we "owe" the other components a few cycles:
+            apu_master_cy_debt += cpu_master_cy;
+
+            // Run all components until we no longer owe them:
+            while apu_master_cy_debt > 0 {
+                apu_master_cy_debt -= self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
+            }
         }
 
         info!("EXITING");
