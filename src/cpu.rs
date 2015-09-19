@@ -79,6 +79,9 @@ const ABORT_VEC16: u16 = 0xFFE8;
 const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
+/// One CPU cycle = 6 master clock cycles
+const CPU_CYCLE: u8 = 6;
+
 pub struct Cpu<T: AddressSpace> {
     a: u16,
     x: u16,
@@ -97,6 +100,7 @@ pub struct Cpu<T: AddressSpace> {
     p: StatusReg,
     emulation: bool,
 
+    /// Master clock cycle counter for the current instruction.
     cy: u8,
 
     pub trace: bool,
@@ -134,9 +138,68 @@ impl<T: AddressSpace> Cpu<T> {
         }
     }
 
+    /// Adds the time needed to access the given memory location to the cycle counter.
+    fn do_io_cycle(&mut self, bank: u8, addr: u16) {
+        match bank {
+            0x00 ... 0x3f => match addr {
+                0x0000 ... 0x1fff | 0x6000 ... 0xffff => {
+                    // Slow: 8 cycles
+                    self.cy += 8;
+                }
+                0x4000 ... 0x41ff => {
+                    // XSlow: 12 cycles
+                    self.cy += 12;
+                }
+                _ => {
+                    self.cy += 6;
+                }
+            },
+            0x40 ... 0x7f => {
+                // Slow
+                self.cy += 6;
+            },
+            0x80 ... 0xbf => match addr {
+                0x0000 ... 0x1fff | 0x6000 ... 0x7fff => {
+                    // Slow
+                    self.cy += 8;
+                }
+                0x4000 ... 0x41ff => {
+                    // XSlow
+                    self.cy += 12;
+                }
+                0x8000 ... 0xffff => {
+                    // FIXME Depends on bit 1 in $420d. Assume slow for now.
+                    self.cy += 8;
+                }
+                _ => {
+                    self.cy += 6;
+                }
+            },
+            0xc0 ... 0xff => {
+                // FIXME Depends on bit 1 in $420d. Assume slow for now.
+                self.cy += 8;
+            }
+            _ => {
+                self.cy += 6;
+            }
+        }
+    }
+
+    /// Load a byte from memory. Will change the cycle counter according to the memory speed.
+    fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
+        self.do_io_cycle(bank, addr);
+        self.mem.load(bank, addr)
+    }
+
+    fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
+        self.do_io_cycle(bank, addr);
+        self.mem.store(bank, addr, value)
+    }
+
     /// Fetches the byte PC points at, then increments PC
     fn fetchb(&mut self) -> u8 {
-        let b = self.mem.load(self.pbr, self.pc);
+        let (pbr, pc) = (self.pbr, self.pc);
+        let b = self.loadb(pbr, pc);
         self.pc = self.pc.wrapping_add(1);
         if self.pc == 0 { warn!("pc overflow") }
         b
@@ -151,7 +214,8 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Pushes a byte onto the stack and decrements the stack pointer
     fn pushb(&mut self, value: u8) {
-        self.mem.store(0, self.s, value);
+        let s = self.s;
+        self.storeb(0, s, value);
         if self.emulation {
             // stack must stay in 0x01xx
             assert_eq!(self.s & 0xff00, 0x0100);
@@ -184,7 +248,8 @@ impl<T: AddressSpace> Cpu<T> {
             self.s = self.s.wrapping_add(1);
         }
 
-        self.mem.load(0, self.s)
+        let s = self.s;
+        self.loadb(0, s)
     }
 
     fn popw(&mut self) -> u16 {
@@ -238,7 +303,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Executes a single opcode and returns the number of internal CPU clock cycles used.
     pub fn dispatch(&mut self) -> u8 {
-        // CPU cycles each opcode takes (FIXME: not actually this simple)
+        // CPU cycles each opcode takes
         static CYCLE_TABLE: [u8; 256] = [
             7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
             2,5,5,7,5,4,6,6, 2,4,2,2,6,4,7,5,   // $10 - $1f
@@ -273,7 +338,7 @@ impl<T: AddressSpace> Cpu<T> {
         }
 
         let op = self.fetchb();
-        self.cy = CYCLE_TABLE[op as usize];
+        self.cy = CYCLE_TABLE[op as usize] * CPU_CYCLE;
         match op {
             // Stack operations
             0x08 => instr!(php),
@@ -396,7 +461,7 @@ impl<T: AddressSpace> Cpu<T> {
             let val = am.loadw(self);
             let res = self.a & val;
             self.a = self.p.set_nz(res);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -422,7 +487,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
 
             self.a = self.p.set_nz(res);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -443,7 +508,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(res < 0);
 
             self.a = self.p.set_nz(res as u16);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -460,7 +525,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(self.a & 0x8000 != 0);
             let res = self.a.rotate_left(1) | c as u16;
             self.a = self.p.set_nz(res);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -480,7 +545,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.p.set_carry(val & 0x8000 != 0);
             let res = self.p.set_nz(val.rotate_right(1) | c as u16);
             am.storew(self, res);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -530,7 +595,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.a = (self.a & 0xff00) | res as u16;
         } else {
             self.a = self.p.set_nz(self.a.wrapping_add(1));
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -542,7 +607,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.y = (self.y & 0xff00) | res as u16;
         } else {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -555,7 +620,7 @@ impl<T: AddressSpace> Cpu<T> {
             self.x = (self.x & 0xff00) | res as u16;
         } else {
             self.x = self.p.set_nz(self.x.wrapping_sub(1));
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -568,7 +633,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.a;
             self.pushw(a);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -581,7 +646,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let a = self.popw();
             self.a = self.p.set_nz(a);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -591,7 +656,7 @@ impl<T: AddressSpace> Cpu<T> {
         if !self.p.negative() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -601,7 +666,7 @@ impl<T: AddressSpace> Cpu<T> {
         if self.p.overflow() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -617,7 +682,7 @@ impl<T: AddressSpace> Cpu<T> {
         if self.p.zero() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -627,7 +692,7 @@ impl<T: AddressSpace> Cpu<T> {
         if !self.p.zero() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -641,7 +706,7 @@ impl<T: AddressSpace> Cpu<T> {
             let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
-            self.cy += 1;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -655,7 +720,7 @@ impl<T: AddressSpace> Cpu<T> {
             let val = am.loadw(self);
             let x = self.x;
             self.compare(x, val);
-            self.cy += 1;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -706,7 +771,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.a = self.p.set_nz(val);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -719,7 +784,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.y = self.p.set_nz(val);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -731,7 +796,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let val = am.loadw(self);
             self.x = self.p.set_nz(val);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -744,7 +809,7 @@ impl<T: AddressSpace> Cpu<T> {
         } else {
             let w = self.a;
             am.storew(self, w);
-            self.cy += 1;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -857,7 +922,7 @@ impl AddressingMode {
             AddressingMode::Immediate8(val) => val,
             _ => {
                 let (bank, addr) = self.address(cpu);
-                cpu.mem.load(bank, addr)
+                cpu.loadb(bank, addr)
             }
         }
     }
@@ -871,8 +936,8 @@ impl AddressingMode {
                 assert!(addr < 0xffff, "loadw on bank boundary");
                 // ^ if this should be supported, make sure to fix the potential overflow below
 
-                let lo = cpu.mem.load(bank, addr) as u16;
-                let hi = cpu.mem.load(bank, addr + 1) as u16;
+                let lo = cpu.loadb(bank, addr) as u16;
+                let hi = cpu.loadb(bank, addr + 1) as u16;
 
                 (hi << 8) | lo
             }
@@ -881,15 +946,15 @@ impl AddressingMode {
 
     fn storeb<T: AddressSpace>(self, cpu: &mut Cpu<T>, value: u8) {
         let (bank, addr) = self.address(cpu);
-        cpu.mem.store(bank, addr, value);
+        cpu.storeb(bank, addr, value);
     }
 
     fn storew<T: AddressSpace>(self, cpu: &mut Cpu<T>, value: u16) {
         let (bank, addr) = self.address(cpu);
         assert!(addr < 0xffff, "storew on bank boundary");
 
-        cpu.mem.store(bank, addr, value as u8);
-        cpu.mem.store(bank, addr + 1, (value >> 8) as u8);
+        cpu.storeb(bank, addr, value as u8);
+        cpu.storeb(bank, addr + 1, (value >> 8) as u8);
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
@@ -932,9 +997,9 @@ impl AddressingMode {
                 // instruction and the Direct Register. The effective address is this 24-bit base
                 // address plus the Y Index Register."
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
-                let lo = cpu.mem.load(0, addr_ptr) as u32;
-                let hi = cpu.mem.load(0, addr_ptr + 1) as u32;
-                let bank = cpu.mem.load(0, addr_ptr + 2) as u32;
+                let lo = cpu.loadb(0, addr_ptr) as u32;
+                let hi = cpu.loadb(0, addr_ptr + 1) as u32;
+                let bank = cpu.loadb(0, addr_ptr + 2) as u32;
                 let base_address = (bank << 16) | (hi << 8) | lo;
                 let eff_addr = base_address + cpu.y as u32;
                 assert!(eff_addr & 0xff000000 == 0, "address overflow");

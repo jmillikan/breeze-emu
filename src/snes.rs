@@ -120,8 +120,6 @@ impl Snes {
         const CY_LIMIT: u64 = 6_540_000;
 
         const MASTER_CLOCK_FREQ: i32 = 21_477_000;
-        const CPU_DIVIDER: i32 = 8; // FIXME WRONG! Take variable IO speed into account!
-        const CPU_CLOCK_FREQ: i32 = MASTER_CLOCK_FREQ / CPU_DIVIDER;
         /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
         /// resonator instead of a quartz).
         const APU_CLOCK_FREQ: i32 = 1_024_000;
@@ -142,7 +140,7 @@ impl Snes {
             }
 
             // Run a CPU instruction and calculate the master cycles elapsed
-            let cpu_master_cy = self.cpu.dispatch() as i32 * CPU_DIVIDER;
+            let cpu_master_cy = self.cpu.dispatch() as i32;
             master_cy += cpu_master_cy as u64;
 
             // Now we "owe" the other components a few cycles:
