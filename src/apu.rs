@@ -1,3 +1,5 @@
+use dsp::Dsp;
+
 pub struct Apu {
     pub cpu: Spc700,
 }
@@ -89,6 +91,8 @@ pub struct Spc700 {
     /// $f4 - $f7
     io_vals: [u8; 4],
 
+    dsp: Dsp,
+
     a: u8,
     x: u8,
     y: u8,
@@ -119,6 +123,7 @@ impl Spc700 {
             reg_dsp_addr: 0,
             reg_dsp_data: 0,
             io_vals: [0; 4],
+            dsp: Dsp::new(),
             a: 0,
             x: 0,
             y: 0,
@@ -134,7 +139,7 @@ impl Spc700 {
             0xf0 | 0xf1 | 0xfa ... 0xfc =>
                 panic!("APU attempted read from write-only register ${:02X}", addr),
             0xf2 => self.reg_dsp_addr,
-            0xf3 => panic!("NYI: DSP data reg: there is no DSP :("),
+            0xf3 => self.dsp.load(self.reg_dsp_addr),
             0xf4 ... 0xf7 => self.io_vals[addr as usize - 0xf4],
             0xfa ... 0xff => panic!("NYI: Timer/Counter"),
             // NB: $f8 and $f9 are regular RAM
@@ -151,7 +156,7 @@ impl Spc700 {
             }
             0xf1 => panic!("NYI: APU control register"),
             0xf2 => self.reg_dsp_addr = val,
-            0xf3 => panic!("NYI: DSP data register: there is no DSP :("),
+            0xf3 => self.dsp.store(self.reg_dsp_addr, val),
             0xfa ... 0xfc => panic!("NYI: APU Timer control (reg ${:02X})", addr),
             0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:02X}", addr),
             // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
@@ -346,17 +351,16 @@ impl Spc700 {
     fn movw_l(&mut self, am: AddressingMode) {
         // FIXME Are the flags set right?
         let (lo, hi) = am.loadw(self);
-        self.y = hi;
+        self.y = self.psw.set_nz(hi);
         self.a = lo;
-        self.psw.set_nz(hi);
 
         //trace!("LOADW got ${:02X}{:02X}", hi, lo);
     }
 
-    /// movw-store. Stores Y/A at the given word address.
+    /// movw-store. Stores Y (high) and A (low) at the given word address.
     /// (`movw {X}, ya`)
     fn movw_s(&mut self, am: AddressingMode) {
-        // No flags modified, A=low, Y=high, Reads the low byte first
+        // No flags modified, Reads the low byte first
         let y = self.y;
         let a = self.a;
         am.clone().loadb(self);
@@ -541,7 +545,7 @@ impl AddressingMode {
             Immediate(_) => panic!("attempted to get address of immediate"),
             A | X | Y => panic!("attempted to get address of register"),
             Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
-            IndirectX => spc.x as u16,
+            IndirectX => spc.x as u16,  // FIXME add direct page?
             IndirectIndexed(offset) => {
                 // [d]+Y
                 let addr_ptr = direct(offset as u16, spc.psw.direct_page());
