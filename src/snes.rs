@@ -31,8 +31,8 @@ impl AddressSpace for Memory {
                         // 2141 => f5
                         // 2142 => f6
                         // 2143 => f7
-                        let reg = addr & 0b11;
-                        self.apu.load(reg as u8)
+                        let port = addr & 0b11;
+                        self.apu.load_port(port as u8)
                     }
                     _ => self.rom.load(bank, addr)
                 }
@@ -62,8 +62,8 @@ impl AddressSpace for Memory {
                         // 2141 => f5
                         // 2142 => f6
                         // 2143 => f7
-                        let reg = addr & 0b11;
-                        self.apu.store(reg as u8, value)
+                        let port = addr & 0b11;
+                        self.apu.store_port(port as u8, value)
                     }
                     0x4200 => {
                         // NMITIMEN - NMI/IRQ enable
@@ -124,7 +124,7 @@ impl Snes {
         loop {
             if opcount == TRACE_START {
                 self.cpu.trace = true;
-                self.cpu.mem.apu.cpu.trace = true;
+                self.cpu.mem.apu.trace = true;
             }
 
             self.cpu.dispatch();

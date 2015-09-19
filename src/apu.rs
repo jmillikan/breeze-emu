@@ -1,36 +1,105 @@
 use dsp::Dsp;
 
-pub struct Apu {
-    pub cpu: Spc700,
+pub type Apu = Spc700;
+
+
+const RAM_SIZE: usize = 65536;
+const RESET_VEC: u16 = 0xFFFE;
+
+/// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
+/// 64 KB of RAM. The last 64 Bytes in its address space are mapped to the "IPL ROM", which
+/// contains a small piece of startup code that allows the main CPU to transfer a program to the
+/// APU (we just copy the IPL ROM into the RAM and make it read-write).
+pub struct Spc700 {
+    // 64KB of RAM
+    // (this is not the address space, even though both are 64KB!)
+    mem: [u8; RAM_SIZE],
+
+    /// $f0 - Testing register
+    reg_test: u8,
+    /// $f1 - Control register
+    reg_ctrl: u8,
+    /// $f2 - DSP address selection ($f3 - DSP data)
+    reg_dsp_addr: u8,
+    /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
+    /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
+    /// $f4 - $f7
+    io_vals: [u8; 4],
+    /// Timer 0 (8kHz) divider
+    /// $00: Divide by 256
+    /// $01 - $ff: Divide by value
+    /*t0div: u8,
+    /// Timer 1 (8kHz) divider
+    t1div: u8,
+    /// Timer 2 (64kHz) divider
+    t2div: u8,
+    t0val: u8,
+    t1val: u8,
+    t2val: u8,*/
+
+    dsp: Dsp,
+
+    a: u8,
+    x: u8,
+    y: u8,
+    sp: u8,
+    pc: u16,
+    psw: StatusReg,
+
+    pub trace: bool,
 }
 
-impl Apu {
-    pub fn new() -> Apu {
-        Apu {
-            cpu: Spc700::new(),
+// Public interface
+impl Spc700 {
+    pub fn new() -> Spc700 {
+        const IPL_START: usize = RAM_SIZE - 64;
+
+        let mut mem = [0; RAM_SIZE as usize];
+        for i in 0..64 {
+            mem[IPL_START as usize + i] = IPL_ROM[i];
+        }
+
+        let pcl = mem[RESET_VEC as usize] as u16;
+        let pch = mem[RESET_VEC as usize + 1] as u16;
+        let pc = (pch << 8) | pcl;
+
+        Spc700 {
+            mem: mem,
+            reg_test: 0x0a,
+            reg_ctrl: 0xb0,
+            reg_dsp_addr: 0,
+            io_vals: [0; 4],
+            dsp: Dsp::new(),
+            a: 0,
+            x: 0,
+            y: 0,
+            sp: 0,
+            pc: pc,
+            psw: StatusReg(0),  // FIXME is 0 correct`?
+            trace: false,
         }
     }
 
     /// Store a byte in an IO port (0-3)
     ///
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
-    pub fn store(&mut self, port: u8, value: u8) {
+    pub fn store_port(&mut self, port: u8, value: u8) {
         debug_assert!(port < 4);
-        self.cpu.io_vals[port as usize] = value;
+        self.io_vals[port as usize] = value;
     }
 
     /// Load a byte from an IO port (0-3)
     ///
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
-    pub fn load(&mut self, port: u8) -> u8 {
+    pub fn load_port(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
-        let val = self.cpu.mem[0xf4 + port as usize];
+        let val = self.mem[0xf4 + port as usize];
         val
     }
 
     // FIXME temp. function
     pub fn tick(&mut self) {
-        self.cpu.dispatch()
+        self.dispatch()
     }
 }
 
@@ -68,72 +137,7 @@ impl StatusReg {
     }
 }
 
-const RAM_SIZE: usize = 65536;
-const RESET_VEC: u16 = 0xFFFE;
-
-/// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
-/// 64 KB of RAM. The last 64 Bytes in its address space are mapped to the "IPL ROM", which
-/// contains a small piece of startup code that allows the main CPU to transfer a program to the
-/// APU (we just copy the IPL ROM into the RAM and make it read-write).
-pub struct Spc700 {
-    // 64KB of RAM
-    // (this is not the address space, even though both are 64KB!)
-    mem: [u8; RAM_SIZE],
-
-    /// $f0 - Testing register
-    reg_test: u8,
-    /// $f1 - Control register
-    reg_ctrl: u8,
-    reg_dsp_addr: u8,
-    reg_dsp_data: u8,
-    /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
-    /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
-    /// $f4 - $f7
-    io_vals: [u8; 4],
-
-    dsp: Dsp,
-
-    a: u8,
-    x: u8,
-    y: u8,
-    sp: u8,
-    pc: u16,
-    psw: StatusReg,
-
-    pub trace: bool,
-}
-
 impl Spc700 {
-    fn new() -> Spc700 {
-        const IPL_START: usize = RAM_SIZE - 64;
-
-        let mut mem = [0; RAM_SIZE as usize];
-        for i in 0..64 {
-            mem[IPL_START as usize + i] = IPL_ROM[i];
-        }
-
-        let pcl = mem[RESET_VEC as usize] as u16;
-        let pch = mem[RESET_VEC as usize + 1] as u16;
-        let pc = (pch << 8) | pcl;
-
-        Spc700 {
-            mem: mem,
-            reg_test: 0x0a,
-            reg_ctrl: 0xb0,
-            reg_dsp_addr: 0,
-            reg_dsp_data: 0,
-            io_vals: [0; 4],
-            dsp: Dsp::new(),
-            a: 0,
-            x: 0,
-            y: 0,
-            sp: 0,
-            pc: pc,
-            psw: StatusReg(0),  // FIXME is 0 correct`?
-            trace: false,
-        }
-    }
-
     fn load(&mut self, addr: u16) -> u8 {
         match addr {
             0xf0 | 0xf1 | 0xfa ... 0xfc =>

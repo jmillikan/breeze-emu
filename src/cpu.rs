@@ -237,7 +237,7 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Executes a single opcode and returns the number of master clock cycles spent doing that.
     pub fn dispatch(&mut self) -> u8 {
-        // CPU cycles each opcode takes (not actually that simple)
+        // CPU cycles each opcode takes (FIXME: not actually this simple)
         static CYCLE_TABLE: [u8; 256] = [
             7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
             2,5,5,7,5,4,6,6, 2,4,2,2,6,4,7,5,   // $10 - $1f
