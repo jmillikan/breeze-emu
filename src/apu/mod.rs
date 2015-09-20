@@ -1,48 +1,16 @@
-use dsp::Dsp;
+mod addressing;
+mod dsp;
+mod timer;
+
+use self::addressing::AddressingMode;
+use self::dsp::Dsp;
+use self::timer::Timer;
 
 pub type Apu = Spc700;
 
 
 const RAM_SIZE: usize = 65536;
 const RESET_VEC: u16 = 0xFFFE;
-
-#[derive(Copy, Clone, Default, Debug)]
-struct Timer {
-    enabled: bool,
-    div: u8,
-    val: u8,
-    /// Counted up at the same speed as the APU runs. When it reaches 128 (Timer 0/1) or 16
-    /// (Timer 2), this is reset and stage1 is incremented.
-    stage0: u8,
-    /// Counted up at the timer's frequency. When this reaches `div`, it is reset and `val`
-    /// (stage3) incremented. Since `div=0` is interpreted as 256, this is a `u16`.
-    stage1: u16,
-}
-
-impl Timer {
-    fn new() -> Timer { Timer::default() }
-
-    /// Update the timer, applying a base-divisor (128 for Timer 0/1, 16 for Timer 2)
-    fn update(&mut self, base_div: u8, cy: u8) {
-        self.stage0 += cy;
-        self.stage1 += self.stage0 as u16 / base_div as u16;
-        self.stage0 %= base_div;
-
-        let real_div: u16 = if self.div == 0 { 256 } else { self.div as u16 };
-        self.val += (self.stage1 / real_div) as u8;
-        self.stage1 %= real_div;
-        self.val &= 0x0f;   // It's a 4-bit counter
-    }
-
-    fn set_enable(&mut self, enable: bool) {
-        if !self.enabled && enable {
-            self.stage1 = 0;
-            self.val = 0;
-        }
-
-        self.enabled = enable;
-    }
-}
 
 /// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
 /// 64 KB of RAM shared with the DSP. The last 64 Bytes in its address space are mapped to the
@@ -277,8 +245,7 @@ impl Spc700 {
                 use log::LogLevel::Trace;
                 let am = self.$am();
                 if log_enabled!(Trace) && self.trace {
-                    let amfmt = am.format(self);
-                    self.trace_op(pc, &format!(e!($s), amfmt));
+                    self.trace_op(pc, &format!(e!($s), am));
                 }
                 self.$name(am)
             }};
@@ -287,9 +254,7 @@ impl Spc700 {
                 let am = self.$am();
                 let am2 = self.$am2();
                 if log_enabled!(Trace) && self.trace {
-                    let amfmt = am.format(self);
-                    let amfmt2 = am2.format(self);
-                    self.trace_op(pc, &format!(e!($s), amfmt, amfmt2));
+                    self.trace_op(pc, &format!(e!($s), am, am2));
                 }
                 self.$name(am, am2)
             }};
@@ -569,169 +534,6 @@ impl Spc700 {
     fn ill(&mut self) {}
 }
 
-/// An addressing mode of the SPC700.
-///
-/// As a safety measure, the `loadb` and `storeb` methods take the mode by value. We derive `Clone`
-/// to make multiple uses explicit.
-#[derive(Clone)]
-enum AddressingMode {
-    Immediate(u8),
-    /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
-    /// Address = `D + $ab`
-    Direct(u8),
-    /// Where X points to (in page 0, $00 - $ff)
-    /// Address = `X`
-    IndirectX,
-    /// Fetch the word address at a direct address (this is the "indirect" part), then index the
-    /// fetched address with Y.
-    /// Address = `[D + $ab] + Y`
-    IndirectIndexed(u8),
-    /// Index direct address with X, then "indirect" by fetching the word address stored there.
-    /// Address = `[D + $ab + X]`
-    IndexedIndirect(u8),
-    /// Fetch the target word address from an absolute address + X (`[$abcd+X]`)
-    /// (only used for `JMP`)
-    AbsIndexedIndirect(u16),
-    /// Absolute address
-    /// Address = `$abcd`
-    Abs(u16),
-    /// Address = `$abcd+X`
-    AbsIndexedX(u16),
-    /// Address = `$abcd+Y`
-    AbsIndexedY(u16),
-    /// Used for branch instructions
-    Rel(i8),
-    A,
-    X,
-    Y,
-}
-
-impl AddressingMode {
-    fn loadb(self, spc: &mut Spc700) -> u8 {
-        use apu::AddressingMode::*;
-
-        match self {
-            Immediate(val) => val,
-            A => spc.a,
-            X => spc.x,
-            Y => spc.y,
-            _ => {
-                let addr = self.address(spc);
-                spc.load(addr)
-            }
-        }
-    }
-
-    /// Loads a word. Returns low and high byte.
-    fn loadw(self, spc: &mut Spc700) -> (u8, u8) {
-        use apu::AddressingMode::*;
-
-        let addr = self.address(spc);
-        let addr2;  // address of second (high) byte
-        if let Direct(_) = self {
-            // Direct Page access will wrap in the page
-            addr2 = (addr & 0xff00) | (addr as u8).wrapping_add(1) as u16;   // low byte wraps
-        } else {
-            // FIXME wrapping
-            addr2 = addr + 1;
-        }
-
-        let lo = spc.load(addr);
-        let hi = spc.load(addr2);
-        (lo, hi)
-    }
-
-    fn storeb(self, spc: &mut Spc700, value: u8) {
-        use apu::AddressingMode::*;
-
-        match self {
-            // NB: Register stores always set NZ, make sure this is okay before using it!
-            A => spc.a = spc.psw.set_nz(value),
-            X => spc.x = spc.psw.set_nz(value),
-            Y => spc.y = spc.psw.set_nz(value),
-            _ => {
-                let a = self.address(spc);
-                spc.store(a, value);
-            }
-        }
-    }
-
-    fn storew(self, spc: &mut Spc700, (lo, hi): (u8, u8)) {
-        use apu::AddressingMode::*;
-
-        let addr = self.address(spc);
-        let addr2;  // address of second (high) byte
-        if let Direct(_) = self {
-            // Direct Page access will wrap in the page
-            addr2 = (addr & 0xff00) | (addr as u8).wrapping_add(1) as u16;   // low byte wraps
-        } else {
-            // FIXME wrapping
-            addr2 = addr + 1;
-        }
-
-        spc.store(addr, lo);
-        spc.store(addr2, hi);
-    }
-
-    fn address(&self, spc: &mut Spc700) -> u16 {
-        use apu::AddressingMode::*;
-
-        fn direct(offset: u16, dp: bool) -> u16 {
-            offset + match dp {
-                true => 0x100,
-                false => 0,
-            }
-        }
-
-        // FIXME wrapping is (intentionally) wrong here!
-        match *self {
-            Immediate(_) => panic!("attempted to get address of immediate"),
-            A | X | Y => panic!("attempted to get address of register"),
-            Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
-            IndirectX => spc.x as u16,  // FIXME add direct page?
-            IndirectIndexed(offset) => {
-                // [d]+Y
-                let addr_ptr = direct(offset as u16, spc.psw.direct_page());
-                let addr = spc.loadw(addr_ptr) + spc.y as u16;
-                addr
-            }
-            IndexedIndirect(offset) => {
-                // [d+X]
-                direct(offset as u16, spc.psw.direct_page()) + spc.x as u16
-            }
-            AbsIndexedIndirect(abs) => {
-                let addr_ptr = abs + spc.x as u16;
-                let addr = spc.loadw(addr_ptr);
-                addr
-            }
-            Abs(addr) => addr,
-            AbsIndexedX(addr) => addr + spc.x as u16,
-            AbsIndexedY(addr) => addr + spc.y as u16,
-            Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
-        }
-    }
-
-    fn format(&self, spc: &Spc700) -> String {
-        use apu::AddressingMode::*;
-
-        match *self {
-            A =>                       "a".to_owned(),
-            X =>                       "x".to_owned(),
-            Y =>                       "y".to_owned(),
-            Immediate(val) =>          format!("#${:02X}", val),
-            Direct(offset) =>          format!("${:02X}", offset),
-            IndirectX =>               format!("(X)"),
-            IndirectIndexed(offset) => format!("[${:02X}]+Y", offset),
-            IndexedIndirect(offset) => format!("[${:02X}+X]", offset),
-            AbsIndexedIndirect(abs) => format!("[${:04X}+X]", abs),
-            // FIXME consider using `!abcd` notation for abs instead of `$abcd`
-            Abs(addr) =>               format!("${:04X}", addr),
-            AbsIndexedX(addr) =>       format!("${:04X}+X", addr),
-            AbsIndexedY(addr) =>       format!("${:04X}+Y", addr),
-            Rel(rel) =>                format!("{:+}", rel),
-        }
-    }
-}
 
 /// Addressing mode construction
 impl Spc700 {
