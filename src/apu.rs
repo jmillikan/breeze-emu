@@ -232,7 +232,7 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, opstr: &str) {
-        trace!("{:04X}     {:14} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
+        trace!("{:04X}     {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
             opstr,
             self.a,
@@ -314,6 +314,15 @@ impl Spc700 {
             0xcf => instr!(mul "mul ya"),
 
             // Control flow and comparisons
+            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0x7e => instr!(cmp "cmp {1}, {0}" direct y),
+            0x68 => instr!(cmp "cmp {1}, {0}" immediate a),
+            0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
+            0xad => instr!(cmp "cmp {1}, {0}" immediate y),
+            0x75 => instr!(cmp "cmp {1}, {0}" abs_indexed_x a),
+
+            0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
+
             0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xf0 => instr!(beq "beq {}" rel),
@@ -330,16 +339,13 @@ impl Spc700 {
             0x6d => instr!(push "push {}" y),
             0xee => instr!(pop "pop {}" y),
 
-            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
-            0x7e => instr!(cmp "cmp {1}, {0}" direct y),
-            0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
-
             // "mov"
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
             // NB: Moves into registers will always set N and Z
             0x8f => instr!(mov "mov {1}, {0}" immediate direct),
             0xe8 => instr!(mov "mov {1}, {0}" immediate a),
             0xcd => instr!(mov "mov {1}, {0}" immediate x),
+            0x8d => instr!(mov "mov {1}, {0}" immediate y),
             0x5d => instr!(mov "mov {1}, {0}" a x),
             0xfd => instr!(mov "mov {1}, {0}" a y),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
@@ -352,6 +358,7 @@ impl Spc700 {
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xcc => instr!(mov "mov {1}, {0}" y abs),
+            0xdb => instr!(mov "mov {1}, {0}" y indexed_indirect),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
             0xe5 => instr!(mov "mov {1}, {0}" abs a),
@@ -444,6 +451,15 @@ impl Spc700 {
         let diff = a.wrapping_sub(b);
         self.psw.set_nz(diff);
         self.psw.set_carry(diff & 0x80 != 0);
+    }
+
+    fn cbne(&mut self, cmp: AddressingMode, addr: AddressingMode) {
+        let cmp = cmp.loadb(self);
+        if cmp != self.a {
+            let a = addr.address(self);
+            self.pc = a;
+            self.cy += 2;
+        }
     }
 
     fn bra(&mut self, am: AddressingMode) {
