@@ -5,10 +5,10 @@ impl Ppu {
         Ppu
     }
 
-    pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
+    pub fn load(&mut self, addr: u16) -> u8 {
         0
     }
 
-    pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
+    pub fn store(&mut self, addr: u16, value: u8) {
     }
 }

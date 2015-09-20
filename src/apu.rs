@@ -53,8 +53,6 @@ pub struct Spc700 {
     // (this is not the address space, even though both are 64KB!)
     mem: [u8; RAM_SIZE],
 
-    /// $f0 - Testing register
-    reg_test: u8,
     /// $f2 - DSP address selection ($f3 - DSP data)
     reg_dsp_addr: u8,
     /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
@@ -93,7 +91,6 @@ impl Spc700 {
 
         Spc700 {
             mem: mem,
-            reg_test: 0x0a,
             reg_dsp_addr: 0,
             io_vals: [0; 4],
             timers: [Timer::new(); 3],
@@ -120,7 +117,7 @@ impl Spc700 {
     /// Load a byte from an IO port (0-3)
     ///
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
-    pub fn load_port(&mut self, port: u8) -> u8 {
+    pub fn read_port(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
         let val = self.mem[0xf4 + port as usize];
         val

@@ -7,7 +7,9 @@ use rom::Rom;
 
 const WRAM_SIZE: usize = 128 * 1024;
 
-/// Contains everything connected to the CPU via one of the two address buses.
+/// This is most of the CPU's address space. Contains everything connected to the CPU via one of
+/// the two address buses. Internal registers which are mapped to memory are handled by the CPU
+/// itself.
 pub struct Memory {
     apu: Apu,
     ppu: Ppu,
@@ -20,25 +22,25 @@ impl Memory {
     pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
         match bank {
             0x00 ... 0x3f => match addr {
-                0x0000 ... 0x1fff => {
-                    // Mirror of first 8k of WRAM
-                    self.wram[addr as usize]
-                }
+                // Mirror of first 8k of WRAM
+                0x0000 ... 0x1fff => self.wram[addr as usize],
+                0x2100 ... 0x2133 =>
+                    panic!("attempt to read from write-only PPU register ${:04X}", addr),
+                0x2138 ... 0x213f => self.ppu.load(addr),
                 0x2140 ... 0x217f => {
-                    // APU IO registers. The APU has 4 IO regs which are mirrored.
+                    // APU IO registers. The APU has 4 IO regs which are mirrored in this address
+                    // range.
                     // $2140 => $f4
                     // $2141 => $f5
                     // $2142 => $f6
                     // $2143 => $f7
                     let port = addr & 0b11;
-                    self.apu.load_port(port as u8)
+                    self.apu.read_port(port as u8)
                 }
                 _ => self.rom.loadb(bank, addr)
             },
-            0x7e | 0x7f => {
-                // WRAM main banks
-                self.wram[(bank as usize - 0x7e) * 65536 + addr as usize]
-            }
+            // WRAM banks. The first 8k are mapped into the start of all banks.
+            0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize],
             _ => self.rom.loadb(bank, addr)
         }
     }
@@ -46,13 +48,9 @@ impl Memory {
     pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
         match bank {
             0x00 ... 0x3f => match addr {
-                0x0000 ... 0x1fff => {
-                    self.wram[addr as usize] = value;
-                }
-                0x2100 ... 0x213f => {
-                    // PPU registers. Let it deal with the access.
-                    self.ppu.store(bank, addr, value)
-                }
+                0x0000 ... 0x1fff => self.wram[addr as usize] = value,
+                // PPU registers. Let it deal with the access.
+                0x2100 ... 0x213f => self.ppu.store(addr, value),
                 0x2140 ... 0x217f => {
                     // APU IO registers. The APU has 4 IO regs which are mirrored.
                     // $2140 => $f4

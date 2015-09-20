@@ -2,6 +2,8 @@
 
 use cpu::Cpu;
 
+use std::fmt;
+
 /// As a safety measure, the load and store methods take the mode by value and consume it. Using
 /// the same object twice requires an explicit `.clone()` (`Copy` isn't implemented).
 #[derive(Clone)]
@@ -154,21 +156,23 @@ impl AddressingMode {
                     immediate?)")
         }
     }
+}
 
-    pub fn format(&self, cpu: &Cpu) -> String {
+impl fmt::Display for AddressingMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::AddressingMode::*;
 
         match *self {
-            Immediate(val) =>              format!("#${:04X}", val),
-            Immediate8(val) =>             format!("#${:02X}", val),
-            Absolute(addr) =>              format!("${:04X}", addr),
-            AbsoluteLong(bank, addr) =>    format!("${:02X}:{:04X}", bank, addr),
-            AbsLongIndexedX(bank, addr) => format!("${:02X}:{:04X},x", bank, addr),
-            AbsIndexedX(offset) =>         format!("${:04X},x", offset),
-            Rel(rel) =>                    format!("{:+}", rel),
-            Direct(offset) =>              format!("${:02X}", offset),
-            DirectIndexedX(offset) =>      format!("${:02X},x", offset),
-            IndirectLongIdx(offset) =>     format!("[${:02X}],y", offset),
+            Immediate(val) =>              write!(f, "#${:04X}", val),
+            Immediate8(val) =>             write!(f, "#${:02X}", val),
+            Absolute(addr) =>              write!(f, "${:04X}", addr),
+            AbsoluteLong(bank, addr) =>    write!(f, "${:02X}:{:04X}", bank, addr),
+            AbsLongIndexedX(bank, addr) => write!(f, "${:02X}:{:04X},x", bank, addr),
+            AbsIndexedX(offset) =>         write!(f, "${:04X},x", offset),
+            Rel(rel) =>                    write!(f, "{:+}", rel),
+            Direct(offset) =>              write!(f, "${:02X}", offset),
+            DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
+            IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),
         }
     }
 }

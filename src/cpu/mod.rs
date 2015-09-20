@@ -204,10 +204,10 @@ impl Cpu {
         use log::LogLevel::Trace;
         if !log_enabled!(Trace) || !self.trace { return }
 
-        let opstr = format!("{} {}",
-            op,
-            am.map(|am| am.format(self)).unwrap_or(String::new())
-        );
+        let opstr = match am {
+            Some(am) => format!("{} {}", op, am),
+            None => format!("{}", op),
+        };
         trace!("{:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
             self.pbr,
             pc,
@@ -683,6 +683,8 @@ impl Cpu {
 
     fn cli(&mut self) { self.p.set_irq_disable(false) }
     fn sei(&mut self) { self.p.set_irq_disable(true) }
+    fn clc(&mut self) { self.p.set_carry(false); }
+    fn sec(&mut self) { self.p.set_carry(true); }
 
     /// Store 0 to memory
     fn stz(&mut self, am: AddressingMode) { am.storeb(self, 0) }
@@ -737,9 +739,6 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
-
-    fn clc(&mut self) { self.p.set_carry(false); }
-    fn sec(&mut self) { self.p.set_carry(true); }
 
     /// Exchange carry and emulation flags
     fn xce(&mut self) {
