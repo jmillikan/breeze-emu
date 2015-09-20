@@ -45,9 +45,9 @@ impl Timer {
 }
 
 /// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
-/// 64 KB of RAM. The last 64 Bytes in its address space are mapped to the "IPL ROM", which
-/// contains a small piece of startup code that allows the main CPU to transfer a program to the
-/// APU (we just copy the IPL ROM into the RAM and make it read-write).
+/// 64 KB of RAM shared with the DSP. The last 64 Bytes in its address space are mapped to the
+/// "IPL ROM", which contains a small piece of startup code that allows the main CPU to transfer a
+/// program to the APU (we just copy the IPL ROM into the RAM and make it read-write).
 pub struct Spc700 {
     // 64KB of RAM
     // (this is not the address space, even though both are 64KB!)
@@ -305,6 +305,7 @@ impl Spc700 {
             0x3d => instr!(inc "inx {}" x),
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
+            0xcf => instr!(mul "mul ya"),
 
             // Control flow and comparisons
             0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
@@ -315,6 +316,10 @@ impl Spc700 {
 
             0x3f => instr!(call "call {}" abs),
             0x6f => instr!(ret "ret"),
+
+            0x2d => instr!(push "push {}" a),
+            0x4d => instr!(push "push {}" x),
+            0x6d => instr!(push "push {}" y),
 
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
@@ -395,6 +400,11 @@ impl Spc700 {
 
 /// Opcode implementations
 impl Spc700 {
+    fn push(&mut self, am: AddressingMode) {
+        let v = am.loadb(self);
+        self.pushb(v);
+    }
+
     fn ret(&mut self) {
         let pc = self.popw();
         self.pc = pc;
@@ -406,36 +416,6 @@ impl Spc700 {
 
     /// Clear direct page bit
     fn clrp(&mut self) { self.psw.set_direct_page(false) }
-
-    /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
-    fn mov_xinc(&mut self) {
-        // No flags changed
-        let addr = self.x as u16;
-        let a = self.a;
-        self.store(addr, a);
-        self.x += 1;
-    }
-
-    /// movw-load. Fetches a word from the addressing mode and puts it into Y (high) and A (low)
-    /// (`movw ya, {X}`)
-    fn movw_l(&mut self, am: AddressingMode) {
-        // FIXME Are the flags set right?
-        let (lo, hi) = am.loadw(self);
-        self.y = self.psw.set_nz(hi);
-        self.a = lo;
-
-        //trace!("LOADW got ${:02X}{:02X}", hi, lo);
-    }
-
-    /// movw-store. Stores Y (high) and A (low) at the given word address.
-    /// (`movw {X}, ya`)
-    fn movw_s(&mut self, am: AddressingMode) {
-        // No flags modified, Reads the low byte first
-        let y = self.y;
-        let a = self.a;
-        am.clone().loadb(self);
-        am.storew(self, (a, y));
-    }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
@@ -452,7 +432,6 @@ impl Spc700 {
         let a = am.address(self);
         self.pc = a;
     }
-
     fn beq(&mut self, am: AddressingMode) {
         if self.psw.zero() {
             let a = am.address(self);
@@ -460,7 +439,6 @@ impl Spc700 {
             self.cy += 2;
         }
     }
-
     fn bne(&mut self, am: AddressingMode) {
         if !self.psw.zero() {
             let a = am.address(self);
@@ -468,7 +446,6 @@ impl Spc700 {
             self.cy += 2;
         }
     }
-
     fn bpl(&mut self, am: AddressingMode) {
         if !self.psw.negative() {
             let a = am.address(self);
@@ -477,6 +454,13 @@ impl Spc700 {
         }
     }
 
+    /// `mul ya` - ya = y * a
+    fn mul(&mut self) {
+        // Sets N and Z. Y = High, A = Low.
+        let res = self.y as u16 * self.a as u16;
+        self.y = self.psw.set_nz((res >> 8) as u8);
+        self.a = res as u8;
+    }
     fn dec(&mut self, am: AddressingMode) {
         let val = am.clone().loadb(self);
         am.storeb(self, val.wrapping_sub(1));
@@ -486,6 +470,32 @@ impl Spc700 {
         am.storeb(self, val.wrapping_add(1));
     }
 
+    /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
+    fn mov_xinc(&mut self) {
+        // No flags changed
+        // FIXME Does this work with direct page?
+        let addr = self.x as u16;
+        let a = self.a;
+        self.store(addr, a);
+        self.x += 1;
+    }
+    /// movw-load. Fetches a word from the addressing mode and puts it into Y (high) and A (low)
+    /// (`movw ya, {X}`)
+    fn movw_l(&mut self, am: AddressingMode) {
+        // FIXME Are the flags set right?
+        let (lo, hi) = am.loadw(self);
+        self.y = self.psw.set_nz(hi);
+        self.a = lo;
+    }
+    /// movw-store. Stores Y (high) and A (low) at the given word address.
+    /// (`movw {X}, ya`)
+    fn movw_s(&mut self, am: AddressingMode) {
+        // No flags modified, Reads the low byte first
+        let y = self.y;
+        let a = self.a;
+        am.clone().loadb(self);
+        am.storew(self, (a, y));
+    }
     /// Copy a byte
     fn mov(&mut self, src: AddressingMode, dest: AddressingMode) {
         // No flags modified
