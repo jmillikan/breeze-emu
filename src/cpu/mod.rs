@@ -1,69 +1,13 @@
-//! 65816 emulator. Does not emulate internal memory-mapped registers (these are meant to be
-//! provided via an implementation of `AddressSpace`).
+//! 65816 emulator
 
+mod statusreg;
+mod addressing;
 
-/// Abstraction over memory operations executed by the CPU. If these operations access an unmapped
-/// address, the methods in here will be used to perform the operation.
-pub trait AddressSpace {
-    /// Load a byte from the given address.
-    fn load(&mut self, bank: u8, addr: u16) -> u8;
+use self::addressing::AddressingMode;
+use self::statusreg::StatusReg;
 
-    /// Store a byte at the given address.
-    fn store(&mut self, bank: u8, addr: u16, value: u8);
-}
+use snes::Memory;
 
-const NEG_FLAG: u8 = 0x80;
-const OVERFLOW_FLAG: u8 = 0x40;
-/// 1 = Accumulator is 8-bit (native mode only)
-const SMALL_ACC_FLAG: u8 = 0x20;
-/// 1 = Index registers X/Y are 8-bit (native mode only)
-const SMALL_INDEX_FLAG: u8 = 0x10;
-/// Emulation mode only (same bit as `SMALL_INDEX_FLAG`)
-const BREAK_FLAG: u8 = 0x10;
-const DEC_FLAG: u8 = 0x08;
-/// 1 = IRQs disabled
-const IRQ_FLAG: u8 = 0x04;
-const ZERO_FLAG: u8 = 0x02;
-const CARRY_FLAG: u8 = 0x01;
-struct StatusReg(u8);
-
-impl StatusReg {
-    fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
-    fn overflow(&self) -> bool    { self.0 & OVERFLOW_FLAG != 0 }
-    fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0}
-    fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
-    fn irq_disable(&self) -> bool { self.0 & IRQ_FLAG != 0 }
-    fn small_acc(&self) -> bool   { self.0 & SMALL_ACC_FLAG != 0 }
-    fn small_index(&self) -> bool { self.0 & SMALL_INDEX_FLAG != 0 }
-
-    fn set(&mut self, flag: u8, value: bool) {
-        if value {
-            self.0 |= flag;
-        } else {
-            self.0 &= !flag;
-        }
-    }
-
-    fn set_negative(&mut self, value: bool)    { self.set(NEG_FLAG, value) }
-    fn set_overflow(&mut self, value: bool)    { self.set(OVERFLOW_FLAG, value) }
-    fn set_zero(&mut self, value: bool)        { self.set(ZERO_FLAG, value) }
-    fn set_carry(&mut self, value: bool)       { self.set(CARRY_FLAG, value) }
-    fn set_irq_disable(&mut self, value: bool) { self.set(IRQ_FLAG, value) }
-    fn set_small_acc(&mut self, value: bool)   { self.set(SMALL_ACC_FLAG, value) }
-    fn set_small_index(&mut self, value: bool) { self.set(SMALL_INDEX_FLAG, value) }
-
-    fn set_nz(&mut self, val: u16) -> u16 {
-        self.set_zero(val == 0);
-        self.set_negative(val & 0x8000 != 0);
-        val
-    }
-
-    fn set_nz_8(&mut self, val: u8) -> u8 {
-        self.set_zero(val == 0);
-        self.set_negative(val & 0x80 != 0);
-        val
-    }
-}
 
 // Emulation mode vectors
 const IRQ_VEC8: u16 = 0xFFFE;
@@ -82,7 +26,7 @@ const COP_VEC16: u16 = 0xFFE4;
 /// One CPU cycle = 6 master clock cycles
 const CPU_CYCLE: u8 = 6;
 
-pub struct Cpu<T: AddressSpace> {
+pub struct Cpu {
     a: u16,
     x: u16,
     y: u16,
@@ -104,13 +48,13 @@ pub struct Cpu<T: AddressSpace> {
     cy: u8,
 
     pub trace: bool,
-    pub mem: T,
+    pub mem: Memory,
 }
 
-impl<T: AddressSpace> Cpu<T> {
+impl Cpu {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
     /// put the CPU in emulation mode.
-    pub fn new(mut mem: T) -> Cpu<T> {
+    pub fn new(mut mem: Memory) -> Cpu {
         let pcl = mem.load(0, RESET_VEC8) as u16;
         let pch = mem.load(0, RESET_VEC8 + 1) as u16;
         let pc = (pch << 8) | pcl;
@@ -130,7 +74,7 @@ impl<T: AddressSpace> Cpu<T> {
             // Read from RESET vector above
             pc: pc,
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
-            p: StatusReg(SMALL_ACC_FLAG | SMALL_INDEX_FLAG | IRQ_FLAG),
+            p: StatusReg::new(),
             emulation: true,
             cy: 0,
             trace: false,
@@ -140,48 +84,27 @@ impl<T: AddressSpace> Cpu<T> {
 
     /// Adds the time needed to access the given memory location to the cycle counter.
     fn do_io_cycle(&mut self, bank: u8, addr: u16) {
-        match bank {
+        const FAST: u8 = 6;
+        const SLOW: u8 = 8;
+        const XSLOW: u8 = 12;
+
+        self.cy += match bank {
             0x00 ... 0x3f => match addr {
-                0x0000 ... 0x1fff | 0x6000 ... 0xffff => {
-                    // Slow: 8 cycles
-                    self.cy += 8;
-                }
-                0x4000 ... 0x41ff => {
-                    // XSlow: 12 cycles
-                    self.cy += 12;
-                }
-                _ => {
-                    self.cy += 6;
-                }
+                0x0000 ... 0x1fff | 0x6000 ... 0xffff => SLOW,
+                0x4000 ... 0x41ff => XSLOW,
+                _ => FAST,
             },
-            0x40 ... 0x7f => {
-                // Slow
-                self.cy += 8;
-            },
+            0x40 ... 0x7f => SLOW,
             0x80 ... 0xbf => match addr {
-                0x0000 ... 0x1fff | 0x6000 ... 0x7fff => {
-                    // Slow
-                    self.cy += 8;
-                }
-                0x4000 ... 0x41ff => {
-                    // XSlow
-                    self.cy += 12;
-                }
-                0x8000 ... 0xffff => {
-                    // FIXME Depends on bit 1 in $420d. Assume slow for now.
-                    self.cy += 8;
-                }
-                _ => {
-                    self.cy += 6;
-                }
-            },
-            0xc0 ... 0xff => {
+                0x0000 ... 0x1fff | 0x6000 ... 0x7fff => SLOW,
+                0x4000 ... 0x41ff => XSLOW,
                 // FIXME Depends on bit 1 in $420d. Assume slow for now.
-                self.cy += 8;
-            }
-            _ => {
-                self.cy += 6;
-            }
+                0x8000 ... 0xffff => SLOW,
+                _ => FAST
+            },
+            // FIXME Depends on bit 1 in $420d. Assume slow for now.
+            0xc0 ... 0xff => SLOW,
+            _ => FAST,
         }
     }
 
@@ -445,7 +368,7 @@ impl<T: AddressSpace> Cpu<T> {
 }
 
 /// Opcode implementations
-impl<T: AddressSpace> Cpu<T> {
+impl Cpu {
     /// Pull Processor Status Register
     fn plp(&mut self) {
         let p = self.popb();
@@ -863,179 +786,8 @@ impl<T: AddressSpace> Cpu<T> {
     fn ill(&mut self) {}
 }
 
-/// As a safety measure, the load and store methods take the mode by value and consume it. Using
-/// the same object twice requires an explicit `.clone()` (`Copy` isn't implemented).
-#[derive(Clone)]
-enum AddressingMode {
-    Immediate(u16),
-    Immediate8(u8),
-    /// "Absolute-a"
-    /// Access absolute offset in the current data bank
-    /// (DBR, <val>)
-    Absolute(u16),
-
-    // "Absolute Indexed Indirect-(a,x)"
-
-    /// "Absolute Indexed with X-a,x"
-    /// (DBR, <val> + X)
-    AbsIndexedX(u16),
-
-    // "Absolute Indexed with Y-a,y"
-    // "Absolute Indirect-(a)" (PC?)
-
-    /// "Absolute Long Indexed With X-al,x" - Absolute Long + X
-    /// (<val0>, <val1> + X)
-    AbsLongIndexedX(u8, u16),
-
-    /// "Absolute Long-al"
-    /// Access absolute offset in the specified data bank (DBR is not changed)
-    /// (<val0>, <val1>)
-    AbsoluteLong(u8, u16),
-    /// "Direct-d"
-    /// <val> + direct page register in bank 0
-    /// (0, D + <val>)
-    Direct(u8),
-    /// "Direct Indexed with X-d,x"
-    /// (0, D + <val> + X)
-    DirectIndexedX(u8),
-    /// "Program Counter Relative-r"
-    /// Used for jumps
-    /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
-    Rel(i8),
-
-    // "Direct Indirect Indexed-(d),y" - Indirect-Y
-    // (DBR, D + <val> + Y)  [D+<val> wraps]
-
-    /// "Direct Indirect Indexed Long/Long Indexed-[d],y"
-    /// (bank, addr) := load(D + <val>)
-    /// (bank, addr + Y)
-    IndirectLongIdx(u8),
-
-    // "Direct Indirect Long-[d]"
-    // (0, D + <val>)
-}
-
-impl AddressingMode {
-    /// Loads a byte from where this AM points to (or returns the immediate value)
-    fn loadb<T: AddressSpace>(self, cpu: &mut Cpu<T>) -> u8 {
-        match self {
-            AddressingMode::Immediate(val) =>
-                panic!("loadb on 16-bit immediate (was this intentional?)"),
-            AddressingMode::Immediate8(val) => val,
-            _ => {
-                let (bank, addr) = self.address(cpu);
-                cpu.loadb(bank, addr)
-            }
-        }
-    }
-
-    fn loadw<T: AddressSpace>(self, cpu: &mut Cpu<T>) -> u16 {
-        match self {
-            AddressingMode::Immediate(val) => val,
-            AddressingMode::Immediate8(val) => panic!("loadw on 8-bit immediate"),
-            _ => {
-                let (bank, addr) = self.address(cpu);
-                assert!(addr < 0xffff, "loadw on bank boundary");
-                // ^ if this should be supported, make sure to fix the potential overflow below
-
-                let lo = cpu.loadb(bank, addr) as u16;
-                let hi = cpu.loadb(bank, addr + 1) as u16;
-
-                (hi << 8) | lo
-            }
-        }
-    }
-
-    fn storeb<T: AddressSpace>(self, cpu: &mut Cpu<T>, value: u8) {
-        let (bank, addr) = self.address(cpu);
-        cpu.storeb(bank, addr, value);
-    }
-
-    fn storew<T: AddressSpace>(self, cpu: &mut Cpu<T>, value: u16) {
-        let (bank, addr) = self.address(cpu);
-        assert!(addr < 0xffff, "storew on bank boundary");
-
-        cpu.storeb(bank, addr, value as u8);
-        cpu.storeb(bank, addr + 1, (value >> 8) as u8);
-    }
-
-    /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
-    /// immediate.
-    fn address<T: AddressSpace>(&self, cpu: &mut Cpu<T>) -> (u8, u16) {
-        use cpu::AddressingMode::*;
-
-        // FIXME is something here dependant on register sizes?
-        // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
-
-        match *self {
-            Absolute(addr) => {
-                (cpu.dbr, addr)
-            }
-            AbsoluteLong(bank, addr) => {
-                (bank, addr)
-            }
-            AbsLongIndexedX(bank, addr) => {
-                let a = ((bank as u32) << 16) | addr as u32;
-                let eff_addr = a + cpu.x as u32;
-                assert!(eff_addr & 0xff000000 == 0, "address overflow");
-                let bank = eff_addr >> 16;
-                let addr = eff_addr as u16;
-                (bank as u8, addr)
-            }
-            AbsIndexedX(offset) => {
-                (cpu.dbr, offset + cpu.x)
-            }
-            Rel(rel) => {
-                (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
-            }
-            Direct(offset) => {
-                (0, cpu.d.wrapping_add(offset as u16))
-            }
-            DirectIndexedX(offset) => {
-                (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
-            }
-            IndirectLongIdx(offset) => {
-                // "The 24-bit base address is pointed to by the sum of the second byte of the
-                // instruction and the Direct Register. The effective address is this 24-bit base
-                // address plus the Y Index Register."
-                let addr_ptr = cpu.d.wrapping_add(offset as u16);
-                let lo = cpu.loadb(0, addr_ptr) as u32;
-                let hi = cpu.loadb(0, addr_ptr + 1) as u32;
-                let bank = cpu.loadb(0, addr_ptr + 2) as u32;
-                let base_address = (bank << 16) | (hi << 8) | lo;
-                let eff_addr = base_address + cpu.y as u32;
-                assert!(eff_addr & 0xff000000 == 0, "address overflow");
-
-                let bank = (eff_addr >> 16) as u8;
-                let addr = eff_addr as u16;
-                (bank, addr)
-            }
-            Immediate(_) | Immediate8(_) =>
-                panic!("attempted to take the address of an immediate value (attempted store to \
-                    immediate?)")
-        }
-    }
-
-    fn format<T: AddressSpace>(&self, cpu: &Cpu<T>) -> String {
-        use cpu::AddressingMode::*;
-
-        match *self {
-            Immediate(val) =>              format!("#${:04X}", val),
-            Immediate8(val) =>             format!("#${:02X}", val),
-            Absolute(addr) =>              format!("${:04X}", addr),
-            AbsoluteLong(bank, addr) =>    format!("${:02X}:{:04X}", bank, addr),
-            AbsLongIndexedX(bank, addr) => format!("${:02X}:{:04X},x", bank, addr),
-            AbsIndexedX(offset) =>         format!("${:04X},x", offset),
-            Rel(rel) =>                    format!("{:+}", rel),
-            Direct(offset) =>              format!("${:02X}", offset),
-            DirectIndexedX(offset) =>      format!("${:02X},x", offset),
-            IndirectLongIdx(offset) =>     format!("[${:02X}],y", offset),
-        }
-    }
-}
-
 /// Addressing mode construction
-impl<T: AddressSpace> Cpu<T> {
+impl Cpu {
     fn indirect_long_idx(&mut self) -> AddressingMode {
         AddressingMode::IndirectLongIdx(self.fetchb())
     }

@@ -24,7 +24,7 @@ fn main() {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
 
-    let rom = Rom::load(&buf).unwrap();
+    let rom = Rom::from_bytes(&buf).unwrap();
 
     let mut snes = Snes::new(rom);
     snes.run();

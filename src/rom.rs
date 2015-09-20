@@ -2,8 +2,6 @@
 
 use std::str;
 
-use cpu::AddressSpace;
-
 /// The (decoded) SNES header
 #[derive(Debug)]
 pub struct RomHeader {
@@ -105,7 +103,7 @@ pub struct Rom {
 
 impl Rom {
     /// Loads a ROM from raw data.
-    pub fn load(mut bytes: &[u8]) -> Result<Rom, ()> {
+    pub fn from_bytes(mut bytes: &[u8]) -> Result<Rom, ()> {
         // FIXME Return a proper error!
 
         debug!("raw size: {} bytes ({:#X})", bytes.len(), bytes.len());
@@ -199,12 +197,12 @@ impl Rom {
     }
 }
 
-impl AddressSpace for Rom {
-    fn load(&mut self, bank: u8, addr: u16) -> u8 {
+impl Rom {
+    pub fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
         *self.resolve_addr(bank, addr)
     }
 
-    fn store(&mut self, bank: u8, addr: u16, value: u8) {
+    pub fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
         if addr >= 0x8000 {
             panic!("attempted to write ${:02X} to ROM (${:02X}:{:04X})", value, bank, addr);
         }

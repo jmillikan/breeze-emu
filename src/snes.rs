@@ -1,14 +1,14 @@
 //! Contains the `Snes` struct, which wields the combined power of this project.
 
 use apu::Apu;
-use cpu::{Cpu, AddressSpace};
+use cpu::Cpu;
 use ppu::Ppu;
 use rom::Rom;
 
 const WRAM_SIZE: usize = 128 * 1024;
 
 /// Contains everything connected to the CPU via one of the two address buses.
-struct Memory {
+pub struct Memory {
     apu: Apu,
     ppu: Ppu,
     rom: Rom,
@@ -16,8 +16,8 @@ struct Memory {
     wram: Vec<u8>,
 }
 
-impl AddressSpace for Memory {
-    fn load(&mut self, bank: u8, addr: u16) -> u8 {
+impl Memory {
+    pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
         match bank {
             0x00 ... 0x3f => match addr {
                 0x0000 ... 0x1fff => {
@@ -33,17 +33,17 @@ impl AddressSpace for Memory {
                     let port = addr & 0b11;
                     self.apu.load_port(port as u8)
                 }
-                _ => self.rom.load(bank, addr)
+                _ => self.rom.loadb(bank, addr)
             },
             0x7e | 0x7f => {
                 // WRAM main banks
                 self.wram[(bank as usize - 0x7e) * 65536 + addr as usize]
             }
-            _ => self.rom.load(bank, addr)
+            _ => self.rom.loadb(bank, addr)
         }
     }
 
-    fn store(&mut self, bank: u8, addr: u16, value: u8) {
+    pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
         match bank {
             0x00 ... 0x3f => match addr {
                 0x0000 ... 0x1fff => {
@@ -83,19 +83,19 @@ impl AddressSpace for Memory {
                     // HDMAEN - HDMA enable
                     if value != 0 { panic!("NYI: HDMA") }
                 }
-                _ => self.rom.store(bank, addr, value)
+                _ => self.rom.storeb(bank, addr, value)
             },
             0x7e | 0x7f => {
                 // WRAM main banks
                 self.wram[(bank as usize - 0x7e) * 65536 + addr as usize] = value;
             }
-            _ => self.rom.store(bank, addr, value)
+            _ => self.rom.storeb(bank, addr, value)
         }
     }
 }
 
 pub struct Snes {
-    cpu: Cpu<Memory>,
+    cpu: Cpu,
 }
 
 impl Snes {
