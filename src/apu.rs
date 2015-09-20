@@ -319,6 +319,7 @@ impl Spc700 {
             0x68 => instr!(cmp "cmp {1}, {0}" immediate a),
             0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
             0xad => instr!(cmp "cmp {1}, {0}" immediate y),
+            0x5e => instr!(cmp "cmp {1}, {0}" abs y),
             0x75 => instr!(cmp "cmp {1}, {0}" abs_indexed_x a),
 
             0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
@@ -355,6 +356,7 @@ impl Spc700 {
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0x7d => instr!(mov "mov {1}, {0}" x a),
+            0xc9 => instr!(mov "mov {1}, {0}" x abs),
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xcc => instr!(mov "mov {1}, {0}" y abs),
