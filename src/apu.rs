@@ -319,6 +319,7 @@ impl Spc700 {
             0xf0 => instr!(beq "beq {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
             0x90 => instr!(bcc "bcc {}" rel),
+            0x30 => instr!(bmi "bmi {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
 
             0x3f => instr!(call "call {}" abs),
@@ -327,6 +328,7 @@ impl Spc700 {
             0x2d => instr!(push "push {}" a),
             0x4d => instr!(push "push {}" x),
             0x6d => instr!(push "push {}" y),
+            0xee => instr!(pop "pop {}" y),
 
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
@@ -346,13 +348,16 @@ impl Spc700 {
             0xd6 => instr!(mov "mov {1}, {0}" a abs_indexed_y),
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
+            0x7d => instr!(mov "mov {1}, {0}" x a),
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xcc => instr!(mov "mov {1}, {0}" y abs),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0xe5 => instr!(mov "mov {1}, {0}" abs a),
             0xec => instr!(mov "mov {1}, {0}" abs y),
             0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
+            0xf4 => instr!(mov "mov {1}, {0}" indexed_indirect a),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
@@ -411,6 +416,10 @@ impl Spc700 {
         let v = am.loadb(self);
         self.pushb(v);
     }
+    fn pop(&mut self, dest: AddressingMode) {
+        let v = self.popb();
+        dest.storeb(self, v);
+    }
 
     fn ret(&mut self) {
         let pc = self.popw();
@@ -457,6 +466,13 @@ impl Spc700 {
     }
     fn bcc(&mut self, am: AddressingMode) {
         if !self.psw.carry() {
+            let a = am.address(self);
+            self.pc = a;
+            self.cy += 2;
+        }
+    }
+    fn bmi(&mut self, am: AddressingMode) {
+        if self.psw.negative() {
             let a = am.address(self);
             self.pc = a;
             self.cy += 2;
@@ -664,7 +680,10 @@ impl AddressingMode {
                 let addr = spc.loadw(addr_ptr) + spc.y as u16;
                 addr
             }
-            IndexedIndirect(offset) => panic!("NYI"),
+            IndexedIndirect(offset) => {
+                // [d+X]
+                direct(offset as u16, spc.psw.direct_page()) + spc.x as u16
+            }
             AbsIndexedIndirect(abs) => {
                 let addr_ptr = abs + spc.x as u16;
                 let addr = spc.loadw(addr_ptr);
