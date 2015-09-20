@@ -140,6 +140,8 @@ impl StatusReg {
     fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0 }
     fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
     fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
+    fn half_carry(&self) -> bool  { self.0 & HALF_CARRY_FLAG != 0 }
+    fn overflow(&self) -> bool    { self.0 & OVERFLOW_FLAG != 0 }
 
     fn set(&mut self, flag: u8, v: bool) {
         match v {
@@ -150,8 +152,10 @@ impl StatusReg {
 
     fn set_negative(&mut self, v: bool)    { self.set(NEG_FLAG, v) }
     fn set_zero(&mut self, v: bool)        { self.set(ZERO_FLAG, v) }
-    fn set_carry(&mut self, v: bool)       { self.set(CARRY_FLAG, v) }
     fn set_direct_page(&mut self, v: bool) { self.set(DIRECT_PAGE_FLAG, v) }
+    fn set_carry(&mut self, v: bool)       { self.set(CARRY_FLAG, v) }
+    fn set_half_carry(&mut self, v: bool)  { self.set(HALF_CARRY_FLAG, v) }
+    fn set_overflow(&mut self, v: bool)    { self.set(OVERFLOW_FLAG, v) }
 
     fn set_nz(&mut self, val: u8) -> u8 {
         self.set_negative(val & 0x80 != 0);
@@ -299,12 +303,14 @@ impl Spc700 {
         match op {
             // Processor status
             0x20 => instr!(clrp "clrp"),
+            0x60 => instr!(clrc "clrc"),
 
             // Arithmetic
             0x1d => instr!(dec "dec {}" x),
             0x3d => instr!(inc "inx {}" x),
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
+            0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
 
             // Control flow and comparisons
@@ -312,6 +318,7 @@ impl Spc700 {
             0x2f => instr!(bra "bra {}" rel),
             0xf0 => instr!(beq "beq {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
+            0x90 => instr!(bcc "bcc {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
 
             0x3f => instr!(call "call {}" abs),
@@ -416,6 +423,8 @@ impl Spc700 {
 
     /// Clear direct page bit
     fn clrp(&mut self) { self.psw.set_direct_page(false) }
+    /// Clear carry
+    fn clrc(&mut self) { self.psw.set_carry(false) }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
@@ -446,6 +455,13 @@ impl Spc700 {
             self.cy += 2;
         }
     }
+    fn bcc(&mut self, am: AddressingMode) {
+        if !self.psw.carry() {
+            let a = am.address(self);
+            self.pc = a;
+            self.cy += 2;
+        }
+    }
     fn bpl(&mut self, am: AddressingMode) {
         if !self.psw.negative() {
             let a = am.address(self);
@@ -460,6 +476,19 @@ impl Spc700 {
         let res = self.y as u16 * self.a as u16;
         self.y = self.psw.set_nz((res >> 8) as u8);
         self.a = res as u8;
+    }
+    fn adc(&mut self, src: AddressingMode, dest: AddressingMode) {
+        // Set N, V, H, Z and C
+        let c = if self.psw.carry() { 1 } else { 0 };
+        let a = dest.clone().loadb(self);
+        let b = src.loadb(self);
+        let res = a as u16 + b as u16 + c as u16;
+        self.psw.set_carry(res > 255);
+        self.psw.set_half_carry(((a & 0x0f) + (b & 0x0f) + c) & 0xf0 != 0);
+        let res = res as u8;
+        self.psw.set_overflow((a ^ b) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
+        self.psw.set_nz(res);
+        dest.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
         let val = am.clone().loadb(self);
