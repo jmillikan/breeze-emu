@@ -156,7 +156,7 @@ impl<T: AddressSpace> Cpu<T> {
             },
             0x40 ... 0x7f => {
                 // Slow
-                self.cy += 6;
+                self.cy += 8;
             },
             0x80 ... 0xbf => match addr {
                 0x0000 ... 0x1fff | 0x6000 ... 0x7fff => {
