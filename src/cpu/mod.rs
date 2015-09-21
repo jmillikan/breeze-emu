@@ -1,9 +1,11 @@
 //! 65816 emulator
 
-mod statusreg;
 mod addressing;
+mod dma;
+mod statusreg;
 
 use self::addressing::AddressingMode;
+use self::dma::DmaChannel;
 use self::statusreg::StatusReg;
 
 use snes::Memory;
@@ -43,6 +45,7 @@ pub struct Cpu {
     pc: u16,
     p: StatusReg,
     emulation: bool,
+    dma: [DmaChannel; 8],
 
     /// Master clock cycle counter for the current instruction.
     cy: u8,
@@ -76,6 +79,7 @@ impl Cpu {
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg::new(),
             emulation: true,
+            dma: [DmaChannel::new(); 8],
             cy: 0,
             trace: false,
             mem: mem,
