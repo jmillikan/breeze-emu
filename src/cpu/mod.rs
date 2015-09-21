@@ -266,7 +266,10 @@ impl Cpu {
 
         self.cy = 0;
         let op = self.fetchb();
-        self.cy += CYCLE_TABLE[op as usize] * CPU_CYCLE;
+        self.cy += CYCLE_TABLE[op as usize] * CPU_CYCLE + 4;
+        // FIXME: The +4 is a timing correction. I'm not sure what causes the inaccuracy, but I
+        // suspect the addressing mode / memory access timing is a bit off.
+
         match op {
             // Stack operations
             0x08 => instr!(php),
@@ -423,7 +426,8 @@ impl Cpu {
 
     /// Subtract with Borrow from Accumulator
     fn sbc(&mut self, am: AddressingMode) {
-        // XXX Changes N, Z, C according to datasheet, but also V according to wiki
+        // Changes N, Z, C and V
+        // FIXME Set V flag!
         let c = if self.p.carry() { 1 } else { 0 };
         if self.p.small_acc() {
             let a = self.a as u8;
@@ -475,7 +479,7 @@ impl Cpu {
             self.p.set_carry(val & 0x8000 != 0);
             let res = self.p.set_nz(val.rotate_right(1) | c as u16);
             am.storew(self, res);
-            self.cy += CPU_CYCLE;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
@@ -497,6 +501,7 @@ impl Cpu {
         }
     }
 
+    /// Transfer Accumulator to Index register Y
     fn tay(&mut self) {
         // Changes N and Z
         if self.p.small_index() {
@@ -505,7 +510,6 @@ impl Cpu {
             self.y = self.p.set_nz(self.a);
         }
     }
-
     /// Transfer Index Register Y to Accumulator
     fn tya(&mut self) {
         // Changes N and Z
@@ -518,29 +522,26 @@ impl Cpu {
 
     /// Increment accumulator
     fn ina(&mut self) {
+        // Timing does not depend on accumulator size.
         if self.p.small_acc() {
             let res = self.p.set_nz_8((self.a as u8).wrapping_add(1));
             self.a = (self.a & 0xff00) | res as u16;
         } else {
             self.a = self.p.set_nz(self.a.wrapping_add(1));
-            self.cy += CPU_CYCLE;
         }
     }
-
     /// Increment Index Register Y
     fn iny(&mut self) {
-        // Changes N and Z
+        // Changes N and Z. Timing does not depend on index register size.
         if self.p.small_index() {
             let res = self.p.set_nz_8((self.y as u8).wrapping_add(1));
             self.y = (self.y & 0xff00) | res as u16;
         } else {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
-            self.cy += CPU_CYCLE;
         }
     }
-
     fn dex(&mut self) {
-        // Changes N and Z
+        // Changes N and Z. Timing does not depend on index register size.
         // NB According to the datasheet, this writes the result to A, not X! But since this
         // doesn't make sense when looking at the way it's used, I'm going to ignore the datasheet
         if self.p.small_index() {
@@ -548,7 +549,6 @@ impl Cpu {
             self.x = (self.x & 0xff00) | res as u16;
         } else {
             self.x = self.p.set_nz(self.x.wrapping_sub(1));
-            self.cy += CPU_CYCLE;
         }
     }
 
@@ -578,47 +578,39 @@ impl Cpu {
         }
     }
 
-    /// Branch if Plus (N = 0)
-    fn bpl(&mut self, am: AddressingMode) {
-        // Changes no flags
-        if !self.p.negative() {
-            let a = am.address(self);
-            self.branch(a);
-            self.cy += CPU_CYCLE;
-        }
-    }
-
-    /// Branch if Overflow Set
-    fn bvs(&mut self, am: AddressingMode) {
-        // Changes no flags
-        if self.p.overflow() {
-            let a = am.address(self);
-            self.branch(a);
-            self.cy += CPU_CYCLE;
-        }
-    }
-
     /// Branch always
     fn bra(&mut self, am: AddressingMode) {
-        // Changes no flags
         let a = am.address(self);
         self.branch(a);
     }
-
-    /// Branch if Equal
-    fn beq(&mut self, am: AddressingMode) {
-        if self.p.zero() {
-            let a = am.address(self);
+    /// Branch if Plus (N = 0)
+    fn bpl(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if !self.p.negative() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
     }
-
+    /// Branch if Overflow Set
+    fn bvs(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if self.p.overflow() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Branch if Equal
+    fn beq(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if self.p.zero() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
     /// Branch if Not Equal (Branch if Z = 0)
     fn bne(&mut self, am: AddressingMode) {
-        // Changes no flags
+        let a = am.address(self);
         if !self.p.zero() {
-            let a = am.address(self);
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
@@ -637,7 +629,6 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
-
     /// Compare Index Register X with Memory
     fn cpx(&mut self, am: AddressingMode) {
         if self.p.small_index() {
@@ -690,7 +681,14 @@ impl Cpu {
     fn sec(&mut self) { self.p.set_carry(true); }
 
     /// Store 0 to memory
-    fn stz(&mut self, am: AddressingMode) { am.storeb(self, 0) }
+    fn stz(&mut self, am: AddressingMode) {
+        if self.p.small_acc() {
+            am.storeb(self, 0);
+        } else {
+            am.storew(self, 0);
+            self.cy += CPU_CYCLE;
+        }
+    }
 
     /// Load accumulator from memory
     fn lda(&mut self, am: AddressingMode) {
@@ -704,7 +702,17 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
-
+    fn ldx(&mut self, am: AddressingMode) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = am.loadb(self);
+            self.x = (self.x & 0xff00) | self.p.set_nz_8(val) as u16;
+        } else {
+            let val = am.loadw(self);
+            self.x = self.p.set_nz(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
     /// Load Y register from memory
     fn ldy(&mut self, am: AddressingMode) {
         // Changes N and Z
@@ -714,18 +722,6 @@ impl Cpu {
         } else {
             let val = am.loadw(self);
             self.y = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
-        }
-    }
-
-    fn ldx(&mut self, am: AddressingMode) {
-        // Changes N and Z
-        if self.p.small_index() {
-            let val = am.loadb(self);
-            self.x = (self.x & 0xff00) | self.p.set_nz_8(val) as u16;
-        } else {
-            let val = am.loadw(self);
-            self.x = self.p.set_nz(val);
             self.cy += CPU_CYCLE;
         }
     }

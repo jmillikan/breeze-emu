@@ -227,8 +227,8 @@ impl Spc700 {
             2,8,4,5,4,5,5,6, 5,5,5,5,2,2,3,4,   // $b0-$bf
             3,8,4,5,4,5,4,7, 2,5,6,4,5,2,4,9,   // $c0-$cf
             2,8,4,5,5,6,6,7, 4,5,5,5,2,2,6,3,   // $d0-$df
-            2,8,4,5,3,4,3,6, 2,4,5,3,4,3,4,4,   // $e0-$ef (last one is SLEEP, unknown timing)
-            2,8,4,5,4,5,5,6, 3,4,5,4,2,2,4,4,   // $f0-$ff (last one is STOP, unknown timing)
+            2,8,4,5,3,4,3,6, 2,4,5,3,4,3,4,3,   // $e0-$ef (last one is SLEEP, unknown timing)
+            2,8,4,5,4,5,5,6, 3,4,5,4,2,2,5,3,   // $f0-$ff (last one is STOP, unknown timing)
         ];
 
         let pc = self.pc;
@@ -420,8 +420,8 @@ impl Spc700 {
 
     fn cbne(&mut self, cmp: AddressingMode, addr: AddressingMode) {
         let cmp = cmp.loadb(self);
+        let a = addr.address(self);
         if cmp != self.a {
-            let a = addr.address(self);
             self.pc = a;
             self.cy += 2;
         }
@@ -432,36 +432,36 @@ impl Spc700 {
         self.pc = a;
     }
     fn beq(&mut self, am: AddressingMode) {
+        let a = am.address(self);
         if self.psw.zero() {
-            let a = am.address(self);
             self.pc = a;
             self.cy += 2;
         }
     }
     fn bne(&mut self, am: AddressingMode) {
+        let a = am.address(self);
         if !self.psw.zero() {
-            let a = am.address(self);
             self.pc = a;
             self.cy += 2;
         }
     }
     fn bcc(&mut self, am: AddressingMode) {
+        let a = am.address(self);
         if !self.psw.carry() {
-            let a = am.address(self);
             self.pc = a;
             self.cy += 2;
         }
     }
     fn bmi(&mut self, am: AddressingMode) {
+        let a = am.address(self);
         if self.psw.negative() {
-            let a = am.address(self);
             self.pc = a;
             self.cy += 2;
         }
     }
     fn bpl(&mut self, am: AddressingMode) {
+        let a = am.address(self);
         if !self.psw.negative() {
-            let a = am.address(self);
             self.pc = a;
             self.cy += 2;
         }
