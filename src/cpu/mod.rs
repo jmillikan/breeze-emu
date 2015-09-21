@@ -299,6 +299,7 @@ impl Cpu {
             0xe2 => instr!(sep immediate8),
 
             // Arithmetic
+            0x0a => instr!(asl_a),
             0x2a => instr!(rol_a),
             0x7e => instr!(ror absolute_indexed_x),
             0x29 => instr!(and immediate_acc),
@@ -332,6 +333,7 @@ impl Cpu {
             0xad => instr!(lda absolute),
             0xbd => instr!(lda absolute_indexed_x),
             0xa2 => instr!(ldx immediate_index),
+            0xa4 => instr!(ldy direct),
             0xa0 => instr!(ldy immediate_index),
             0xac => instr!(ldy absolute),
 
@@ -463,6 +465,37 @@ impl Cpu {
         }
     }
 
+    /// Shift accumulator left
+    fn asl_a(&mut self) {
+        // Sets N, Z and C. The rightmost bit is filled with the current carry flag.
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            self.p.set_carry(self.a & 0x80 != 0);
+            self.a = (self.a & 0xff00) | self.p.set_nz_8((a << 1) | c) as u16;
+        } else {
+            self.p.set_carry(self.a & 0x8000 != 0);
+            self.a = self.p.set_nz((self.a << 1) | c as u16);
+        }
+    }
+    /// Arithmetic left-shift
+    fn asl(&mut self, am: AddressingMode) {
+        // Sets N, Z and C. The rightmost bit is filled with the current carry flag.
+        let (bank, addr) = am.address(self);
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let val = self.loadb(bank, addr);
+            self.p.set_carry(val & 0x80 != 0);
+            let res = self.p.set_nz_8(val.rotate_left(1) | c);
+            self.storeb(bank, addr, res);
+        } else {
+            let val = self.loadw(bank, addr);
+            self.p.set_carry(val & 0x8000 != 0);
+            let res = self.p.set_nz(val.rotate_left(1) | c as u16);
+            self.storew(bank, addr, res);
+            self.cy += 2 * CPU_CYCLE;
+        }
+    }
     /// Rotate Accumulator Left
     fn rol_a(&mut self) {
         // Sets N, Z, and C. C is used to fill the rightmost bit.
@@ -517,7 +550,6 @@ impl Cpu {
             self.x = self.p.set_nz(self.a);
         }
     }
-
     /// Transfer Accumulator to Index register Y
     fn tay(&mut self) {
         // Changes N and Z
