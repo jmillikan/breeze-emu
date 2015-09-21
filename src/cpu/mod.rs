@@ -117,10 +117,25 @@ impl Cpu {
         self.do_io_cycle(bank, addr);
         self.mem.load(bank, addr)
     }
+    fn loadw(&mut self, bank: u8, addr: u16) -> u16 {
+        assert!(addr < 0xffff, "loadw on bank boundary");
+        // ^ if this should be supported, make sure to fix the potential overflow below
+
+        let lo = self.loadb(bank, addr) as u16;
+        let hi = self.loadb(bank, addr + 1) as u16;
+        (hi << 8) | lo
+    }
 
     fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
         self.do_io_cycle(bank, addr);
         self.mem.store(bank, addr, value)
+    }
+    fn storew(&mut self, bank: u8, addr: u16, value: u16) {
+        assert!(addr < 0xffff, "storew on bank boundary");
+        // ^ if this should be supported, make sure to fix the potential overflow below
+
+        self.storeb(bank, addr, value as u8);
+        self.storeb(bank, addr + 1, (value >> 8) as u8);
     }
 
     /// Fetches the byte PC points at, then increments PC
@@ -348,7 +363,6 @@ impl Cpu {
         self.p.set_carry(a >= b);
         self.p.set_negative(a.wrapping_sub(b) & 0x8000 != 0);
     }
-
     /// Does the exact same thing as `compare`, but for 8-bit operands
     fn compare8(&mut self, a: u8, b: u8) {
         self.p.set_zero(a == b);
@@ -469,16 +483,17 @@ impl Cpu {
         // The `AddressingMode` is used for both loading and storing the value (Read-Modify-Write
         // instruction)
         let c: u8 = if self.p.carry() { 1 } else { 0 };
+        let (bank, addr) = am.address(self);
         if self.p.small_acc() {
-            let val = am.clone().loadb(self);
+            let val = self.loadb(bank, addr);
             self.p.set_carry(val & 0x80 != 0);
             let res = self.p.set_nz_8(val.rotate_right(1) | c);
-            am.storeb(self, res);
+            self.storeb(bank, addr, res);
         } else {
-            let val = am.clone().loadw(self);
+            let val = self.loadw(bank, addr);
             self.p.set_carry(val & 0x8000 != 0);
             let res = self.p.set_nz(val.rotate_right(1) | c as u16);
-            am.storew(self, res);
+            self.storew(bank, addr, res);
             self.cy += 2 * CPU_CYCLE;
         }
     }

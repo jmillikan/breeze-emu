@@ -69,20 +69,13 @@ impl AddressingMode {
             }
         }
     }
-
     pub fn loadw(self, cpu: &mut Cpu) -> u16 {
         match self {
             AddressingMode::Immediate(val) => val,
             AddressingMode::Immediate8(val) => panic!("loadw on 8-bit immediate"),
             _ => {
                 let (bank, addr) = self.address(cpu);
-                assert!(addr < 0xffff, "loadw on bank boundary");
-                // ^ if this should be supported, make sure to fix the potential overflow below
-
-                let lo = cpu.loadb(bank, addr) as u16;
-                let hi = cpu.loadb(bank, addr + 1) as u16;
-
-                (hi << 8) | lo
+                cpu.loadw(bank, addr)
             }
         }
     }
@@ -91,13 +84,9 @@ impl AddressingMode {
         let (bank, addr) = self.address(cpu);
         cpu.storeb(bank, addr, value);
     }
-
     pub fn storew(self, cpu: &mut Cpu, value: u16) {
         let (bank, addr) = self.address(cpu);
-        assert!(addr < 0xffff, "storew on bank boundary");
-
-        cpu.storeb(bank, addr, value as u8);
-        cpu.storeb(bank, addr + 1, (value >> 8) as u8);
+        cpu.storew(bank, addr, value);
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is

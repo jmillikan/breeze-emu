@@ -2,6 +2,8 @@
 
 #[derive(Copy, Clone, Default)]
 struct Voice {
+    // Registers
+
     /// $x0 - Left channel volume
     lvol: i8,
     /// $x1 - Right channel volume
@@ -10,15 +12,15 @@ struct Voice {
     pitch: u16,
     /// $x4 - Source number (source directory table entry)
     source: u8,
-    /// $x5
+    /// $x5 - VxADSR1
     adsr1: u8,
-    /// $x6
+    /// $x6 - VxADSR2
     adsr2: u8,
-    /// $x7
+    /// $x7 - VxGAIN
     gain: u8,
-    /// $x8 - Read-only: Current envelope value
+    /// $x8 - VxENVX - Read-only: Current envelope value (0-127)
     env: u8,
-    /// $x9 - Read-only: Waveform value after envelope multiplication, before volume multiplication
+    /// $x9 - VxOUTX - Read-only: Upper 8bit of the current 15bit sample value (-128..+127)
     out: u8,
     /// $xf - 8-tap FIR filter coefficients
     fir: u8,
@@ -44,7 +46,7 @@ pub struct Dsp {
     endx: u8,
     /// $0d - Echo feedback
     efb: u8,
-    /// $2d - Pitch modulation
+    /// $2d - PMON - Pitch modulation
     pmod: u8,
     /// $3d - Noise enable
     noise: u8,
@@ -158,4 +160,20 @@ impl Dsp {
             }
         }
     }
+}
+
+enum BrrLoop {
+    /// Continue playing with the next BRR block
+    Continue,
+    /// Jump to the block's loop address and set the ENDx flag for this voice
+    Loop,
+    /// Jump to the loop address, set ENDx, enter `Release`, set env to $000
+    Release,
+}
+
+struct BrrBlock {
+    /// 0-12 where 0 = silent and 12 = loudest
+    shift: u8,
+    /// 0-3, 0 = no filter
+    filter: u8,
 }

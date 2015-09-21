@@ -3,11 +3,9 @@
 pub struct DmaChannel {
     /// $43x1 - The bus B ("PPU bus") address to access
     b_addr: u8,
-    /// $43x2
-    a_addr_lo: u8,
-    /// $43x3
-    a_addr_hi: u8,
-    /// $43x4
+    /// $43x2/$43x3 - Bus A address
+    a_addr: u16,
+    /// $43x4 - Bus A bank
     a_addr_bank: u8,
     /// When `false`, memory will be read from bus A and written to bus B (to the PPU). When
     /// `true`, the transfer direction is reversed.
@@ -51,8 +49,7 @@ impl DmaChannel {
     pub fn new() -> DmaChannel {
         DmaChannel {
             b_addr: 0xff,
-            a_addr_lo: 0xff,
-            a_addr_hi: 0xff,
+            a_addr: 0xffff,
             a_addr_bank: 0xff,
             read_ppu: true,
             hdma_indirect: true,
