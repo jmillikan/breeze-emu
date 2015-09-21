@@ -404,6 +404,52 @@ impl Cpu {
         let p = self.popb();
         self.set_p(p);
     }
+    /// Push A on the stack
+    fn pha(&mut self) {
+        // No flags modified
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            self.pushb(a);
+        } else {
+            let a = self.a;
+            self.pushw(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Pull Accumulator from stack
+    fn pla(&mut self) {
+        // Changes N and Z
+        if self.p.small_acc() {
+            let a = self.popb();
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(a) as u16;
+        } else {
+            let a = self.popw();
+            self.a = self.p.set_nz(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn plx(&mut self) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = self.popb();
+            self.x = self.p.set_nz_8(val) as u16;
+        } else {
+            let val = self.popw();
+            self.x = self.p.set_nz(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn ply(&mut self) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = self.popb();
+            self.y = self.p.set_nz_8(val) as u16;
+        } else {
+            let val = self.popw();
+            self.y = self.p.set_nz(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
 
     /// AND Accumulator with Memory (or immediate)
     fn and(&mut self, am: AddressingMode) {
@@ -628,54 +674,6 @@ impl Cpu {
             self.x = (self.x & 0xff00) | res as u16;
         } else {
             self.x = self.p.set_nz(self.x.wrapping_sub(1));
-        }
-    }
-
-    /// Push A on the stack
-    fn pha(&mut self) {
-        // No flags modified
-        if self.p.small_acc() {
-            let a = self.a as u8;
-            self.pushb(a);
-        } else {
-            let a = self.a;
-            self.pushw(a);
-            self.cy += CPU_CYCLE;
-        }
-    }
-
-    /// Pull Accumulator from stack
-    fn pla(&mut self) {
-        // Changes N and Z
-        if self.p.small_acc() {
-            let a = self.popb();
-            self.a = (self.a & 0xff00) | self.p.set_nz_8(a) as u16;
-        } else {
-            let a = self.popw();
-            self.a = self.p.set_nz(a);
-            self.cy += CPU_CYCLE;
-        }
-    }
-    fn plx(&mut self) {
-        // Changes N and Z
-        if self.p.small_index() {
-            let val = self.popb();
-            self.x = self.p.set_nz_8(val) as u16;
-        } else {
-            let val = self.popw();
-            self.x = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
-        }
-    }
-    fn ply(&mut self) {
-        // Changes N and Z
-        if self.p.small_index() {
-            let val = self.popb();
-            self.y = self.p.set_nz_8(val) as u16;
-        } else {
-            let val = self.popw();
-            self.y = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
         }
     }
 
