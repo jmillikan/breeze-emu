@@ -287,6 +287,7 @@ impl Cpu {
             0x28 => instr!(plp),
             0x48 => instr!(pha),
             0x68 => instr!(pla),
+            0x7a => instr!(ply),
 
             // Processor status
             0x18 => instr!(clc),
@@ -300,9 +301,11 @@ impl Cpu {
             // Arithmetic
             0x2a => instr!(rol_a),
             0x7e => instr!(ror absolute_indexed_x),
+            0x29 => instr!(and immediate_acc),
             0x2f => instr!(and absolute_long),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
+            0xe6 => instr!(inc direct),
             0x1a => instr!(ina),
             0xc8 => instr!(iny),
             0xca => instr!(dex),
@@ -319,11 +322,14 @@ impl Cpu {
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
+            0x84 => instr!(sty direct),
             0x9c => instr!(stz absolute),
             0x74 => instr!(stz direct_indexed_x),
             0x9e => instr!(stz absolute_indexed_x),
+            0xa5 => instr!(lda direct),
             0xa9 => instr!(lda immediate_acc),
             0xb7 => instr!(lda indirect_long_idx),
+            0xad => instr!(lda absolute),
             0xbd => instr!(lda absolute_indexed_x),
             0xa2 => instr!(ldx immediate_index),
             0xa0 => instr!(ldy immediate_index),
@@ -338,6 +344,7 @@ impl Cpu {
             0x10 => instr!(bpl rel),
             0x70 => instr!(bvs rel),
             0x20 => instr!(jsr absolute),
+            0x22 => instr!(jsr absolute_long),
             0x60 => instr!(rts),
             _ => {
                 instr!(ill);
@@ -472,7 +479,6 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
-
     /// Rotate Memory Right
     fn ror(&mut self, am: AddressingMode) {
         // Sets N, Z, and C. Memory width can be changed. C is used to fill the leftmost bit.
@@ -531,6 +537,19 @@ impl Cpu {
         }
     }
 
+    /// Increment memory location
+    fn inc(&mut self, am: AddressingMode) {
+        let (bank, addr) = am.address(self);
+        if self.p.small_acc() {
+            let res = self.loadb(bank, addr).wrapping_add(1);
+            self.p.set_nz_8(res);
+            self.storeb(bank, addr, res);
+        } else {
+            let res = self.loadw(bank, addr).wrapping_add(1);
+            self.p.set_nz(res);
+            self.storew(bank, addr, res);
+        }
+    }
     /// Increment accumulator
     fn ina(&mut self) {
         // Timing does not depend on accumulator size.
@@ -585,6 +604,28 @@ impl Cpu {
         } else {
             let a = self.popw();
             self.a = self.p.set_nz(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn plx(&mut self) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = self.popb();
+            self.x = self.p.set_nz_8(val) as u16;
+        } else {
+            let val = self.popw();
+            self.x = self.p.set_nz(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn ply(&mut self) {
+        // Changes N and Z
+        if self.p.small_index() {
+            let val = self.popb();
+            self.y = self.p.set_nz_8(val) as u16;
+        } else {
+            let val = self.popw();
+            self.y = self.p.set_nz(val);
             self.cy += CPU_CYCLE;
         }
     }
@@ -745,6 +786,28 @@ impl Cpu {
             am.storeb(self, b);
         } else {
             let w = self.a;
+            am.storew(self, w);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn stx(&mut self, am: AddressingMode) {
+        // Changes no flags
+        if self.p.small_index() {
+            let b = self.x as u8;
+            am.storeb(self, b);
+        } else {
+            let w = self.x;
+            am.storew(self, w);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    fn sty(&mut self, am: AddressingMode) {
+        // Changes no flags
+        if self.p.small_index() {
+            let b = self.y as u8;
+            am.storeb(self, b);
+        } else {
+            let w = self.y;
             am.storew(self, w);
             self.cy += CPU_CYCLE;
         }
