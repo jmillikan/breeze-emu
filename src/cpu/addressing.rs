@@ -47,13 +47,15 @@ pub enum AddressingMode {
     // "Direct Indirect Indexed-(d),y" - Indirect-Y
     // (DBR, D + <val> + Y)  [D+<val> wraps]
 
+    /// "Direct Indirect Long-[d]"
+    /// (bank, addr) := load(D + <val>)
+    /// (bank, addr)
+    IndirectLong(u8),
+
     /// "Direct Indirect Indexed Long/Long Indexed-[d],y"
     /// (bank, addr) := load(D + <val>)
     /// (bank, addr + Y)
     IndirectLongIdx(u8),
-
-    // "Direct Indirect Long-[d]"
-    // (0, D + <val>)
 }
 
 impl AddressingMode {
@@ -130,6 +132,14 @@ impl AddressingMode {
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
             }
+            IndirectLong(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                let addr_ptr = cpu.d.wrapping_add(offset as u16);
+                let lo = cpu.loadb(0, addr_ptr) as u16;
+                let hi = cpu.loadb(0, addr_ptr + 1) as u16;
+                let bank = cpu.loadb(0, addr_ptr + 2);
+                (bank, (hi << 8) | lo)
+            }
             IndirectLongIdx(offset) => {
                 // "The 24-bit base address is pointed to by the sum of the second byte of the
                 // instruction and the Direct Register. The effective address is this 24-bit base
@@ -170,6 +180,7 @@ impl fmt::Display for AddressingMode {
             Rel(rel) =>                    write!(f, "{:+}", rel),
             Direct(offset) =>              write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
+            IndirectLong(offset) =>        write!(f, "[${:02X}]", offset),
             IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),
         }
     }

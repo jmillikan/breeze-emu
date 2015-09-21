@@ -309,6 +309,7 @@ impl Cpu {
             0xe6 => instr!(inc direct),
             0x1a => instr!(ina),
             0xc8 => instr!(iny),
+            0xce => instr!(dec absolute),
             0xca => instr!(dex),
 
             // Register and memory transfers
@@ -324,6 +325,7 @@ impl Cpu {
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
             0x84 => instr!(sty direct),
+            0x64 => instr!(stz direct),
             0x9c => instr!(stz absolute),
             0x74 => instr!(stz direct_indexed_x),
             0x9e => instr!(stz absolute_indexed_x),
@@ -341,6 +343,7 @@ impl Cpu {
             0xcd => instr!(cmp absolute),
             0xe0 => instr!(cpx immediate_index),
             0x80 => instr!(bra rel),
+            0xdc => instr!(bra indirect_long),
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
@@ -350,7 +353,7 @@ impl Cpu {
             0x60 => instr!(rts),
             _ => {
                 instr!(ill);
-                panic!("illegal CPU opcode: {:02X}", op);
+                panic!("illegal CPU opcode: ${:02X}", op);
             }
         }
 
@@ -602,6 +605,20 @@ impl Cpu {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
         }
     }
+    /// Decrement memory location
+    fn dec(&mut self, am: AddressingMode) {
+        let (bank, addr) = am.address(self);
+        if self.p.small_acc() {
+            let res = self.loadb(bank, addr).wrapping_sub(1);
+            self.p.set_nz_8(res);
+            self.storeb(bank, addr, res);
+        } else {
+            let res = self.loadw(bank, addr).wrapping_sub(1);
+            self.p.set_nz(res);
+            self.storew(bank, addr, res);
+        }
+    }
+    /// Decrement X
     fn dex(&mut self) {
         // Changes N and Z. Timing does not depend on index register size.
         // NB According to the datasheet, this writes the result to A, not X! But since this
@@ -892,6 +909,9 @@ impl Cpu {
 
 /// Addressing mode construction
 impl Cpu {
+    fn indirect_long(&mut self) -> AddressingMode {
+        AddressingMode::IndirectLong(self.fetchb())
+    }
     fn indirect_long_idx(&mut self) -> AddressingMode {
         AddressingMode::IndirectLongIdx(self.fetchb())
     }
