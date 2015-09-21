@@ -2,41 +2,58 @@
 
 use apu::Apu;
 use cpu::Cpu;
+use dma::DmaChannel;
 use ppu::Ppu;
 use rom::Rom;
 
 const WRAM_SIZE: usize = 128 * 1024;
 
-/// This is most of the CPU's address space. Contains everything connected to the CPU via one of
-/// the two address buses. Internal registers which are mapped to memory are handled by the CPU
-/// itself.
-pub struct Memory {
+/// Contains everything connected to the CPU via one of the two address buses. All memory accesses
+/// will be directed through this (the CPU already takes access time into account).
+pub struct Peripherals {
     apu: Apu,
     ppu: Ppu,
     rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
     wram: Vec<u8>,
+
+    dma: [DmaChannel; 8],
+    /// $420b - MDMAEN - Enable-bits of general-purpose DMA channels. Writing with any value that
+    /// contains a set bit will start a DMA transfer immediately.
+    dmaen: u8,
+    hdmaen: u8,
+
+    /// Additional cycles spent doing IO (in master clock cycles). This is reset before each CPU
+    /// instruction and added to the cycle count returned by the CPU.
+    cy: u16,
 }
 
-impl Memory {
+impl Peripherals {
+    pub fn new(rom: Rom) -> Peripherals {
+        Peripherals {
+            rom: rom,
+            apu: Apu::new(),
+            ppu: Ppu::new(),
+            dma: [DmaChannel::new(); 8],
+            dmaen: 0x00,
+            hdmaen: 0x00,
+            wram: vec![0; WRAM_SIZE],
+            cy: 0,
+        }
+    }
+
     pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
         match bank {
             0x00 ... 0x3f => match addr {
                 // Mirror of first 8k of WRAM
                 0x0000 ... 0x1fff => self.wram[addr as usize],
-                0x2100 ... 0x2133 =>
-                    panic!("attempt to read from write-only PPU register ${:04X}", addr),
+                // PPU
+                0x2100 ... 0x2133 => panic!("read from write-only PPU register ${:04X}", addr),
                 0x2138 ... 0x213f => self.ppu.load(addr),
-                0x2140 ... 0x217f => {
-                    // APU IO registers. The APU has 4 IO regs which are mirrored in this address
-                    // range.
-                    // $2140 => $f4
-                    // $2141 => $f5
-                    // $2142 => $f6
-                    // $2143 => $f7
-                    let port = addr & 0b11;
-                    self.apu.read_port(port as u8)
-                }
+                // APU IO registers
+                0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
+                // DMA channels (0x43xr, where x is the channel and r is the channel register)
+                0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
                 _ => self.rom.loadb(bank, addr)
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
@@ -51,15 +68,8 @@ impl Memory {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
                 // PPU registers. Let it deal with the access.
                 0x2100 ... 0x213f => self.ppu.store(addr, value),
-                0x2140 ... 0x217f => {
-                    // APU IO registers. The APU has 4 IO regs which are mirrored.
-                    // $2140 => $f4
-                    // $2141 => $f5
-                    // $2142 => $f6
-                    // $2143 => $f7
-                    let port = addr & 0b11;
-                    self.apu.store_port(port as u8, value)
-                }
+                // APU IO registers.
+                0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
                 0x4200 => {
                     // NMITIMEN - NMI/IRQ enable
@@ -76,17 +86,20 @@ impl Memory {
                 0x420b => {
                     // MDMAEN - Party enable
                     if value != 0 { panic!("NYI: DMA") }
+                    self.dmaen = value;
                 }
                 0x420c => {
                     // HDMAEN - HDMA enable
                     if value != 0 { panic!("NYI: HDMA") }
+                    self.hdmaen = value;
                 }
+                // DMA channels (0x43xr, where x is the channel and r is the channel register)
+                0x4300 ... 0x43ff =>
+                    self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value),
                 _ => self.rom.storeb(bank, addr, value)
             },
-            0x7e | 0x7f => {
-                // WRAM main banks
-                self.wram[(bank as usize - 0x7e) * 65536 + addr as usize] = value;
-            }
+            // WRAM main banks
+            0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize] = value,
             _ => self.rom.storeb(bank, addr, value)
         }
     }
@@ -99,20 +112,15 @@ pub struct Snes {
 impl Snes {
     pub fn new(rom: Rom) -> Snes {
         Snes {
-            cpu: Cpu::new(Memory {
-                rom: rom,
-                apu: Apu::new(),
-                ppu: Ppu::new(),
-                wram: vec![0; WRAM_SIZE],
-            }),
+            cpu: Cpu::new(Peripherals::new(rom)),
         }
     }
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 24_000_000;
+        const CY_LIMIT: u64 = 24_040_000;
         /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = CY_LIMIT - 7_000;
+        const TRACE_START: u64 = CY_LIMIT - 10_000;
 
         const MASTER_CLOCK_FREQ: i32 = 21_477_000;
         /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
@@ -135,7 +143,8 @@ impl Snes {
             }
 
             // Run a CPU instruction and calculate the master cycles elapsed
-            let cpu_master_cy = self.cpu.dispatch() as i32;
+            self.cpu.mem.cy = 0;
+            let cpu_master_cy = self.cpu.dispatch() as i32 + self.cpu.mem.cy as i32;
             master_cy += cpu_master_cy as u64;
 
             // Now we "owe" the other components a few cycles:

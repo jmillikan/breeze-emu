@@ -1,14 +1,12 @@
 //! 65816 emulator
 
 mod addressing;
-mod dma;
 mod statusreg;
 
 use self::addressing::AddressingMode;
-use self::dma::DmaChannel;
 use self::statusreg::StatusReg;
 
-use snes::Memory;
+use snes::Peripherals;
 
 
 // Emulation mode vectors
@@ -45,19 +43,18 @@ pub struct Cpu {
     pc: u16,
     p: StatusReg,
     emulation: bool,
-    dma: [DmaChannel; 8],
 
     /// Master clock cycle counter for the current instruction.
     cy: u8,
 
     pub trace: bool,
-    pub mem: Memory,
+    pub mem: Peripherals,
 }
 
 impl Cpu {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
     /// put the CPU in emulation mode.
-    pub fn new(mut mem: Memory) -> Cpu {
+    pub fn new(mut mem: Peripherals) -> Cpu {
         let pcl = mem.load(0, RESET_VEC8) as u16;
         let pch = mem.load(0, RESET_VEC8 + 1) as u16;
         let pc = (pch << 8) | pcl;
@@ -79,7 +76,6 @@ impl Cpu {
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg::new(),
             emulation: true,
-            dma: [DmaChannel::new(); 8],
             cy: 0,
             trace: false,
             mem: mem,
@@ -243,7 +239,7 @@ impl Cpu {
         );
     }
 
-    /// Executes a single opcode and returns the number of internal CPU clock cycles used.
+    /// Executes a single opcode and returns the number of master clock cycles used.
     pub fn dispatch(&mut self) -> u8 {
         // CPU cycles each opcode takes (at the minimum).
         static CYCLE_TABLE: [u8; 256] = [
