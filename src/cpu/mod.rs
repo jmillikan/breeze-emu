@@ -378,7 +378,7 @@ impl Cpu {
         self.p.set_negative(a.wrapping_sub(b) & 0x80 != 0);
     }
 
-    /// Branch to an absolute address
+    /// Branch to an absolute address. This will overwrite the current program bank.
     fn branch(&mut self, target: (u8, u16)) {
         self.pbr = target.0;
         self.pc = target.1;
@@ -889,7 +889,6 @@ impl Cpu {
     fn tcd(&mut self) {
         self.d = self.p.set_nz(self.a);
     }
-
     /// Transfer 16-bit Accumulator to Stack Pointer
     fn tcs(&mut self) {
         if self.emulation {
