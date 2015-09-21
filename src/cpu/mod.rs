@@ -26,7 +26,7 @@ const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
 /// One CPU cycle = 6 master clock cycles
-const CPU_CYCLE: u8 = 6;
+pub const CPU_CYCLE: u8 = 6;
 
 pub struct Cpu {
     a: u16,
@@ -88,9 +88,9 @@ impl Cpu {
 
     /// Adds the time needed to access the given memory location to the cycle counter.
     fn do_io_cycle(&mut self, bank: u8, addr: u16) {
-        const FAST: u8 = 6;
-        const SLOW: u8 = 8;
-        const XSLOW: u8 = 12;
+        const FAST: u8 = 0;
+        const SLOW: u8 = 2;
+        const XSLOW: u8 = 6;
 
         self.cy += match bank {
             0x00 ... 0x3f => match addr {
@@ -230,7 +230,7 @@ impl Cpu {
 
     /// Executes a single opcode and returns the number of internal CPU clock cycles used.
     pub fn dispatch(&mut self) -> u8 {
-        // CPU cycles each opcode takes
+        // CPU cycles each opcode takes (at the minimum).
         static CYCLE_TABLE: [u8; 256] = [
             7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
             2,5,5,7,5,4,6,6, 2,4,2,2,6,4,7,5,   // $10 - $1f
@@ -264,8 +264,9 @@ impl Cpu {
             }};
         }
 
+        self.cy = 0;
         let op = self.fetchb();
-        self.cy = CYCLE_TABLE[op as usize] * CPU_CYCLE;
+        self.cy += CYCLE_TABLE[op as usize] * CPU_CYCLE;
         match op {
             // Stack operations
             0x08 => instr!(php),
@@ -481,8 +482,6 @@ impl Cpu {
     /// Exchange B with A (B is the MSB of the accumulator, A is the LSB)
     fn xba(&mut self) {
         // Changes N and Z (FIXME How exactly?)
-        // FIXME the datasheet claims that this only does "B -> A", which seems odd, given the name
-        // FIXME WHAT AM I
         let lo = self.a & 0xff;
         let hi = self.a >> 8;
         self.a = (lo << 8) | self.p.set_nz_8(hi as u8) as u16;
@@ -585,7 +584,7 @@ impl Cpu {
         if !self.p.negative() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -595,7 +594,7 @@ impl Cpu {
         if self.p.overflow() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -611,7 +610,7 @@ impl Cpu {
         if self.p.zero() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -621,7 +620,7 @@ impl Cpu {
         if !self.p.zero() {
             let a = am.address(self);
             self.branch(a);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -635,7 +634,7 @@ impl Cpu {
             let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -649,7 +648,7 @@ impl Cpu {
             let val = am.loadw(self);
             let x = self.x;
             self.compare(x, val);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += CPU_CYCLE;
         }
     }
 
@@ -824,6 +823,7 @@ impl Cpu {
         if self.p.small_acc() {
             AddressingMode::Immediate8(self.fetchb())
         } else {
+            self.cy += CPU_CYCLE;
             AddressingMode::Immediate(self.fetchw())
         }
     }
@@ -832,6 +832,7 @@ impl Cpu {
         if self.p.small_index() {
             AddressingMode::Immediate8(self.fetchb())
         } else {
+            self.cy += CPU_CYCLE;
             AddressingMode::Immediate(self.fetchw())
         }
     }

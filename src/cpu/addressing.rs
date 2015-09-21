@@ -1,6 +1,6 @@
 //! Contains addressing mode definitions
 
-use cpu::Cpu;
+use cpu::{Cpu, CPU_CYCLE};
 
 use std::fmt;
 
@@ -106,6 +106,7 @@ impl AddressingMode {
         use self::AddressingMode::*;
 
         // FIXME is something here dependant on register sizes?
+        // -> Yes, the cycle count. This causes bad timing, fix it!
         // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
 
         match *self {
@@ -116,6 +117,7 @@ impl AddressingMode {
                 (bank, addr)
             }
             AbsLongIndexedX(bank, addr) => {
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 let a = ((bank as u32) << 16) | addr as u32;
                 let eff_addr = a + cpu.x as u32;
                 assert!(eff_addr & 0xff000000 == 0, "address overflow");
@@ -124,21 +126,28 @@ impl AddressingMode {
                 (bank as u8, addr)
             }
             AbsIndexedX(offset) => {
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (cpu.dbr, offset + cpu.x)
             }
             Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
             }
             Direct(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16))
             }
             DirectIndexedX(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
             }
             IndirectLongIdx(offset) => {
                 // "The 24-bit base address is pointed to by the sum of the second byte of the
                 // instruction and the Direct Register. The effective address is this 24-bit base
                 // address plus the Y Index Register."
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u32;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u32;
