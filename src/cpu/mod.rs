@@ -342,6 +342,7 @@ impl Cpu {
             // Comparisons and control flow
             0xcd => instr!(cmp absolute),
             0xe0 => instr!(cpx immediate_index),
+            0xc0 => instr!(cpy immediate_index),
             0x80 => instr!(bra rel),
             0xdc => instr!(bra indirect_long),
             0xf0 => instr!(beq rel),
@@ -738,6 +739,19 @@ impl Cpu {
             let val = am.loadw(self);
             let x = self.x;
             self.compare(x, val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Compare Index Register Y with Memory
+    fn cpy(&mut self, am: AddressingMode) {
+        if self.p.small_index() {
+            let val = am.loadb(self);
+            let y = self.y as u8;
+            self.compare8(y, val);
+        } else {
+            let val = am.loadw(self);
+            let y = self.y;
+            self.compare(y, val);
             self.cy += CPU_CYCLE;
         }
     }
