@@ -28,7 +28,7 @@ pub enum AddressingMode {
     /// (only used for `JMP`)
     AbsIndexedIndirect(u16),
     /// Absolute address
-    /// Address = `$abcd`
+    /// Address = `!abcd`
     Abs(u16),
     /// Address = `$abcd+X`
     AbsIndexedX(u16),
@@ -160,11 +160,10 @@ impl fmt::Display for AddressingMode {
             IndirectX =>               write!(f, "(X)"),
             IndirectIndexed(offset) => write!(f, "[${:02X}]+Y", offset),
             IndexedIndirect(offset) => write!(f, "[${:02X}+X]", offset),
-            AbsIndexedIndirect(abs) => write!(f, "[${:04X}+X]", abs),
-            // FIXME consider using `!abcd` notation for abs instead of `$abcd`
-            Abs(addr) =>               write!(f, "${:04X}", addr),
-            AbsIndexedX(addr) =>       write!(f, "${:04X}+X", addr),
-            AbsIndexedY(addr) =>       write!(f, "${:04X}+Y", addr),
+            AbsIndexedIndirect(abs) => write!(f, "[!{:04X}+X]", abs),
+            Abs(addr) =>               write!(f, "!{:04X}", addr),
+            AbsIndexedX(addr) =>       write!(f, "!{:04X}+X", addr),
+            AbsIndexedY(addr) =>       write!(f, "!{:04X}+Y", addr),
             Rel(rel) =>                write!(f, "{:+}", rel),
         }
     }

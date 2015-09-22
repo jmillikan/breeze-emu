@@ -148,9 +148,21 @@ impl Spc700 {
             0xf2 => self.reg_dsp_addr,
             0xf3 => self.dsp.load(self.reg_dsp_addr),
             0xf4 ... 0xf7 => self.io_vals[addr as usize - 0xf4],
-            0xfd => self.timers[0].val,
-            0xfe => self.timers[1].val,
-            0xff => self.timers[2].val,
+            0xfd => {
+                let val = self.timers[0].val;
+                self.timers[0].val = 0;
+                val
+            }
+            0xfe => {
+                let val = self.timers[1].val;
+                self.timers[1].val = 0;
+                val
+            }
+            0xff => {
+                let val = self.timers[2].val;
+                self.timers[2].val = 0;
+                val
+            }
             // NB: $f8 and $f9 work like regular RAM
             _ => self.mem[addr as usize],
         }
@@ -164,6 +176,7 @@ impl Spc700 {
                      only $0a is allowed)", 0);
             }
             0xf1 => {
+                trace!("APU control write: ${:02X}", val);
                 self.timers[0].set_enable(val & 0x01 != 0);
                 self.timers[1].set_enable(val & 0x02 != 0);
                 self.timers[2].set_enable(val & 0x04 != 0);
@@ -244,8 +257,17 @@ impl Spc700 {
 
         macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
+            ( $name:ident ($($arg:expr),*) $s:tt $am:ident ) => {{
+                // Used for bit set opcode
+                use log::LogLevel::Trace;
+                let am = self.$am();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(e!($s), am));
+                }
+                self.$name($($arg,)* am)
+            }};
             ( $name:ident ($($arg:expr),*) $s:tt $am:ident $am2:ident ) => {{
-                // Used for bit test opcodes
+                // Used for bit test opcode
                 use log::LogLevel::Trace;
                 let am = self.$am();
                 let am2 = self.$am2();
@@ -286,6 +308,7 @@ impl Spc700 {
             // Processor status
             0x20 => instr!(clrp "clrp"),
             0x60 => instr!(clrc "clrc"),
+            0x80 => instr!(setc "setc"),
 
             // Arithmetic
             0x1d => instr!(dec "dec {}" x),
@@ -297,6 +320,7 @@ impl Spc700 {
             0x08 => instr!(or "or {1}, {0}" immediate a),
             0x48 => instr!(eor "eor {1}, {0}" immediate a),
             0x1c => instr!(asl "asl {}" a),
+            0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
 
@@ -313,7 +337,8 @@ impl Spc700 {
             0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
             0xfe => instr!(dbnz "dbnz {}, {}" y rel),
 
-            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
+            0x5f => instr!(bra "jmp {}" abs),                       // reuse `bra` fn
+            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),      // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
             0xf0 => instr!(beq "beq {}" rel),
             0xd0 => instr!(bne "bne {}" rel),
@@ -321,6 +346,7 @@ impl Spc700 {
             0x30 => instr!(bmi "bmi {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
 
+            0xa2 => instr!(set1(0) "set1 {}.0" direct),
             0x13 => instr!(bbc(0) "bbc {}.0, {}" direct rel),
             0x33 => instr!(bbc(1) "bbc {}.1, {}" direct rel),
             0x53 => instr!(bbc(2) "bbc {}.2, {}" direct rel),
@@ -442,6 +468,8 @@ impl Spc700 {
     fn clrp(&mut self) { self.psw.set_direct_page(false) }
     /// Clear carry
     fn clrc(&mut self) { self.psw.set_carry(false) }
+    /// Set carry
+    fn setc(&mut self) { self.psw.set_carry(true) }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
@@ -454,6 +482,13 @@ impl Spc700 {
         self.psw.set_carry(diff & 0x80 != 0);
     }
 
+    /// Set bit
+    fn set1(&mut self, bit: u8, am: AddressingMode) {
+        // Sets no flags
+        let mut val = am.clone().loadb(self);
+        val |= 1 << bit;
+        am.storeb(self, val);
+    }
     /// Branch if bit clear
     fn bbc(&mut self, bit: u8, val: AddressingMode, addr: AddressingMode) {
         let val = val.loadb(self);

@@ -122,9 +122,8 @@ impl Dsp {
     }
 
     /// Store a value in a DSP register
-    pub fn store(&mut self, mut reg: u8, value: u8) {
+    pub fn store(&mut self, reg: u8, value: u8) {
         trace!("DSP STORE: ${:02X} to ${:02X}", value, reg);
-        reg &= 0x7f;
         match reg {
             0x0c => self.lmvol = value,
             0x1c => self.rmvol = value,
