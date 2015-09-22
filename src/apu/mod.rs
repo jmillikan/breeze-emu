@@ -324,6 +324,7 @@ impl Spc700 {
             0x44 => instr!(eor "eor {1}, {0}" direct a),
             0x1c => instr!(asl "asl {}" a),
             0x5c => instr!(lsr "lsr {}" a),
+            0x6b => instr!(ror "ror {}" direct),
             0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
@@ -636,6 +637,13 @@ impl Spc700 {
         self.psw.set_carry(val & 0x01 != 0);
         let res = self.psw.set_nz(val >> 1);
         op.storeb(self, res);
+    }
+    /// Rotate right
+    fn ror(&mut self, op: AddressingMode) {
+        let val = op.clone().loadb(self);
+        let c = if self.psw.carry() { 0x80 } else { 0 };
+        self.psw.set_carry(val & 0x01 != 0);
+        let res = self.psw.set_nz((val >> 1) | c);
     }
     fn dec(&mut self, am: AddressingMode) {
         // Sets N and Z
