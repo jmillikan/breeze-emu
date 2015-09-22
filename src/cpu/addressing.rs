@@ -98,7 +98,7 @@ impl AddressingMode {
 
         // FIXME is something here dependant on register sizes?
         // -> Yes, the cycle count. This causes bad timing, fix it!
-        // FIXME Overflow unclear, use next bank or not? (Probably yes, but let's crash first)
+        // FIXME Use next bank on some address overflows
 
         match *self {
             Absolute(addr) => {

@@ -195,7 +195,7 @@ impl Spc700 {
             0xfa => self.timers[0].div = val,
             0xfb => self.timers[1].div = val,
             0xfc => self.timers[2].div = val,
-            0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:02X}", addr),
+            0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:04X}", addr),
             // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
             _ => self.mem[addr as usize] = val,
         }
@@ -221,8 +221,9 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, opstr: &str) {
-        trace!("{:04X}     {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
+        trace!("{:04X}  {:02X} {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
+            self.mem[pc as usize],
             opstr,
             self.a,
             self.x,
@@ -309,6 +310,7 @@ impl Spc700 {
             0x20 => instr!(clrp "clrp"),
             0x60 => instr!(clrc "clrc"),
             0x80 => instr!(setc "setc"),
+            0xed => instr!(notc "notc"),
 
             // Arithmetic
             0x1d => instr!(dec "dec {}" x),
@@ -319,7 +321,9 @@ impl Spc700 {
             0x28 => instr!(and "and {1}, {0}" immediate a),
             0x08 => instr!(or "or {1}, {0}" immediate a),
             0x48 => instr!(eor "eor {1}, {0}" immediate a),
+            0x44 => instr!(eor "eor {1}, {0}" direct a),
             0x1c => instr!(asl "asl {}" a),
+            0x5c => instr!(lsr "lsr {}" a),
             0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
@@ -337,15 +341,6 @@ impl Spc700 {
             0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
             0xfe => instr!(dbnz "dbnz {}, {}" y rel),
 
-            0x5f => instr!(bra "jmp {}" abs),                       // reuse `bra` fn
-            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),      // reuse `bra` fn
-            0x2f => instr!(bra "bra {}" rel),
-            0xf0 => instr!(beq "beq {}" rel),
-            0xd0 => instr!(bne "bne {}" rel),
-            0x90 => instr!(bcc "bcc {}" rel),
-            0x30 => instr!(bmi "bmi {}" rel),
-            0x10 => instr!(bpl "bpl {}" rel),
-
             0xa2 => instr!(set1(0) "set1 {}.0" direct),
             0x13 => instr!(bbc(0) "bbc {}.0, {}" direct rel),
             0x33 => instr!(bbc(1) "bbc {}.1, {}" direct rel),
@@ -355,6 +350,16 @@ impl Spc700 {
             0xb3 => instr!(bbc(5) "bbc {}.5, {}" direct rel),
             0xd3 => instr!(bbc(6) "bbc {}.6, {}" direct rel),
             0xf3 => instr!(bbc(7) "bbc {}.7, {}" direct rel),
+
+            0x5f => instr!(bra "jmp {}" abs),                       // reuse `bra` fn
+            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),      // reuse `bra` fn
+            0x2f => instr!(bra "bra {}" rel),
+            0xf0 => instr!(beq "beq {}" rel),
+            0xd0 => instr!(bne "bne {}" rel),
+            0xb0 => instr!(bcs "bcs {}" rel),
+            0x90 => instr!(bcc "bcc {}" rel),
+            0x30 => instr!(bmi "bmi {}" rel),
+            0x10 => instr!(bpl "bpl {}" rel),
 
             0x3f => instr!(call "call {}" abs),
             0x6f => instr!(ret "ret"),
@@ -387,6 +392,7 @@ impl Spc700 {
             0xdb => instr!(mov "mov {1}, {0}" y indexed_indirect),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0xe6 => instr!(mov "mov {1}, {0}" indirect_x a),
             0xe5 => instr!(mov "mov {1}, {0}" abs a),
             0xec => instr!(mov "mov {1}, {0}" abs y),
             0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
@@ -395,7 +401,7 @@ impl Spc700 {
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
-            0xaf => instr!(mov_xinc "mov x++, a"),
+            0xaf => instr!(mov_xinc "mov (x++), a"),
             _ => {
                 instr!(ill "ill");
                 panic!("illegal APU opcode: ${:02X}", op);
@@ -470,6 +476,10 @@ impl Spc700 {
     fn clrc(&mut self) { self.psw.set_carry(false) }
     /// Set carry
     fn setc(&mut self) { self.psw.set_carry(true) }
+    fn notc(&mut self) {
+        let c = self.psw.carry();
+        self.psw.set_carry(!c);
+    }
 
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
@@ -537,6 +547,15 @@ impl Spc700 {
             self.cy += 2;
         }
     }
+    /// Branch if carry set
+    fn bcs(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if self.psw.carry() {
+            self.pc = a;
+            self.cy += 2;
+        }
+    }
+    /// Branch if carry clear
     fn bcc(&mut self, am: AddressingMode) {
         let a = am.address(self);
         if !self.psw.carry() {
@@ -604,10 +623,18 @@ impl Spc700 {
         let res = self.psw.set_nz(lb ^ rb);
         l.storeb(self, res);
     }
+    /// Left shift
     fn asl(&mut self, op: AddressingMode) {
         let val = op.clone().loadb(self);
         self.psw.set_carry(val & 0x80 != 0);
         let res = self.psw.set_nz(val << 1);
+        op.storeb(self, res);
+    }
+    /// Right shift
+    fn lsr(&mut self, op: AddressingMode) {
+        let val = op.clone().loadb(self);
+        self.psw.set_carry(val & 0x01 != 0);
+        let res = self.psw.set_nz(val >> 1);
         op.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
@@ -651,7 +678,8 @@ impl Spc700 {
     }
     /// Copy a byte
     fn mov(&mut self, src: AddressingMode, dest: AddressingMode) {
-        // No flags modified
+        // No flags modified. If a register is written, the corresponding `AddressingMode` will set
+        // the flags.
         let val = src.loadb(self);
         dest.storeb(self, val);
     }
