@@ -1,3 +1,12 @@
+//! Implements the Audio Processing Unit (APU)
+//!
+//! The APU consists of 64 KB shared RAM, the SPC700 and the DSP. It is almost fully independent
+//! from the rest of the SNES.
+//!
+//! The SPC700 is an independent audio coprocessor. The main CPU can transmit a program and audio
+//! data into the shared RAM and then execute it. The program can manipulate DSP registers and
+//! specify samples to play.
+
 mod addressing;
 mod dsp;
 mod ipl;
@@ -235,6 +244,16 @@ impl Spc700 {
 
         macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
+            ( $name:ident ($($arg:expr),*) $s:tt $am:ident $am2:ident ) => {{
+                // Used for bit test opcodes
+                use log::LogLevel::Trace;
+                let am = self.$am();
+                let am2 = self.$am2();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(e!($s), am, am2));
+                }
+                self.$name($($arg,)* am, am2)
+            }};
             ( $name:ident $s:tt ) => {{
                 use log::LogLevel::Trace;
                 if log_enabled!(Trace) && self.trace {
@@ -275,7 +294,9 @@ impl Spc700 {
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
             0x28 => instr!(and "and {1}, {0}" immediate a),
+            0x08 => instr!(or "or {1}, {0}" immediate a),
             0x48 => instr!(eor "eor {1}, {0}" immediate a),
+            0x1c => instr!(asl "asl {}" a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
 
@@ -290,6 +311,7 @@ impl Spc700 {
             0x75 => instr!(cmp "cmp {1}, {0}" abs_indexed_x a),
 
             0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
+            0xfe => instr!(dbnz "dbnz {}, {}" y rel),
 
             0x1f => instr!(bra "jmp {}" abs_indexed_indirect),    // reuse `bra` fn
             0x2f => instr!(bra "bra {}" rel),
@@ -298,6 +320,15 @@ impl Spc700 {
             0x90 => instr!(bcc "bcc {}" rel),
             0x30 => instr!(bmi "bmi {}" rel),
             0x10 => instr!(bpl "bpl {}" rel),
+
+            0x13 => instr!(bbc(0) "bbc {}.0, {}" direct rel),
+            0x33 => instr!(bbc(1) "bbc {}.1, {}" direct rel),
+            0x53 => instr!(bbc(2) "bbc {}.2, {}" direct rel),
+            0x73 => instr!(bbc(3) "bbc {}.3, {}" direct rel),
+            0x93 => instr!(bbc(4) "bbc {}.4, {}" direct rel),
+            0xb3 => instr!(bbc(5) "bbc {}.5, {}" direct rel),
+            0xd3 => instr!(bbc(6) "bbc {}.6, {}" direct rel),
+            0xf3 => instr!(bbc(7) "bbc {}.7, {}" direct rel),
 
             0x3f => instr!(call "call {}" abs),
             0x6f => instr!(ret "ret"),
@@ -333,6 +364,7 @@ impl Spc700 {
             0xe5 => instr!(mov "mov {1}, {0}" abs a),
             0xec => instr!(mov "mov {1}, {0}" abs y),
             0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
+            0xf6 => instr!(mov "mov {1}, {0}" abs_indexed_y a),
             0xf4 => instr!(mov "mov {1}, {0}" indexed_indirect a),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
@@ -422,6 +454,27 @@ impl Spc700 {
         self.psw.set_carry(diff & 0x80 != 0);
     }
 
+    /// Branch if bit clear
+    fn bbc(&mut self, bit: u8, val: AddressingMode, addr: AddressingMode) {
+        let val = val.loadb(self);
+        let addr = addr.address(self);
+        if val & (1 << bit) != 0 {
+            self.pc = addr;
+            self.cy += 2;
+        }
+    }
+    /// Decrement and branch if zero
+    fn dbnz(&mut self, val: AddressingMode, addr: AddressingMode) {
+        let v = val.clone().loadb(self);
+        let a = addr.address(self);
+        let res = v.wrapping_sub(1);
+        val.storeb(self, res);
+        if res == 0 {
+            self.pc = a;
+            self.cy += 2;
+        }
+    }
+    /// Compare and branch if not equal
     fn cbne(&mut self, cmp: AddressingMode, addr: AddressingMode) {
         let cmp = cmp.loadb(self);
         let a = addr.address(self);
@@ -499,6 +552,14 @@ impl Spc700 {
         let res = self.psw.set_nz(lb & rb);
         l.storeb(self, res);
     }
+    fn or(&mut self, r: AddressingMode, l: AddressingMode) {
+        // Sets N and Z
+        // l := l | r
+        let rb = r.loadb(self);
+        let lb = l.clone().loadb(self);
+        let res = self.psw.set_nz(lb | rb);
+        l.storeb(self, res);
+    }
     /// Exclusive Or
     fn eor(&mut self, r: AddressingMode, l: AddressingMode) {
         // Sets N and Z
@@ -507,6 +568,12 @@ impl Spc700 {
         let lb = l.clone().loadb(self);
         let res = self.psw.set_nz(lb ^ rb);
         l.storeb(self, res);
+    }
+    fn asl(&mut self, op: AddressingMode) {
+        let val = op.clone().loadb(self);
+        self.psw.set_carry(val & 0x80 != 0);
+        let res = self.psw.set_nz(val << 1);
+        op.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
         // Sets N and Z

@@ -530,18 +530,17 @@ impl Cpu {
     }
     /// Arithmetic left-shift
     fn asl(&mut self, am: AddressingMode) {
-        // Sets N, Z and C. The rightmost bit is filled with the current carry flag.
+        // Sets N, Z and C. The rightmost bit is filled with 0.
         let (bank, addr) = am.address(self);
-        let c: u8 = if self.p.carry() { 1 } else { 0 };
         if self.p.small_acc() {
             let val = self.loadb(bank, addr);
             self.p.set_carry(val & 0x80 != 0);
-            let res = self.p.set_nz_8(val.rotate_left(1) | c);
+            let res = self.p.set_nz_8(val << 1);
             self.storeb(bank, addr, res);
         } else {
             let val = self.loadw(bank, addr);
             self.p.set_carry(val & 0x8000 != 0);
-            let res = self.p.set_nz(val.rotate_left(1) | c as u16);
+            let res = self.p.set_nz(val << 1);
             self.storew(bank, addr, res);
             self.cy += 2 * CPU_CYCLE;
         }
@@ -553,11 +552,11 @@ impl Cpu {
         if self.p.small_acc() {
             let a = self.a as u8;
             self.p.set_carry(self.a & 0x80 != 0);
-            let res = a.rotate_left(1) | c;
+            let res = (a << 1) | c;
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
         } else {
             self.p.set_carry(self.a & 0x8000 != 0);
-            let res = self.a.rotate_left(1) | c as u16;
+            let res = (self.a << 1) | c as u16;
             self.a = self.p.set_nz(res);
             self.cy += CPU_CYCLE;
         }
@@ -572,12 +571,12 @@ impl Cpu {
         if self.p.small_acc() {
             let val = self.loadb(bank, addr);
             self.p.set_carry(val & 0x80 != 0);
-            let res = self.p.set_nz_8(val.rotate_right(1) | c);
+            let res = self.p.set_nz_8((val >> 1) | (c << 7));
             self.storeb(bank, addr, res);
         } else {
             let val = self.loadw(bank, addr);
             self.p.set_carry(val & 0x8000 != 0);
-            let res = self.p.set_nz(val.rotate_right(1) | c as u16);
+            let res = self.p.set_nz((val >> 1) | ((c as u16) << 15));
             self.storew(bank, addr, res);
             self.cy += 2 * CPU_CYCLE;
         }
