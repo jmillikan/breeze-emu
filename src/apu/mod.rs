@@ -275,6 +275,7 @@ impl Spc700 {
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
             0x28 => instr!(and "and {1}, {0}" immediate a),
+            0x48 => instr!(eor "eor {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
 
@@ -339,7 +340,7 @@ impl Spc700 {
             0xaf => instr!(mov_xinc "mov x++, a"),
             _ => {
                 instr!(ill "ill");
-                panic!("illegal APU opcode at ${:04X}: ${:02X}", pc, op);
+                panic!("illegal APU opcode: ${:02X}", op);
             }
         }
 
@@ -496,6 +497,15 @@ impl Spc700 {
         let rb = r.loadb(self);
         let lb = l.clone().loadb(self);
         let res = self.psw.set_nz(lb & rb);
+        l.storeb(self, res);
+    }
+    /// Exclusive Or
+    fn eor(&mut self, r: AddressingMode, l: AddressingMode) {
+        // Sets N and Z
+        // l := l ^ r
+        let rb = r.loadb(self);
+        let lb = l.clone().loadb(self);
+        let res = self.psw.set_nz(lb ^ rb);
         l.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
