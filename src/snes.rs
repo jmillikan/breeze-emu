@@ -67,7 +67,8 @@ impl Peripherals {
             0x00 ... 0x3f => match addr {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
                 // PPU registers. Let it deal with the access.
-                0x2100 ... 0x213f => self.ppu.store(addr, value),
+                0x2100 ... 0x2133 => self.ppu.store(addr, value),
+                0x2138 ... 0x213f => panic!("store to read-only PPU register ${:04X}", addr),
                 // APU IO registers.
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),

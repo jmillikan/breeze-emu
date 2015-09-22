@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate log;
 extern crate env_logger;
+extern crate sdl2;
 
 use std::fs::File;
 use std::io::Read;
@@ -19,7 +20,7 @@ mod snes;
 fn main() {
     env_logger::init().unwrap();
 
-    let filename = std::env::args().skip(1).next().expect("no rom file passed to command");
+    let filename = std::env::args().skip(1).next().expect("no rom file specified");
     let mut file = File::open(&filename).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
