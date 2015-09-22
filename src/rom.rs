@@ -161,7 +161,7 @@ impl Rom {
                 // (there's other stuff here, but that's handled much earlier than we are called)
                 match bank {
                     0x70 ... 0x7d => {
-                        let a = bank as u32 * 0x8000 + addr as u32;
+                        let a = (bank as u32 - 0x70) * 0x8000 + addr as u32;
                         self.ram.get_mut(a as usize).unwrap_or_else(|| out_of_ram_bounds(bank, addr, a))
                     }
                     0xfe ... 0xff => {

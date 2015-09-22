@@ -325,6 +325,7 @@ impl Cpu {
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
             0x84 => instr!(sty direct),
+            0x8c => instr!(sty absolute),
             0x64 => instr!(stz direct),
             0x9c => instr!(stz absolute),
             0x74 => instr!(stz direct_indexed_x),
@@ -333,6 +334,7 @@ impl Cpu {
             0xa9 => instr!(lda immediate_acc),
             0xb7 => instr!(lda indirect_long_idx),
             0xad => instr!(lda absolute),
+            0xaf => instr!(lda absolute_long),
             0xbd => instr!(lda absolute_indexed_x),
             0xa2 => instr!(ldx immediate_index),
             0xa4 => instr!(ldy direct),
@@ -340,6 +342,7 @@ impl Cpu {
             0xac => instr!(ldy absolute),
 
             // Comparisons and control flow
+            0xc9 => instr!(cmp immediate_acc),
             0xcd => instr!(cmp absolute),
             0xe0 => instr!(cpx immediate_index),
             0xc0 => instr!(cpy immediate_index),
