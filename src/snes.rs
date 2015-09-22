@@ -119,9 +119,9 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 24_040_000;
+        const CY_LIMIT: u64 = 28_690_000;
         /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = CY_LIMIT - 10_000;
+        const TRACE_START: u64 = CY_LIMIT - 50_000;
 
         const MASTER_CLOCK_FREQ: i32 = 21_477_000;
         /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic

@@ -270,14 +270,17 @@ impl Spc700 {
 
             // Arithmetic
             0x1d => instr!(dec "dec {}" x),
-            0x3d => instr!(inc "inx {}" x),
+            0xbc => instr!(inc "inc {}" a),
+            0x3d => instr!(inc "inc {}" x),
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
+            0x28 => instr!(and "and {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0xcf => instr!(mul "mul ya"),
 
             // Control flow and comparisons
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
+            0x64 => instr!(cmp "cmp {1}, {0}" direct a),
             0x7e => instr!(cmp "cmp {1}, {0}" direct y),
             0x68 => instr!(cmp "cmp {1}, {0}" immediate a),
             0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
@@ -467,7 +470,7 @@ impl Spc700 {
         }
     }
 
-    /// `mul ya` - ya = y * a
+    /// `mul ya`: ya = y * a
     fn mul(&mut self) {
         // Sets N and Z. Y = High, A = Low.
         let res = self.y as u16 * self.a as u16;
@@ -487,13 +490,25 @@ impl Spc700 {
         self.psw.set_nz(res);
         dest.storeb(self, res);
     }
+    fn and(&mut self, r: AddressingMode, l: AddressingMode) {
+        // Sets N and Z
+        // l := l & r
+        let rb = r.loadb(self);
+        let lb = l.clone().loadb(self);
+        let res = self.psw.set_nz(lb & rb);
+        l.storeb(self, res);
+    }
     fn dec(&mut self, am: AddressingMode) {
+        // Sets N and Z
         let val = am.clone().loadb(self);
-        am.storeb(self, val.wrapping_sub(1));
+        let res = self.psw.set_nz(val.wrapping_sub(1));
+        am.storeb(self, res);
     }
     fn inc(&mut self, am: AddressingMode) {
+        // Sets N and Z
         let val = am.clone().loadb(self);
-        am.storeb(self, val.wrapping_add(1));
+        let res = self.psw.set_nz(val.wrapping_add(1));
+        am.storeb(self, res);
     }
 
     /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
