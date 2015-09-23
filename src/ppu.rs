@@ -2,6 +2,24 @@
 //!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
+/// Physical screen width
+pub const SCREEN_WIDTH: u16 = 256;
+/// Physical screen height
+pub const SCREEN_HEIGHT: u16 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
+
+/// The result of an `update` call. Either H-Blank or V-Blank might get entered, and IRQs can be
+/// caused.
+#[derive(Default)]
+pub struct UpdateResult {
+    /// `true` if the last `update` rendered the last visible pixel on the current scanline
+    pub hblank: bool,
+    /// `true` if the last (invisible) H-Blank pixel of the last visible scanline was rendered
+    pub vblank: bool,
+    /// `true` if the current V-Blank was just left (but no visible pixels were rendered). The next
+    /// `update` call will render the first (visible) pixel of a new frame.
+    pub new_frame: bool,
+}
+
 pub struct Ppu {
     /// Object Attribute Memory
     ///
@@ -13,7 +31,7 @@ pub struct Ppu {
     /// `yyyyyyyy` - **Y** coordinate
     /// `tttttttt` - Starting **t**ile/character number (low 8 bits)
     /// `vhoopppt` - **V**ertical/**H**orizontal flip, Pri**o**rity bits, **P**alette number,
-    ///     Bit 9 (most significant bit) of starting tile number.
+    ///     Bit 9 (most significant bit) of starting **t**ile number.
     ///
     /// Layout of a byte in the last 32 Bytes of OAM:
     /// `xsxsxsxs` - **S**ize toggle bit and most significant bit of **X** coordinate
@@ -39,6 +57,22 @@ pub struct Ppu {
     ///
     /// Character data locations are set with the registers `$210B` (BG1/2) and `$210C` (BG3/4).
     vram: [u8; 64 * 1024],
+
+    /// Scanline counter
+    ///
+    /// "The SNES runs 1 scanline every 1364 master cycles, except in non-interlace mode scanline
+    /// $f0 of every other frame (those with $213f.7=1) is only 1360 cycles. Frames are 262
+    /// scanlines in non-interlace mode, while in interlace mode frames with $213f.7=0 are 263
+    /// scanlines. V-Blank runs from either scanline $e1 or $f0 until the end of the frame."
+    scanline: u16,
+
+    /// Horizontal pixel counter
+    ///
+    /// Each call of the `update` method will advance this counter by exactly 1. Since the
+    /// horizontal resolution of a frame is 256 pixels, H-Blank is started at `x=256`, or the 257th
+    /// pixel. The last X coordinate in H-Blank is `x=339`. At the end of the `update` call (when
+    /// `x=399`), `x` will be reset to 0 and `scanline` will be incremented.
+    x: u16,
 }
 
 /// Unpacked OAM entry for internal use.
@@ -63,6 +97,8 @@ impl Ppu {
             oam: [0; 544],
             cgram: [0; 512],
             vram: [0; 64 * 1024],
+            scanline: 0,
+            x: 0,
         }
     }
 
@@ -74,5 +110,54 @@ impl Ppu {
     /// Store a byte in a PPU register ($2100 - $2133)
     pub fn store(&mut self, addr: u16, value: u8) {
         trace!("PPU store: ${:02X} in ${:04X}", value, addr)
+    }
+
+    /// Runs the PPU for a bit.
+    ///
+    /// This will render exactly one pixel (when in V/H-Blank, the pixel counter will be
+    /// incremented, but obviously nothing will be drawn).
+    pub fn update(&mut self) -> (u8, UpdateResult) {
+        // FIXME Does each pixel take *exactly* 4 master clock cycles?
+        self.render_pixel();
+
+        self.x += 1;
+        let mut result = UpdateResult::default();
+        match self.x {
+            256 => {
+                // H-Blank starts now!
+                result.hblank = true;
+            }
+            340 => {
+                // H-Blank ends now!
+                self.x = 0;
+                self.scanline += 1;
+                match self.scanline {
+                    SCREEN_HEIGHT => {
+                        // V-Blank starts now!
+                        result.vblank = true;
+                    }
+                    262 => {
+                        // V-Blank ends now! The next `update` call will render the first visible
+                        // pixel of a new frame.
+                        result.new_frame = true;
+                        self.scanline = 0;
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        (4, result)
+    }
+}
+
+/// Private methods
+impl Ppu {
+    fn in_h_blank(&self) -> bool { self.x >= 256 }
+    fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
+
+    /// Renders the current pixel. If in H- or V-Blank, this does nothing.
+    fn render_pixel(&mut self) {
     }
 }

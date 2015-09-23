@@ -64,7 +64,7 @@ impl Peripherals {
 
     pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
         match bank {
-            0x00 ... 0x3f => match addr {
+            0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
                 // PPU registers. Let it deal with the access.
                 0x2100 ... 0x2133 => self.ppu.store(addr, value),
@@ -136,6 +136,7 @@ impl Snes {
         let mut master_cy: u64 = 0;
         // Master clock cycles for the APU not yet accounted for (can be negative)
         let mut apu_master_cy_debt = 0;
+        let mut ppu_master_cy_debt = 0;
 
         while master_cy < CY_LIMIT {
             if master_cy >= TRACE_START {
@@ -150,10 +151,22 @@ impl Snes {
 
             // Now we "owe" the other components a few cycles:
             apu_master_cy_debt += cpu_master_cy;
+            ppu_master_cy_debt += cpu_master_cy;
 
             // Run all components until we no longer owe them:
             while apu_master_cy_debt > 0 {
                 apu_master_cy_debt -= self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
+            }
+            while ppu_master_cy_debt > 0 {
+                let (cy, result) = self.cpu.mem.ppu.update();
+                ppu_master_cy_debt -= cy as i32;
+
+                if result.hblank {
+                    // TODO Do HDMA
+                }
+                if result.vblank {
+                    // TODO Raise an NMI
+                }
             }
         }
 
