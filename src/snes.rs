@@ -15,7 +15,7 @@ pub struct Peripherals {
     ppu: Ppu,
     rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
-    wram: Vec<u8>,
+    wram: [u8; WRAM_SIZE],
 
     dma: [DmaChannel; 8],
     /// $420b - MDMAEN - Enable-bits of general-purpose DMA channels. Writing with any value that
@@ -40,7 +40,7 @@ impl Peripherals {
             rom: rom,
             apu: Apu::new(),
             ppu: Ppu::new(),
-            wram: vec![0; WRAM_SIZE],
+            wram: [0; WRAM_SIZE],
             dma: [DmaChannel::new(); 8],
             dmaen: 0x00,
             hdmaen: 0x00,
@@ -82,7 +82,6 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
                 0x4200 => {
-                    trace!("store $4200 : ${:02X}", value);
                     // NMITIMEN - NMI/IRQ enable
                     // E-HV---J
                     // E: Enable NMI
@@ -148,6 +147,8 @@ impl Snes {
 
         // Master cycle counter, used only for debugging atm
         let mut master_cy: u64 = 0;
+        let mut total_apu_cy: u64 = 0;
+        let mut total_ppu_cy: u64 = 0;
         // Master clock cycles for the APU not yet accounted for (can be negative)
         let mut apu_master_cy_debt = 0;
         let mut ppu_master_cy_debt = 0;
@@ -168,12 +169,17 @@ impl Snes {
             ppu_master_cy_debt += cpu_master_cy;
 
             // Run all components until we no longer owe them:
-            while apu_master_cy_debt > 0 {
-                apu_master_cy_debt -= self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
+            while apu_master_cy_debt > APU_DIVIDER {
+                // (Since the APU uses lots of cycles to do stuff - lower clock rate and such - we
+                // only run it if we owe it `APU_DIVIDER` master cycles - or one SPC700 cycle)
+                let apu_master_cy = self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
+                apu_master_cy_debt -= apu_master_cy;
+                total_apu_cy += apu_master_cy as u64;
             }
             while ppu_master_cy_debt > 0 {
                 let (cy, result) = self.cpu.mem.ppu.update();
                 ppu_master_cy_debt -= cy as i32;
+                total_ppu_cy += cy as u64;
 
                 if result.hblank {
                     // TODO Do HDMA
@@ -188,6 +194,7 @@ impl Snes {
             }
         }
 
-        info!("EXITING");
+        info!("EXITING. Master cycle count: {}, APU: {}, PPU: {}",
+            master_cy, total_apu_cy, total_ppu_cy);
     }
 }

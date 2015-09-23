@@ -5,7 +5,7 @@ use std::str;
 /// The (decoded) SNES header
 #[derive(Debug)]
 pub struct RomHeader {
-    /// ASCII title
+    /// ASCII title, filled with spaces to 21 Bytes
     title: [u8; 21],
     rom_size: u32,
     ram_size: u32,
@@ -36,7 +36,7 @@ impl RomHeader {
             }
         }
 
-        debug!("'{}'", str::from_utf8(&title).unwrap());
+        debug!("'{}'", str::from_utf8(&title).unwrap().trim_right());
 
         // "ROM makeup byte"
         let makeup = bytes[21];
@@ -89,7 +89,8 @@ impl RomHeader {
     }
 
     pub fn title(&self) -> &str {
-        str::from_utf8(&self.title).unwrap()
+        // Trim the padding
+        str::from_utf8(&self.title).unwrap().trim_right()
     }
 }
 

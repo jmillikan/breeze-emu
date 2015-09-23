@@ -48,7 +48,7 @@ pub struct Ppu {
     /// by 2 Bytes of CGRAM. Layout:
     /// `?bbbbbgg` `gggrrrrr` (the `?`-bit is ignored)
     ///
-    /// TODO LSB/MSB?
+    /// FIXME LSB/MSB?
     cgram: [u8; 512],
 
     /// VRAM - Stores background maps and tile/character data
@@ -74,8 +74,8 @@ pub struct Ppu {
     ///
     /// Each call of the `update` method will advance this counter by exactly 1. Since the
     /// horizontal resolution of a frame is 256 pixels, H-Blank is started at `x=256`, or the 257th
-    /// pixel. The last X coordinate in H-Blank is `x=339`. At the end of the `update` call (when
-    /// `x=399`), `x` will be reset to 0 and `scanline` will be incremented.
+    /// pixel. The last X coordinate in H-Blank is `x=339`. At the end of the `update` call (during
+    /// which `x=339`), `x` will be reset to 0 and `scanline` will be incremented.
     x: u16,
 }
 
@@ -106,19 +106,19 @@ impl Ppu {
         }
     }
 
-    /// Load a PPU register ($2134 - $213f)
+    /// Load a PPU register (addresses `$2134` to `$213f`)
     pub fn load(&mut self, addr: u16) -> u8 {
         panic!("PPU register load unimplemented (${:04X})", addr)
     }
 
-    /// Store a byte in a PPU register ($2100 - $2133)
+    /// Store a byte in a PPU register (addresses `$2100` - `$2133`)
     pub fn store(&mut self, addr: u16, value: u8) {
         trace!("PPU store: ${:02X} in ${:04X}", value, addr)
     }
 
     /// Runs the PPU for a bit.
     ///
-    /// This will render exactly one pixel (when in V/H-Blank, the pixel counter will be
+    /// This will render exactly one pixel (when in H/V-Blank, the pixel counter will be
     /// incremented, but obviously nothing will be drawn).
     pub fn update(&mut self) -> (u8, UpdateResult) {
         // FIXME Does each pixel take *exactly* 4 master clock cycles?

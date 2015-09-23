@@ -32,31 +32,42 @@ pub struct Dsp {
     lmvol: u8,
     /// $1c - Right main volume
     rmvol: u8,
-    /// $2c - Left echo volume
+    /// $2c - EVOLL: Left echo volume
     levol: u8,
-    /// $3c - Right echo volume
+    /// $3c - EVOLR: Right echo volume
     revol: u8,
-    /// $4c - Key on (1 bit per voice)
+    /// $4c - KON: Key on (1 bit per voice)
+    ///
+    /// "Writing 1 to the KON bit will set the envelope to 0, the state to
+    /// Attack, and will start the channel from the beginning (see DIR and
+    /// VxSRCN). Note that this happens even if the channel is already playing
+    /// (which may cause a click/pop), and that there are 5 'empty' samples
+    /// before envelope updates and BRR decoding actually begin."
     keyon: u8,
-    /// $5c - Key off (1 bit per voice)
+    /// $5c - KOFF: Key off (1 bit per voice)
+    ///
+    /// "Setting 1 to the KOFF bit will transition the voice to the Release
+    /// state. Thus, the envelope will decrease by 8 every sample (regardless
+    /// of the VxADSR and VxGAIN settings) until it reaches 0, where it will
+    /// stay until the next KON."
     keyoff: u8,
-    /// $6c
+    /// $6c - FLG: Reset, Mute, Echo-Write flags and Noise Clock
     flags: u8,
-    /// $7c - Voice end flags (1 bit per voice)
+    /// $7c - ENDX: Voice end flags (1 bit per voice)
     endx: u8,
-    /// $0d - Echo feedback
+    /// $0d - EFB: Echo feedback
     efb: u8,
-    /// $2d - PMON - Pitch modulation
+    /// $2d - PMON: Pitch modulation
     pmod: u8,
-    /// $3d - Noise enable
+    /// $3d - NON: Noise enable
     noise: u8,
     /// $4d - Echo enable
     echo: u8,
     /// $5d - Sample table address (`* $100` for memory offset)
     srcdir: u8,
-    /// $6d - Echo buffer start offset (`* $100` for memory offset)
+    /// $6d - ESA: Echo ring buffer start offset (`* $100` for memory offset)
     echo_buf: u8,
-    /// $7d - Echo delay (4 bits only!)
+    /// $7d - EDL: Echo delay (ring buffer size) (4 bits only!)
     echo_delay: u8,
 }
 

@@ -1,3 +1,4 @@
 target
-**.sfc
+*.sfc
+*.smc
 *.dll
