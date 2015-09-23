@@ -22,6 +22,12 @@ pub struct Peripherals {
     /// contains a set bit will start a DMA transfer immediately.
     dmaen: u8,
     hdmaen: u8,
+    /// `n-xy---a`
+    /// * `n`: Enable NMI on V-Blank
+    /// * `x`: Enable IRQ on H-Counter match
+    /// * `y`: Enable IRQ on V-Counter match
+    /// * `a`: Enable auto-joypad read
+    interrupt_enable: u8,
 
     /// Additional cycles spent doing IO (in master clock cycles). This is reset before each CPU
     /// instruction and added to the cycle count returned by the CPU.
@@ -34,17 +40,18 @@ impl Peripherals {
             rom: rom,
             apu: Apu::new(),
             ppu: Ppu::new(),
+            wram: vec![0; WRAM_SIZE],
             dma: [DmaChannel::new(); 8],
             dmaen: 0x00,
             hdmaen: 0x00,
-            wram: vec![0; WRAM_SIZE],
+            interrupt_enable: 0x00,
             cy: 0,
         }
     }
 
     pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
         match bank {
-            0x00 ... 0x3f => match addr {
+            0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 // Mirror of first 8k of WRAM
                 0x0000 ... 0x1fff => self.wram[addr as usize],
                 // PPU
@@ -54,11 +61,13 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
-                _ => self.rom.loadb(bank, addr)
+                0x8000 ... 0xffff => self.rom.loadb(bank, addr),
+                _ => panic!("invalid load from ${:02X}:{:04X}", bank, addr)
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize],
-            _ => self.rom.loadb(bank, addr)
+            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.loadb(bank, addr),
+            _ => unreachable!(),    // Rust should know this!
         }
     }
 
@@ -73,6 +82,7 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
                 0x4200 => {
+                    trace!("store $4200 : ${:02X}", value);
                     // NMITIMEN - NMI/IRQ enable
                     // E-HV---J
                     // E: Enable NMI
@@ -97,13 +107,17 @@ impl Peripherals {
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff =>
                     self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value),
-                _ => self.rom.storeb(bank, addr, value)
+                0x8000 ... 0xffff => self.rom.storeb(bank, addr, value),
+                _ => panic!("invalid store: ${:02X} to ${:02X}:{:04X}", value, bank, addr)
             },
             // WRAM main banks
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize] = value,
-            _ => self.rom.storeb(bank, addr, value)
+            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.storeb(bank, addr, value),
+            _ => unreachable!(),    // Rust should know this!
         }
     }
+
+    fn nmi_enabled(&self) -> bool { self.interrupt_enable & 0x80 != 0 }
 }
 
 pub struct Snes {
@@ -121,7 +135,7 @@ impl Snes {
         /// Exit after this number of master clock cycles
         const CY_LIMIT: u64 = 30_000_000;
         /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = CY_LIMIT - 3_000;
+        const TRACE_START: u64 = CY_LIMIT - 4_000;
 
         const MASTER_CLOCK_FREQ: i32 = 21_477_000;
         /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
@@ -164,8 +178,12 @@ impl Snes {
                 if result.hblank {
                     // TODO Do HDMA
                 }
-                if result.vblank {
-                    // TODO Raise an NMI
+                if result.vblank && self.cpu.mem.nmi_enabled() {
+                    trace!("V-Blank NMI triggered!");
+                    self.cpu.trigger_nmi();
+                    // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU too
+                    // many cycles.
+                    break;
                 }
             }
         }

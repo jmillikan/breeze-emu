@@ -1,5 +1,9 @@
 //! Emulates the Picture Processing Unit.
 //!
+//! The SNES actually has 2 distinct PPU chips that work together (TODO Write more about this! I
+//! haven't found any docs on how exactly this works), but since they act as one unit to the rest
+//! of the system, they're emulated as one unit.
+//!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
 /// Physical screen width

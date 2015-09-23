@@ -364,6 +364,39 @@ impl Cpu {
         self.cy
     }
 
+    /// Immediately executes an IRQ sequence and jumps to the NMI handler.
+    pub fn trigger_nmi(&mut self) {
+        if self.emulation {
+            // FIXME Do we still push the same 4 Bytes in emulation mode?
+            self.interrupt(NMI_VEC8);
+        } else {
+            self.interrupt(NMI_VEC16);
+        }
+    }
+
+    pub fn trigger_irq(&mut self) {
+        if self.emulation {
+            // FIXME Do we still push the same 4 Bytes in emulation mode?
+            self.interrupt(IRQ_VEC8);
+        } else {
+            self.interrupt(IRQ_VEC16);
+        }
+    }
+
+    /// Execute an IRQ sequence. This pushes PBR, PC and the processor status register P on the
+    /// stack, loads the handler address from the given vector, and jumps to the handler.
+    fn interrupt(&mut self, vector: u16) {
+        let pbr = self.pbr;
+        self.pushb(pbr);
+        let pc = self.pc;
+        self.pushw(pc);
+        let p = self.p.0;
+        self.pushb(p);
+
+        let handler = self.loadw(0, vector);
+        self.pc = handler;
+    }
+
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing
     /// `a-b`. This method only works correctly for 16-bit values.
     ///
