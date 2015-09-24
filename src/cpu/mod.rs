@@ -368,7 +368,7 @@ impl Cpu {
             0x10 => instr!(bpl rel),
             0x70 => instr!(bvs rel),
             0x20 => instr!(jsr absolute),
-            0x22 => instr!(jsr absolute_long),
+            0x22 => instr!(jsl absolute_long),
             0x60 => instr!(rts),
             _ => {
                 instr!(ill);
@@ -566,20 +566,19 @@ impl Cpu {
         }
     }
 
-    /// Shift accumulator left
+    /// Shift accumulator left by 1 bit
     fn asl_a(&mut self) {
-        // Sets N, Z and C. The rightmost bit is filled with the current carry flag.
-        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        // Sets N, Z and C. The rightmost bit is filled with 0.
         if self.p.small_acc() {
             let a = self.a as u8;
             self.p.set_carry(self.a & 0x80 != 0);
-            self.a = (self.a & 0xff00) | self.p.set_nz_8((a << 1) | c) as u16;
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(a << 1) as u16;
         } else {
             self.p.set_carry(self.a & 0x8000 != 0);
-            self.a = self.p.set_nz((self.a << 1) | c as u16);
+            self.a = self.p.set_nz(self.a << 1);
         }
     }
-    /// Arithmetic left-shift
+    /// Arithmetic left-shift: Shift a memory location left by 1 bit (Read-Modify-Write)
     fn asl(&mut self, am: AddressingMode) {
         // Sets N, Z and C. The rightmost bit is filled with 0.
         let (bank, addr) = am.address(self);
@@ -813,29 +812,43 @@ impl Cpu {
         self.pushb(p);
     }
 
-    /// Return from Subroutine
+    /// Return from Subroutine (Short - Like JSR)
     fn rts(&mut self) {
         let pcl = self.popb() as u16;
         let pch = self.popb() as u16;
-        let pbr = self.popb();
-        self.pbr = pbr;
-        self.pc = (pch << 8) | pcl;
+        let pc = (pch << 8) | pcl;
+        self.pc = pc + 1;   // +1 since the last byte of the JSR was saved
     }
 
-    /// Jump to Subroutine
+    /// Jump to Subroutine (with short address). Doesn't change PBR.
+    ///
+    /// "The address saved is the address of the last byte of the JSR instruction (the address of
+    /// the last byte of the operand), not the address of the next instruction as is the case with
+    /// some other processors.  The address is pushed onto the stack in standard 65x order – the
+    /// low byte in the lower address, the high byte in the higher address – and done in standard
+    /// 65x fashion – the first byte is stored at the location pointed to by the stack pointer, the
+    /// stack pointer is decremented, the second byte is stored, and the stack pointer is
+    /// decremented again."
     fn jsr(&mut self, am: AddressingMode) {
         // Changes no flags
+        let pc = self.pc - 1;
+        self.pushb((pc >> 8) as u8);
+        self.pushb(pc as u8);
 
-        // UGH!!! Come on borrowck, you're supposed to *help*!
+        self.pc = am.address(self).1;
+    }
+    /// Long jump to subroutine. Sets PBR to the bank returned by `am.address()`.
+    fn jsl(&mut self, am: AddressingMode) {
+        // Changes no flags
         let pbr = self.pbr;
         self.pushb(pbr);
-        let pch = (self.pc >> 8) as u8;
-        self.pushb(pch);
-        let pcl = self.pc as u8;
-        self.pushb(pcl);
+        let pc = self.pc - 1;
+        self.pushb((pc >> 8) as u8);
+        self.pushb(pc as u8);
 
-        // JSR can't immediate. Absolute is handled by storing the address, not the value, in PC.
-        self.pc = am.address(self).1;
+        let (pbr, pc) = am.address(self);
+        self.pbr = pbr;
+        self.pc = pc;
     }
 
     fn cli(&mut self) { self.p.set_irq_disable(false) }
