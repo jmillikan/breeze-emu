@@ -8,6 +8,13 @@ use self::statusreg::StatusReg;
 
 use snes::Peripherals;
 
+/// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
+/// read access.
+const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
+];
+const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
+    (0x00, 0x1df5),
+];
 
 // Emulation mode vectors
 const IRQ_VEC8: u16 = 0xFFFE;
@@ -110,6 +117,11 @@ impl Cpu {
 
     /// Load a byte from memory. Will change the cycle counter according to the memory speed.
     fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
+        if MEM_BREAK_LOAD.iter().find(|&&(b, a)| bank == b && addr == a).is_some() {
+            debug!("MEM-BREAK: Breakpoint triggered on load from ${:02X}:{:04X} (${:02})",
+                bank, addr, self.mem.load(bank, addr))
+        }
+
         self.do_io_cycle(bank, addr);
         self.mem.load(bank, addr)
     }
@@ -123,6 +135,11 @@ impl Cpu {
     }
 
     fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
+        if MEM_BREAK_STORE.iter().find(|&&(b, a)| bank == b && addr == a).is_some() {
+            debug!("MEM-BREAK: Breakpoint triggered on store of ${:02X} to ${:02X}:{:04X}",
+                value, bank, addr)
+        }
+
         self.do_io_cycle(bank, addr);
         self.mem.store(bank, addr, value)
     }
@@ -167,7 +184,6 @@ impl Cpu {
     }
 
     fn pushw(&mut self, value: u16) {
-        // FIXME is high or low pushed first? We'll push high first, since JSR does the same
         let hi = (value >> 8) as u8;
         let lo = value as u8;
         self.pushb(hi);
@@ -191,7 +207,6 @@ impl Cpu {
     }
 
     fn popw(&mut self) -> u16 {
-        // FIXME see pushw. we pop low first, then high.
         let lo = self.popb() as u16;
         let hi = self.popb() as u16;
         (hi << 8) | lo

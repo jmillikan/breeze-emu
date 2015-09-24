@@ -18,10 +18,11 @@ pub struct Peripherals {
     wram: [u8; WRAM_SIZE],
 
     dma: [DmaChannel; 8],
-    /// $420b - MDMAEN - Enable-bits of general-purpose DMA channels. Writing with any value that
-    /// contains a set bit will start a DMA transfer immediately.
+    /// $420b - MDMAEN: Enable-bits of general-purpose DMA channels. Writing with any value that
+    /// contains a set bit will start a DMA transfer on the respective channel immediately.
     dmaen: u8,
     hdmaen: u8,
+    /// $4200 - NMITIMEN: Interrupt enable flags
     /// `n-xy---a`
     /// * `n`: Enable NMI on V-Blank
     /// * `x`: Enable IRQ on H-Counter match
@@ -82,6 +83,7 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
                 0x4200 => {
+                    trace!("NMITIMEN = ${:02X}", value);
                     // NMITIMEN - NMI/IRQ enable
                     // E-HV---J
                     // E: Enable NMI
@@ -132,7 +134,7 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 30_000_000;
+        const CY_LIMIT: u64 = 24_500_000;
         /// Start tracing at this master cycle (0 to trace everything)
         const TRACE_START: u64 = CY_LIMIT - 4_000;
 
