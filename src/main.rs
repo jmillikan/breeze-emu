@@ -13,6 +13,7 @@ use snes::Snes;
 mod apu;
 mod cpu;
 mod dma;
+#[macro_use] mod log_util;
 mod ppu;
 mod rom;
 mod snes;

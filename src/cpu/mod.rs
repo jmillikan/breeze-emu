@@ -238,7 +238,7 @@ impl Cpu {
             Some(am) => format!("{} {}", op, am),
             None => format!("{}", op),
         };
-        trace!("{:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} pbr:{:02X} emu:{} p:{:08b}",
+        trace!("${:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} emu:{} {}",
             self.pbr,
             pc,
             opstr,
@@ -248,9 +248,8 @@ impl Cpu {
             self.s,
             self.d,
             self.dbr,
-            self.pbr,
             self.emulation as u8,
-            self.p.0,
+            self.p,
         );
     }
 

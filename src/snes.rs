@@ -2,7 +2,7 @@
 
 use apu::Apu;
 use cpu::Cpu;
-use dma::DmaChannel;
+use dma::{do_dma, DmaChannel};
 use ppu::Ppu;
 use rom::Rom;
 
@@ -17,10 +17,10 @@ pub struct Peripherals {
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
     wram: [u8; WRAM_SIZE],
 
-    dma: [DmaChannel; 8],
-    /// $420b - MDMAEN: Enable-bits of general-purpose DMA channels. Writing with any value that
-    /// contains a set bit will start a DMA transfer on the respective channel immediately.
-    dmaen: u8,
+    pub dma: [DmaChannel; 8],
+    /// $420c - HDMAEN: HDMA enable flags
+    /// (Note that general DMA doesn't have a register here, since all transactions are started
+    /// immediately and the register can't be read)
     hdmaen: u8,
     /// $4200 - NMITIMEN: Interrupt enable flags
     /// `n-xy---a`
@@ -32,7 +32,7 @@ pub struct Peripherals {
 
     /// Additional cycles spent doing IO (in master clock cycles). This is reset before each CPU
     /// instruction and added to the cycle count returned by the CPU.
-    cy: u16,
+    cy: u32,
 }
 
 impl Peripherals {
@@ -43,7 +43,6 @@ impl Peripherals {
             ppu: Ppu::new(),
             wram: [0; WRAM_SIZE],
             dma: [DmaChannel::new(); 8],
-            dmaen: 0x00,
             hdmaen: 0x00,
             interrupt_enable: 0x00,
             cy: 0,
@@ -95,19 +94,18 @@ impl Peripherals {
                     if value & 0x10 != 0 { panic!("NYI: IRQ-V") }
                     if value & 0x01 != 0 { panic!("NYI: Auto-Joypad-Read") }
                 }
-                0x420b => {
-                    // MDMAEN - Party enable
-                    if value != 0 { panic!("NYI: DMA") }
-                    self.dmaen = value;
-                }
+                // MDMAEN - Party enable
+                0x420b => self.cy += do_dma(self, value),
                 0x420c => {
                     // HDMAEN - HDMA enable
                     if value != 0 { panic!("NYI: HDMA") }
                     self.hdmaen = value;
                 }
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
-                0x4300 ... 0x43ff =>
-                    self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value),
+                0x4300 ... 0x43ff => {
+                    trace!("DMA CTRL: ${:02X} to ${:04X}", value, addr);
+                    self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value);
+                }
                 0x8000 ... 0xffff => self.rom.storeb(bank, addr, value),
                 _ => panic!("invalid store: ${:02X} to ${:02X}:{:04X}", value, bank, addr)
             },
