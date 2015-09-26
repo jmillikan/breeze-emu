@@ -77,6 +77,34 @@ pub struct Ppu {
     /// pixel. The last X coordinate in H-Blank is `x=339`. At the end of the `update` call (during
     /// which `x=339`), `x` will be reset to 0 and `scanline` will be incremented.
     x: u16,
+
+    /// `$2100` - Screen Display register
+    /// `x---bbbb`
+    /// * `x`: Force blank (F-Blank)
+    /// * `b`: Brightness (0=black, 15=max)
+    inidisp: u8,
+    /// `$2101` - Object Size and Name Base Address
+    /// `sssnnbbb`
+    /// * `sss`: Object/Sprite size
+    ///  * 000 =  8x8  and 16x16 sprites
+    ///  * 001 =  8x8  and 32x32 sprites
+    ///  * 010 =  8x8  and 64x64 sprites
+    ///  * 011 = 16x16 and 32x32 sprites
+    ///  * 100 = 16x16 and 64x64 sprites
+    ///  * 101 = 32x32 and 64x64 sprites
+    ///  * 110 = 16x32 and 32x64 sprites ('undocumented')
+    ///  * 111 = 16x32 and 32x32 sprites ('undocumented')
+    /// * `nn`: Name select - Offset between sprite/name tables
+    /// * `bbb`: Address select of first sprite/name table
+    obsel: u8,
+
+    /// `$2102` Low byte of current OAM word address
+    oamaddl: u8,
+    /// `$2103` High bit (bit 9) of OAM word address and priority rotation bit
+    /// `p------b`
+    /// * `p`: If set, give priority to sprite `(OAMAddr&0xFE)>>1` (internal OAM address)
+    /// * `b`: High bit of OAM word address
+    oamaddh: u8,
 }
 
 /// Unpacked OAM entry for internal use.
@@ -103,6 +131,10 @@ impl Ppu {
             vram: [0; 64 * 1024],
             scanline: 0,
             x: 0,
+            inidisp: 0x80,  // F-Blank on by default
+            obsel: 0,
+            oamaddl: 0,
+            oamaddh: 0,
         }
     }
 
