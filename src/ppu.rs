@@ -1,9 +1,5 @@
 //! Emulates the Picture Processing Unit.
 //!
-//! The SNES actually has 2 distinct PPU chips that work together (TODO Write more about this! I
-//! haven't found any docs on how exactly this works), but since they act as one unit to the rest
-//! of the system, they're emulated as one unit.
-//!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
 /// Physical screen width
@@ -105,6 +101,21 @@ pub struct Ppu {
     /// * `p`: If set, give priority to sprite `(OAMAddr&0xFE)>>1` (internal OAM address)
     /// * `b`: High bit of OAM word address
     oamaddh: u8,
+
+    /// `$2115` Video Port Control (VRAM)
+    /// `j---mmii`
+    /// * `j`: Address increment mode
+    ///  * 0 = increment after writing $2118/reading $2139
+    ///  * 1 = increment after writing $2119/reading $213a
+    /// * `m`: VRAM Address remapping
+    ///  * 00 = None
+    ///  * 01 = Remap addressing aaaaaaaaBBBccccc => aaaaaaaacccccBBB
+    ///  * 10 = Remap addressing aaaaaaaBBBcccccc => aaaaaaaccccccBBB
+    ///  * 11 = Remap addressing aaaaaaBBBccccccc => aaaaaacccccccBBB
+    /// * `i`: Word address increment amount (00 => 1, 01 => 32, 10/11 => 128)
+    vmain: u8,
+    /// `$2116`/`$2117` Low/High byte of VRAM word address
+    vmaddr: u16,
 }
 
 /// Unpacked OAM entry for internal use.
@@ -135,6 +146,8 @@ impl Ppu {
             obsel: 0,
             oamaddl: 0,
             oamaddh: 0,
+            vmain: 0,
+            vmaddr: 0,
         }
     }
 
@@ -145,7 +158,21 @@ impl Ppu {
 
     /// Store a byte in a PPU register (addresses `$2100` - `$2133`)
     pub fn store(&mut self, addr: u16, value: u8) {
-        trace_unique!("PPU store (first only): ${:02X} in ${:04X}", value, addr)
+        trace_unique!("PPU store (first only): ${:02X} in ${:04X}", value, addr);
+
+        match addr {
+            0x2100 => self.inidisp = value,
+            0x2101 => self.obsel = value,
+            0x2102 => self.oamaddl = value,
+            0x2103 => self.oamaddh = value,
+
+            0x2115 => self.vmain = value,
+            0x2116 => self.vmaddr = (self.vmaddr & 0xff00) | value as u16,
+            0x2117 => self.vmaddr = ((value as u16) << 8) | self.vmaddr & 0xff,
+            0x2118 => self.vram_store_low(value),
+            0x2119 => self.vram_store_high(value),
+            _ => {},
+        }
     }
 
     /// Runs the PPU for a bit.
@@ -192,8 +219,64 @@ impl Ppu {
 impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
     fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
+    fn force_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
+    fn brightness(&self) -> u8 { self.inidisp & 0xf }
 
-    /// Renders the current pixel. If in H- or V-Blank, this does nothing.
+    /// Get the configured sprite size in pixels
+    fn obj_size(&self, alt: bool) -> (u8, u8) {
+        match self.obsel & 0b111 {
+            0b000 => if !alt {(8,8)} else {(16,16)},
+            0b001 => if !alt {(8,8)} else {(32,32)},
+            0b010 => if !alt {(8,8)} else {(64,64)},
+            0b011 => if !alt {(16,16)} else {(32,32)},
+            0b100 => if !alt {(16,16)} else {(64,64)},
+            0b101 => if !alt {(32,32)} else {(64,64)},
+            //0b110 => if !alt {(16,32)} else {(32,64)},
+            //0b111 => if !alt {(16,32)} else {(32,32)},
+            invalid => panic!("invalid sprite size selected: {:b} (OBSEL = ${:02X})",
+                invalid, self.obsel)
+        }
+    }
+
+    /// Get the value to increment the VRAM word address by
+    fn vram_addr_increment(&self) -> u16 {
+        match self.vmain & 0b11 {
+            0b00 => 1,
+            0b01 => 32,
+            _ => 128,   // 0b10 | 0b11
+        }
+    }
+    /// Translate a VRAM word address according to the address translation bits of `$2115`
+    fn vram_translate_addr(&self, addr: u16) -> u16 {
+        // * 00 = None
+        // * 01 = Remap addressing aaaaaaaaBBBccccc => aaaaaaaacccccBBB
+        // * 10 = Remap addressing aaaaaaaBBBcccccc => aaaaaaaccccccBBB
+        // * 11 = Remap addressing aaaaaaBBBccccccc => aaaaaacccccccBBB
+        let trans = (self.vmain & 0b1100) >> 2;
+        match trans {
+            0b00 => addr,
+            0b01 => panic!("NYI: VRAM address translation"),   // FIXME
+            0b10 => panic!("NYI: VRAM address translation"),
+            0b11 => panic!("NYI: VRAM address translation"),
+            _ => unreachable!(),
+        }
+    }
+    /// Store to `$2118`. This writes the Byte to the current VRAM word address and increments it
+    /// accordingly.
+    fn vram_store_low(&mut self, data: u8) {
+        let inc = if self.vmain & 0x80 != 0 { 0 } else { self.vram_addr_increment() };
+        self.vram[self.vmaddr as usize * 2] = data;
+        self.vmaddr += inc;
+    }
+    /// Store to `$2119`. This writes the Byte to the current VRAM word address + 1 and increments
+    /// it accordingly.
+    fn vram_store_high(&mut self, data: u8) {
+        let inc = if self.vmain & 0x80 != 0 { self.vram_addr_increment() } else { 0 };
+        self.vram[self.vmaddr as usize * 2 + 1] = data;
+        self.vmaddr += inc;
+    }
+
+    /// Renders the current pixel. If in H/V/F-Blank, this does nothing.
     fn render_pixel(&mut self) {
     }
 }
