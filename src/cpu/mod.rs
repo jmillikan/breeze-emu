@@ -11,15 +11,8 @@ use snes::Peripherals;
 /// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
 /// read access.
 const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
-    (0x00, 0xf045),
-    (0x00, 0x01f9),
-    (0x00, 0x01fa),
-    (0x00, 0x01fb),
 ];
 const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
-    (0x00, 0x01f9),
-    (0x00, 0x01fa),
-    (0x00, 0x01fb),
 ];
 
 // Emulation mode vectors
@@ -330,6 +323,7 @@ impl Cpu {
             0x1a => instr!(ina),
             0xe8 => instr!(inx),
             0xc8 => instr!(iny),
+            0xc6 => instr!(dec direct),
             0xce => instr!(dec absolute),
             0xca => instr!(dex),
 
@@ -338,7 +332,9 @@ impl Cpu {
             0x1b => instr!(tcs),
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
+            0x9b => instr!(txy),
             0x98 => instr!(tya),
+            0xbb => instr!(tyx),
             0xeb => instr!(xba),
             0x85 => instr!(sta direct),
             0x97 => instr!(sta indirect_long_idx),
@@ -375,6 +371,7 @@ impl Cpu {
             0xc0 => instr!(cpy immediate_index),
             0x80 => instr!(bra rel),
             0xdc => instr!(bra indirect_long),
+            0x4c => instr!(bra absolute),
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
@@ -384,6 +381,7 @@ impl Cpu {
             0x22 => instr!(jsl absolute_long),
             0x60 => instr!(rts),
             0x6b => instr!(rtl),
+
             _ => {
                 instr!(ill);
                 panic!("illegal CPU opcode: ${:02X}", op);
@@ -721,6 +719,11 @@ impl Cpu {
             self.y = self.p.set_nz(self.a);
         }
     }
+    /// Transfer X to Y
+    fn txy(&mut self) {
+        // We can ignore the `X` bit, since the upper 8 bits are 0 anyway if `X` is set
+        self.y = self.x;
+    }
     /// Transfer Index Register Y to Accumulator
     fn tya(&mut self) {
         // Changes N and Z
@@ -729,6 +732,10 @@ impl Cpu {
         } else {
             self.a = self.p.set_nz(self.y);
         }
+    }
+    /// Transfer Y to X
+    fn tyx(&mut self) {
+        self.x = self.y;
     }
 
     /// Increment memory location
