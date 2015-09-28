@@ -298,9 +298,13 @@ impl Cpu {
 
         match op {
             // Stack operations
+            0x4b => instr!(phk),
+            0x8b => instr!(phb),
+            0xab => instr!(plb),
             0x08 => instr!(php),
             0x28 => instr!(plp),
             0x48 => instr!(pha),
+            0x5a => instr!(phy),
             0x68 => instr!(pla),
             0x7a => instr!(ply),
 
@@ -350,10 +354,12 @@ impl Cpu {
             0x9e => instr!(stz absolute_indexed_x),
             0xa5 => instr!(lda direct),
             0xa9 => instr!(lda immediate_acc),
+            0xa7 => instr!(lda indirect_long),
             0xb7 => instr!(lda indirect_long_idx),
             0xad => instr!(lda absolute),
             0xaf => instr!(lda absolute_long),
             0xbd => instr!(lda absolute_indexed_x),
+            0xb9 => instr!(lda absolute_indexed_y),
             0xa2 => instr!(ldx immediate_index),
             0xa4 => instr!(ldy direct),
             0xa0 => instr!(ldy immediate_index),
@@ -455,6 +461,21 @@ impl Cpu {
 
 /// Opcode implementations
 impl Cpu {
+    /// Push Program Bank Register
+    fn phk(&mut self) {
+        let pbr = self.pbr;
+        self.pushb(pbr);
+    }
+    /// Push Data Bank Register
+    fn phb(&mut self) {
+        let dbr = self.dbr;
+        self.pushb(dbr);
+    }
+    /// Pop Data Bank Register
+    fn plb(&mut self) {
+        let dbr = self.popb();
+        self.dbr = dbr;
+    }
     /// Push Processor Status Register
     fn php(&mut self) {
         // Changes no flags
@@ -501,6 +522,18 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Push Index Register Y
+    fn phy(&mut self) {
+        if self.p.small_index() {
+            let val = self.y as u8;
+            self.pushb(val);
+        } else {
+            let val = self.y;
+            self.pushw(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Pop Index Register Y
     fn ply(&mut self) {
         // Changes N and Z
         if self.p.small_index() {
@@ -1040,6 +1073,9 @@ impl Cpu {
     }
     fn absolute_indexed_x(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedX(self.fetchw())
+    }
+    fn absolute_indexed_y(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedY(self.fetchw())
     }
     fn absolute_long_indexed_x(&mut self) -> AddressingMode {
         let addr = self.fetchw();

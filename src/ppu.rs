@@ -137,6 +137,13 @@ pub struct Ppu {
     vmain: u8,
     /// `$2116`/`$2117` Low/High byte of VRAM word address
     vmaddr: u16,
+    /// `$211a` Mode 7 Settings
+    /// `rc----xy`
+    /// * `r`: Placing field size (`0` = 1024x1024, `1` = uhh... larger?)
+    /// * `c`: 0 = Empty space is transparent, 1 = Fill empty space with character 0
+    /// * `x`: Horizontal mirroring
+    /// * `y`: Vertical mirroring
+    m7sel: u8,
 
     /// `$212a` BG Window mask logic
     /// `44332211`
@@ -193,6 +200,7 @@ impl Ppu {
             bg34nba: 0,
             vmain: 0,
             vmaddr: 0,
+            m7sel: 0,
             wbglog: 0,
             wobjlog: 0,
             tm: 0,
@@ -229,6 +237,7 @@ impl Ppu {
             0x2117 => self.vmaddr = ((value as u16) << 8) | self.vmaddr & 0xff,
             0x2118 => self.vram_store_low(value),
             0x2119 => self.vram_store_high(value),
+            0x211a => self.m7sel = value,
             0x212a => self.wbglog = value,
             0x212b => {
                 if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }

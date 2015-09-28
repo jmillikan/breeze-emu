@@ -22,6 +22,9 @@ pub enum AddressingMode {
     AbsIndexedX(u16),
 
     // "Absolute Indexed with Y-a,y"
+    // (DBR, <val> + Y)
+    AbsIndexedY(u16),
+
     // "Absolute Indirect-(a)" (PC?)
 
     /// "Absolute Long Indexed With X-al,x" - Absolute Long + X
@@ -119,6 +122,10 @@ impl AddressingMode {
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (cpu.dbr, offset + cpu.x)
             }
+            AbsIndexedY(offset) => {
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                (cpu.dbr, offset + cpu.y)
+            }
             Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
             }
@@ -176,6 +183,7 @@ impl fmt::Display for AddressingMode {
             AbsoluteLong(bank, addr) =>    write!(f, "${:02X}:{:04X}", bank, addr),
             AbsLongIndexedX(bank, addr) => write!(f, "${:02X}:{:04X},x", bank, addr),
             AbsIndexedX(offset) =>         write!(f, "${:04X},x", offset),
+            AbsIndexedY(offset) =>         write!(f, "${:04X},y", offset),
             Rel(rel) =>                    write!(f, "{:+}", rel),
             Direct(offset) =>              write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
