@@ -28,7 +28,7 @@ impl StatusReg {
     pub fn overflow(&self) -> bool    { self.0 & OVERFLOW_FLAG != 0 }
     pub fn small_acc(&self) -> bool   { self.0 & SMALL_ACC_FLAG != 0 }
     pub fn small_index(&self) -> bool { self.0 & SMALL_INDEX_FLAG != 0 }
-    pub fn decimal(&self) -> bool         { self.0 & DEC_FLAG != 0 }
+    pub fn decimal(&self) -> bool     { self.0 & DEC_FLAG != 0 }
     pub fn irq_disable(&self) -> bool { self.0 & IRQ_FLAG != 0 }
     pub fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0}
     pub fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }

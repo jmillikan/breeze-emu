@@ -102,6 +102,27 @@ pub struct Ppu {
     /// * `b`: High bit of OAM word address
     oamaddh: u8,
 
+    /// `$2106` Mosaic filter
+    /// `xxxx4321`
+    /// * `4321`: Enable mosaic filter for BG4/3/2/1
+    /// * `xxxx`: Mosaic size in pixels (`0`: 1 pixel (default), `F`: 16 pixels)
+    mosaic: u8,
+    /// `$2107`-`$210a` BGx Tilemap Address and Size
+    /// `aaaaaayx`
+    /// * `a`: VRAM address is `aaaaaa << 10`
+    /// * `y`: Vertical mirroring
+    /// * `x`: Horizontal mirroring
+    bg1sc: u8,
+    bg2sc: u8,
+    bg3sc: u8,
+    bg4sc: u8,
+    /// `$210b`/`$210c` BG Character Data Address
+    /// `bbbbaaaa`
+    /// * `b`: Base address for BG2/4 is `bbbb << 12`
+    /// * `a`: Base address for BG1/3 is `bbbb << 12`
+    bg12nba: u8,
+    bg34nba: u8,
+
     /// `$2115` Video Port Control (VRAM)
     /// `j---mmii`
     /// * `j`: Address increment mode
@@ -116,22 +137,39 @@ pub struct Ppu {
     vmain: u8,
     /// `$2116`/`$2117` Low/High byte of VRAM word address
     vmaddr: u16,
-}
 
-/// Unpacked OAM entry for internal use.
-struct OamEntry {
-    /// 0-511
-    tile: u16,
-    /// 0-511
-    x: u16,
-    y: u8,
-    /// 0-3
-    priority: u8,
-    /// 0-7
-    palette: u8,
-    hflip: bool,
-    vflip: bool,
-    size_toggle: bool,
+    /// `$212a` BG Window mask logic
+    /// `44332211`
+    ///
+    /// `$212b` OBJ/Color Window mask logic
+    /// `----ccoo`
+    ///
+    /// The 2 bits can select the boolean operator to apply:
+    /// * `00 = OR`
+    /// * `01 = AND`
+    /// * `10 = XOR`
+    /// * `11 = XNOR`
+    wbglog: u8,
+    wobjlog: u8,
+    /// `$212c`/`$212d` Enable layers on main/sub screen
+    /// `---o4321`
+    /// OBJ layer, BG4/3/2/1
+    tm: u8,
+    ts: u8,
+    /// `$212e`/`$212f` Enable window masking on main/sub screen
+    /// `---o4321`
+    tmw: u8,
+    tsw: u8,
+
+    /// `$2133` Screen Mode/Video Select
+    /// `se--poIi`
+    /// * `s`: "External Sync" (should always be 0)
+    /// * `e`: Allows enabling BG2 in mode 7
+    /// * `p`: Pseudo-Hires
+    /// * `o`: If set, 239 lines are rendered instead of 224. This changes the V-Blank timing.
+    /// * `I`: OBJ interlace
+    /// * `i`: Screen interlace. Doubles the effective screen height.
+    setini: u8,
 }
 
 impl Ppu {
@@ -146,8 +184,22 @@ impl Ppu {
             obsel: 0,
             oamaddl: 0,
             oamaddh: 0,
+            mosaic: 0,
+            bg1sc: 0,
+            bg2sc: 0,
+            bg3sc: 0,
+            bg4sc: 0,
+            bg12nba: 0,
+            bg34nba: 0,
             vmain: 0,
             vmaddr: 0,
+            wbglog: 0,
+            wobjlog: 0,
+            tm: 0,
+            ts: 0,
+            tmw: 0,
+            tsw: 0,
+            setini: 0,
         }
     }
 
@@ -165,11 +217,43 @@ impl Ppu {
             0x2101 => self.obsel = value,
             0x2102 => self.oamaddl = value,
             0x2103 => self.oamaddh = value,
+            0x2106 => self.mosaic = value,
+            0x2107 => self.bg1sc = value,
+            0x2108 => self.bg2sc = value,
+            0x2109 => self.bg3sc = value,
+            0x210a => self.bg4sc = value,
+            0x210b => self.bg12nba = value,
+            0x210c => self.bg34nba = value,
             0x2115 => self.vmain = value,
             0x2116 => self.vmaddr = (self.vmaddr & 0xff00) | value as u16,
             0x2117 => self.vmaddr = ((value as u16) << 8) | self.vmaddr & 0xff,
             0x2118 => self.vram_store_low(value),
             0x2119 => self.vram_store_high(value),
+            0x212a => self.wbglog = value,
+            0x212b => {
+                if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }
+                self.wobjlog = value;
+            }
+            0x212c => {
+                if value & 0xe0 != 0 { panic!("invalid value for $212c: ${:02X}", value) }
+                self.tm = value;
+            }
+            0x212d => {
+                if value & 0xe0 != 0 { panic!("invalid value for $212d: ${:02X}", value) }
+                self.ts = value;
+            }
+            0x212e => {
+                if value & 0xe0 != 0 { panic!("invalid value for $212e: ${:02X}", value) }
+                self.tmw = value;
+            }
+            0x212f => {
+                if value & 0xe0 != 0 { panic!("invalid value for $212f: ${:02X}", value) }
+                self.tsw = value;
+            }
+            0x2133 => {
+                if value != 0 { panic!("NYI: $2133 != 0") }
+                self.setini = value;
+            }
             _ => panic!("invalid or unimplemented PPU store: ${:02X} to ${:04X}", value, addr),
         }
     }
@@ -212,6 +296,32 @@ impl Ppu {
 
         (4, result)
     }
+}
+
+/// Unpacked OAM entry for internal use.
+struct OamEntry {
+    /// 0-511
+    tile: u16,
+    /// 0-511
+    x: u16,
+    y: u8,
+    /// 0-3
+    priority: u8,
+    /// 0-7
+    palette: u8,
+    hflip: bool,
+    vflip: bool,
+    size_toggle: bool,
+}
+
+/// Collected background settings
+struct BgSettings {
+    /// Mosaic pixel size. 1-16. 1 = Normal pixels.
+    mosaic: u8,
+    /// Tilemap address in VRAM
+    tilemap_addr: u16,
+    mirror_h: bool,
+    mirror_v: bool,
 }
 
 /// Private methods

@@ -869,7 +869,6 @@ impl Cpu {
         self.pushb(pc as u8);
 
         let (pbr, pc) = am.address(self);
-        debug!("JSL from ${:02X}{:04X} to ${:02X}{:04X}", self.pbr, self.pc, pbr, pc);
         self.pbr = pbr;
         self.pc = pc;
     }
