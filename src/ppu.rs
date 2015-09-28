@@ -105,8 +105,8 @@ pub struct Ppu {
     /// `$2115` Video Port Control (VRAM)
     /// `j---mmii`
     /// * `j`: Address increment mode
-    ///  * 0 = increment after writing $2118/reading $2139
-    ///  * 1 = increment after writing $2119/reading $213a
+    ///  * 0 = increment after writing `$2118`/reading `$2139`
+    ///  * 1 = increment after writing `$2119`/reading `$213a`
     /// * `m`: VRAM Address remapping
     ///  * 00 = None
     ///  * 01 = Remap addressing aaaaaaaaBBBccccc => aaaaaaaacccccBBB
@@ -165,13 +165,12 @@ impl Ppu {
             0x2101 => self.obsel = value,
             0x2102 => self.oamaddl = value,
             0x2103 => self.oamaddh = value,
-
             0x2115 => self.vmain = value,
             0x2116 => self.vmaddr = (self.vmaddr & 0xff00) | value as u16,
             0x2117 => self.vmaddr = ((value as u16) << 8) | self.vmaddr & 0xff,
             0x2118 => self.vram_store_low(value),
             0x2119 => self.vram_store_high(value),
-            _ => {},
+            _ => panic!("invalid or unimplemented PPU store: ${:02X} to ${:04X}", value, addr),
         }
     }
 

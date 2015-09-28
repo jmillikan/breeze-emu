@@ -11,9 +11,15 @@ use snes::Peripherals;
 /// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
 /// read access.
 const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
+    (0x00, 0xf045),
+    (0x00, 0x01f9),
+    (0x00, 0x01fa),
+    (0x00, 0x01fb),
 ];
 const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
-    (0x00, 0x1df5),
+    (0x00, 0x01f9),
+    (0x00, 0x01fa),
+    (0x00, 0x01fb),
 ];
 
 // Emulation mode vectors
@@ -118,7 +124,7 @@ impl Cpu {
     /// Load a byte from memory. Will change the cycle counter according to the memory speed.
     fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
         if MEM_BREAK_LOAD.iter().find(|&&(b, a)| bank == b && addr == a).is_some() {
-            debug!("MEM-BREAK: Breakpoint triggered on load from ${:02X}:{:04X} (${:02})",
+            debug!("MEM-BREAK: Breakpoint triggered on load from ${:02X}:{:04X} (${:02X})",
                 bank, addr, self.mem.load(bank, addr))
         }
 
@@ -155,8 +161,7 @@ impl Cpu {
     fn fetchb(&mut self) -> u8 {
         let (pbr, pc) = (self.pbr, self.pc);
         let b = self.loadb(pbr, pc);
-        self.pc = self.pc.wrapping_add(1);
-        if self.pc == 0 { warn!("pc overflow") }
+        self.pc += 1;
         b
     }
 
@@ -174,12 +179,10 @@ impl Cpu {
         if self.emulation {
             // stack must stay in 0x01xx
             assert_eq!(self.s & 0xff00, 0x0100);
-            let s = self.s as u8;
-            if s == 0 { warn!("stack overflow") }
-            self.s = (self.s & 0xff00) | s.wrapping_sub(1) as u16;
+            let s = self.s as u8 - 1;
+            self.s = (self.s & 0xff00) | s as u16;
         } else {
-            if self.s == 0 { warn!("stack overflow") }
-            self.s = self.s.wrapping_sub(1);
+            self.s -= 1;
         }
     }
 
@@ -194,12 +197,10 @@ impl Cpu {
         if self.emulation {
             // stack must stay in 0x01xx
             assert_eq!(self.s & 0xff00, 0x0100);
-            let s = self.s as u8;
-            if s == 0xff { warn!("stack underflow") }
-            self.s = (self.s & 0xff00) | s.wrapping_add(1) as u16;
+            let s = self.s as u8 + 1;
+            self.s = (self.s & 0xff00) | s as u16;
         } else {
-            if self.s == 0xffff { warn!("stack underflow") }
-            self.s = self.s.wrapping_add(1);
+            self.s += 1;
         }
 
         let s = self.s;
@@ -318,10 +319,12 @@ impl Cpu {
             0x7e => instr!(ror absolute_indexed_x),
             0x29 => instr!(and immediate_acc),
             0x2f => instr!(and absolute_long),
+            0x05 => instr!(ora direct),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
             0xe6 => instr!(inc direct),
             0x1a => instr!(ina),
+            0xe8 => instr!(inx),
             0xc8 => instr!(iny),
             0xce => instr!(dec absolute),
             0xca => instr!(dex),
@@ -338,6 +341,7 @@ impl Cpu {
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
+            0x8e => instr!(stx absolute),
             0x84 => instr!(sty direct),
             0x8c => instr!(sty absolute),
             0x64 => instr!(stz direct),
@@ -369,6 +373,7 @@ impl Cpu {
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x60 => instr!(rts),
+            0x6b => instr!(rtl),
             _ => {
                 instr!(ill);
                 panic!("illegal CPU opcode: ${:02X}", op);
@@ -450,6 +455,12 @@ impl Cpu {
 
 /// Opcode implementations
 impl Cpu {
+    /// Push Processor Status Register
+    fn php(&mut self) {
+        // Changes no flags
+        let p = self.p.0;
+        self.pushb(p);
+    }
     /// Pull Processor Status Register
     fn plp(&mut self) {
         let p = self.popb();
@@ -512,6 +523,20 @@ impl Cpu {
         } else {
             let val = am.loadw(self);
             let res = self.a & val;
+            self.a = self.p.set_nz(res);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// OR Accumulator with Memory
+    fn ora(&mut self, am: AddressingMode) {
+        if self.p.small_acc() {
+            let val = am.loadb(self);
+            let res = self.a as u8 | val;
+            self.p.set_nz_8(res);
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            let val = am.loadw(self);
+            let res = self.a | val;
             self.a = self.p.set_nz(res);
             self.cy += CPU_CYCLE;
         }
@@ -633,7 +658,9 @@ impl Cpu {
 
     /// Exchange B with A (B is the MSB of the accumulator, A is the LSB)
     fn xba(&mut self) {
-        // Changes N and Z (FIXME How exactly?)
+        // Changes N and Z: "The flags are changed based on the new value of the low byte, the A
+        // accumulator (that is, on the former value of the high byte, the B accumulator), even in
+        // sixteen-bit accumulator mode."
         let lo = self.a & 0xff;
         let hi = self.a >> 8;
         self.a = (lo << 8) | self.p.set_nz_8(hi as u8) as u16;
@@ -682,12 +709,22 @@ impl Cpu {
     }
     /// Increment accumulator
     fn ina(&mut self) {
-        // Timing does not depend on accumulator size.
+        // Changes N and Z. Timing does not depend on accumulator size.
         if self.p.small_acc() {
             let res = self.p.set_nz_8((self.a as u8).wrapping_add(1));
             self.a = (self.a & 0xff00) | res as u16;
         } else {
             self.a = self.p.set_nz(self.a.wrapping_add(1));
+        }
+    }
+    /// Increment Index Register X
+    fn inx(&mut self) {
+        // Changes N and Z. Timing does not depend on index register size.
+        if self.p.small_index() {
+            let res = self.p.set_nz_8((self.x as u8).wrapping_add(1));
+            self.x = (self.x & 0xff00) | res as u16;
+        } else {
+            self.x = self.p.set_nz(self.x.wrapping_add(1));
         }
     }
     /// Increment Index Register Y
@@ -804,21 +841,6 @@ impl Cpu {
         }
     }
 
-    /// Push Processor Status Register
-    fn php(&mut self) {
-        // Changes no flags
-        let p = self.p.0;
-        self.pushb(p);
-    }
-
-    /// Return from Subroutine (Short - Like JSR)
-    fn rts(&mut self) {
-        let pcl = self.popb() as u16;
-        let pch = self.popb() as u16;
-        let pc = (pch << 8) | pcl;
-        self.pc = pc + 1;   // +1 since the last byte of the JSR was saved
-    }
-
     /// Jump to Subroutine (with short address). Doesn't change PBR.
     ///
     /// "The address saved is the address of the last byte of the JSR instruction (the address of
@@ -836,7 +858,8 @@ impl Cpu {
 
         self.pc = am.address(self).1;
     }
-    /// Long jump to subroutine. Sets PBR to the bank returned by `am.address()`.
+    /// Long jump to subroutine. Additionally saves PBR on the stack and sets it to the bank
+    /// returned by `am.address()`.
     fn jsl(&mut self, am: AddressingMode) {
         // Changes no flags
         let pbr = self.pbr;
@@ -846,8 +869,27 @@ impl Cpu {
         self.pushb(pc as u8);
 
         let (pbr, pc) = am.address(self);
+        debug!("JSL from ${:02X}{:04X} to ${:02X}{:04X}", self.pbr, self.pc, pbr, pc);
         self.pbr = pbr;
         self.pc = pc;
+    }
+    /// Return from Subroutine (Short - Like JSR)
+    fn rts(&mut self) {
+        let pcl = self.popb() as u16;
+        let pch = self.popb() as u16;
+        let pc = (pch << 8) | pcl;
+        self.pc = pc + 1;   // +1 since the last byte of the JSR was saved
+    }
+    /// Return from Subroutine called with `jsl`.
+    ///
+    /// This also restores the PBR.
+    fn rtl(&mut self) {
+        let pcl = self.popb() as u16;
+        let pch = self.popb() as u16;
+        let pbr = self.popb();
+        let pc = (pch << 8) | pcl;
+        self.pbr = pbr;
+        self.pc = pc + 1;   // +1 since the last byte of the JSR was saved
     }
 
     fn cli(&mut self) { self.p.set_irq_disable(false) }
@@ -877,6 +919,7 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Load X register from memory
     fn ldx(&mut self, am: AddressingMode) {
         // Changes N and Z
         if self.p.small_index() {
