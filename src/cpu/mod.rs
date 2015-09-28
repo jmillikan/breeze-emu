@@ -341,10 +341,12 @@ impl Cpu {
             0x98 => instr!(tya),
             0xeb => instr!(xba),
             0x85 => instr!(sta direct),
+            0x97 => instr!(sta indirect_long_idx),
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
             0x9f => instr!(sta absolute_long_indexed_x),
+            0x86 => instr!(stx direct),
             0x8e => instr!(stx absolute),
             0x84 => instr!(sty direct),
             0x8c => instr!(sty absolute),
@@ -360,6 +362,7 @@ impl Cpu {
             0xaf => instr!(lda absolute_long),
             0xbd => instr!(lda absolute_indexed_x),
             0xb9 => instr!(lda absolute_indexed_y),
+            0xa6 => instr!(ldx direct),
             0xa2 => instr!(ldx immediate_index),
             0xa4 => instr!(ldy direct),
             0xa0 => instr!(ldy immediate_index),
@@ -375,6 +378,7 @@ impl Cpu {
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
+            0x30 => instr!(bmi rel),
             0x70 => instr!(bvs rel),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
@@ -805,6 +809,14 @@ impl Cpu {
     fn bpl(&mut self, am: AddressingMode) {
         let a = am.address(self);
         if !self.p.negative() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Branch if Minus/Negative (N = 1)
+    fn bmi(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if self.p.negative() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
