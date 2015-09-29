@@ -10,6 +10,7 @@ use std::fmt;
 pub enum AddressingMode {
     Immediate(u16),
     Immediate8(u8),
+
     /// "Absolute-a"
     /// Access absolute offset in the current data bank
     /// (DBR, <val>)
@@ -42,6 +43,9 @@ pub enum AddressingMode {
     /// "Direct Indexed with X-d,x"
     /// (0, D + <val> + X)
     DirectIndexedX(u8),
+    // "Direct Indexed with Y-d,y"
+    // (0, D + <val> + Y)
+
     /// "Program Counter Relative-r"
     /// Used for jumps
     /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
@@ -50,13 +54,18 @@ pub enum AddressingMode {
     // "Direct Indirect Indexed-(d),y" - Indirect-Y
     // (DBR, D + <val> + Y)  [D+<val> wraps]
 
+    /// "Direct Indirect-(d)"
+    /// addr := load2(0, D + <val>)
+    /// (DBR, addr)
+    Indirect(u8),
+
     /// "Direct Indirect Long-[d]"
-    /// (bank, addr) := load(D + <val>)
+    /// (bank, addr) := load3(0, D + <val>)
     /// (bank, addr)
     IndirectLong(u8),
 
-    /// "Direct Indirect Indexed Long/Long Indexed-[d],y"
-    /// (bank, addr) := load(D + <val>)
+    /// "Direct Indirect Long Indexed-[d],y" (or "Direct Indirect Indexed Long")
+    /// (bank, addr) := load3(0, D + <val>)
     /// (bank, addr + Y)
     IndirectLongIdx(u8),
 }
@@ -138,6 +147,13 @@ impl AddressingMode {
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
             }
+            Indirect(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                let addr_ptr = cpu.d.wrapping_add(offset as u16);
+                let lo = cpu.loadb(0, addr_ptr) as u16;
+                let hi = cpu.loadb(0, addr_ptr + 1) as u16;
+                (cpu.dbr, (hi << 8) | lo)
+            }
             IndirectLong(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
@@ -187,6 +203,7 @@ impl fmt::Display for AddressingMode {
             Rel(rel) =>                    write!(f, "{:+}", rel),
             Direct(offset) =>              write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
+            Indirect(offset) =>            write!(f, "(${:02X})", offset),
             IndirectLong(offset) =>        write!(f, "[${:02X}]", offset),
             IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),
         }

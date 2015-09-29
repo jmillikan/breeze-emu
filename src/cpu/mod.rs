@@ -320,6 +320,7 @@ impl Cpu {
             0x05 => instr!(ora direct),
             0x07 => instr!(ora indirect_long),
             0x1d => instr!(ora absolute_indexed_x),
+            0x65 => instr!(adc direct),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
             0xe6 => instr!(inc direct),
@@ -336,6 +337,7 @@ impl Cpu {
             0x1b => instr!(tcs),
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
+            0x8a => instr!(txa),
             0x9b => instr!(txy),
             0x98 => instr!(tya),
             0xbb => instr!(tyx),
@@ -345,6 +347,7 @@ impl Cpu {
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
+            0x99 => instr!(sta absolute_indexed_y),
             0x9f => instr!(sta absolute_long_indexed_x),
             0x86 => instr!(stx direct),
             0x8e => instr!(stx absolute),
@@ -356,6 +359,7 @@ impl Cpu {
             0x9e => instr!(stz absolute_indexed_x),
             0xa5 => instr!(lda direct),
             0xa9 => instr!(lda immediate_acc),
+            0xb2 => instr!(lda indirect),
             0xa7 => instr!(lda indirect_long),
             0xb7 => instr!(lda indirect_long_idx),
             0xad => instr!(lda absolute),
@@ -725,10 +729,23 @@ impl Cpu {
             self.y = self.p.set_nz(self.a);
         }
     }
+    /// Transfer X to A
+    fn txa(&mut self) {
+        // Changes N and Z
+        if self.p.small_acc() {
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(self.x as u8) as u16;
+        } else {
+            self.a = self.p.set_nz(self.x);
+        }
+    }
     /// Transfer X to Y
     fn txy(&mut self) {
-        // We can ignore the `X` bit, since the upper 8 bits are 0 anyway if `X` is set
-        self.y = self.x;
+        // Changes N and Z
+        if self.p.small_index() {
+            self.y = self.p.set_nz_8(self.x as u8) as u16;
+        } else {
+            self.y = self.p.set_nz(self.x);
+        }
     }
     /// Transfer Index Register Y to Accumulator
     fn tya(&mut self) {
@@ -1100,6 +1117,9 @@ impl Cpu {
 
 /// Addressing mode construction
 impl Cpu {
+    fn indirect(&mut self) -> AddressingMode {
+        AddressingMode::Indirect(self.fetchb())
+    }
     fn indirect_long(&mut self) -> AddressingMode {
         AddressingMode::IndirectLong(self.fetchb())
     }
