@@ -173,7 +173,7 @@ impl Rom {
                     }
                     _ => {
                         // 0x40 ... 0x6f | 0x7e ... 0xfd
-                        panic!("attempted to access unmapped address: {:02X}:{:04X}", bank, addr);
+                        panic!("attempted to access unmapped address: ${:02X}:{:04X}", bank, addr);
                     }
                 }
             },
@@ -187,11 +187,12 @@ impl Rom {
                     let a = 0x3f8000 + addr as u32 - 0x8000;
                     self.rom.get_mut(a as usize).unwrap_or_else(|| out_of_rom_bounds(bank, addr, a))
                 }
-                _ => {
+                0x80 ... 0xfd | 0x00 ... 0x7d => {
                     // `& !0x80` because 0x80-0xFD mirrors 0x00-0x7D
                     let a = (bank as u32 & !0x80) * 0x8000 + addr as u32 - 0x8000;
                     self.rom.get_mut(a as usize).unwrap_or_else(|| out_of_rom_bounds(bank, addr, a))
                 }
+                _ => panic!("attempted to access unmapped address: ${:02X}:{:04X}", bank, addr)
             },
             _ => unreachable!()
         }

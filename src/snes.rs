@@ -89,10 +89,8 @@ impl Peripherals {
                     // H: Enable IRQ on H-Counter
                     // V: Enable IRQ on V-Counter
                     // J: Enable Auto-Joypad-Read
-                    if value & 0x80 != 0 { panic!("NYI: NMI") }
                     if value & 0x20 != 0 { panic!("NYI: IRQ-H") }
                     if value & 0x10 != 0 { panic!("NYI: IRQ-V") }
-                    if value & 0x01 != 0 { panic!("NYI: Auto-Joypad-Read") }
                 }
                 // MDMAEN - Party enable
                 0x420b => self.cy += do_dma(self, value),
@@ -132,7 +130,7 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 31_210_000;
+        const CY_LIMIT: u64 = 24_435_000;
         /// Start tracing at this master cycle (0 to trace everything)
         const TRACE_START: u64 = CY_LIMIT - 7_000;
 

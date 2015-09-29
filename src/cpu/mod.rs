@@ -11,8 +11,11 @@ use snes::Peripherals;
 /// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
 /// read access.
 const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
+    (0x7f, 0x8000),
 ];
 const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
+    //(0x00, 0x1ff),
+    //(0x7f, 0x8000),
 ];
 
 // Emulation mode vectors
@@ -224,7 +227,7 @@ impl Cpu {
         self.emulation = value;
     }
 
-    fn trace_op(&self, pc: u16, op: &str, am: Option<&AddressingMode>) {
+    fn trace_op(&self, pc: u16, raw: u8, op: &str, am: Option<&AddressingMode>) {
         use log::LogLevel::Trace;
         if !log_enabled!(Trace) || !self.trace { return }
 
@@ -232,9 +235,10 @@ impl Cpu {
             Some(am) => format!("{} {}", op, am),
             None => format!("{}", op),
         };
-        trace!("${:02X}:{:04X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} emu:{} {}",
+        trace!("${:02X}:{:04X} {:02X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} emu:{} {}",
             self.pbr,
             pc,
+            raw,
             opstr,
             self.a,
             self.x,
@@ -270,24 +274,23 @@ impl Cpu {
         ];
 
         let pc = self.pc;
-
-        macro_rules! instr {
-            ( $name:ident ) => {{
-                self.trace_op(pc, stringify!($name), None);
-                self.$name()
-            }};
-            ( $name:ident $am:ident ) => {{
-                let am = self.$am();
-                self.trace_op(pc, stringify!($name), Some(&am));
-                self.$name(am)
-            }};
-        }
-
         self.cy = 0;
         let op = self.fetchb();
         self.cy += CYCLE_TABLE[op as usize] * CPU_CYCLE + 4;
         // FIXME: The +4 is a timing correction. I'm not sure what causes the inaccuracy, but I
         // suspect the addressing mode / memory access timing is a bit off.
+
+        macro_rules! instr {
+            ( $name:ident ) => {{
+                self.trace_op(pc, op, stringify!($name), None);
+                self.$name()
+            }};
+            ( $name:ident $am:ident ) => {{
+                let am = self.$am();
+                self.trace_op(pc, op, stringify!($name), Some(&am));
+                self.$name(am)
+            }};
+        }
 
         match op {
             // Stack operations
@@ -317,6 +320,7 @@ impl Cpu {
             0x25 => instr!(and direct),
             0x29 => instr!(and immediate_acc),
             0x2f => instr!(and absolute_long),
+            0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
             0x07 => instr!(ora indirect_long),
             0x1d => instr!(ora absolute_indexed_x),
@@ -422,7 +426,8 @@ impl Cpu {
     }
 
     /// Execute an IRQ sequence. This pushes PBR, PC and the processor status register P on the
-    /// stack, loads the handler address from the given vector, and jumps to the handler.
+    /// stack, sets the PBR to 0, loads the handler address from the given vector, and jumps to the
+    /// handler.
     fn interrupt(&mut self, vector: u16) {
         let pbr = self.pbr;
         self.pushb(pbr);
@@ -431,6 +436,7 @@ impl Cpu {
         let p = self.p.0;
         self.pushb(p);
 
+        self.pbr = 0;
         let handler = self.loadw(0, vector);
         self.pc = handler;
     }
@@ -618,7 +624,7 @@ impl Cpu {
     fn sbc(&mut self, am: AddressingMode) {
         // Changes N, Z, C and V
         // FIXME Set V flag!
-        let c = if self.p.carry() { 1 } else { 0 };
+        let c = if self.p.carry() { 0 } else { 1 };
         if self.p.small_acc() {
             let a = self.a as u8;
             let v = am.loadb(self);
@@ -1148,6 +1154,9 @@ impl Cpu {
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
+    }
+    fn stack_rel(&mut self) -> AddressingMode {
+        AddressingMode::StackRel(self.fetchb())
     }
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())

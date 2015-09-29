@@ -68,6 +68,10 @@ pub enum AddressingMode {
     /// (bank, addr) := load3(0, D + <val>)
     /// (bank, addr + Y)
     IndirectLongIdx(u8),
+
+    /// "Stack Relative-d,s"
+    /// (0, SP + <val>)
+    StackRel(u8),
 }
 
 impl AddressingMode {
@@ -181,6 +185,10 @@ impl AddressingMode {
                 let addr = eff_addr as u16;
                 (bank, addr)
             }
+            StackRel(offset) => {
+                let addr = cpu.s + offset as u16;
+                (0, addr)
+            }
             Immediate(_) | Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
                     immediate?)")
@@ -206,6 +214,7 @@ impl fmt::Display for AddressingMode {
             Indirect(offset) =>            write!(f, "(${:02X})", offset),
             IndirectLong(offset) =>        write!(f, "[${:02X}]", offset),
             IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),
+            StackRel(offset) =>            write!(f, "${:02X},s", offset),
         }
     }
 }

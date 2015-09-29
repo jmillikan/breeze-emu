@@ -165,10 +165,10 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
                 0x2100 + chan.b_addr as u16
             };
 
-            trace!("DMA on channel {} with {} bytes in mode {:?}, inc {} ({})",
-                i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"});
-            trace!("DMA from ${:02X}:{:04X} to ${:02X}:{:04X}",
-                src_bank, src_addr, dest_bank, dest_addr);
+            trace!("DMA on channel {} with {} bytes in mode {:?}, inc {} ({}), \
+                from ${:02X}:{:04X} to ${:02X}:{:04X}",
+                i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"}, src_bank,
+                src_addr, dest_bank, dest_addr);
 
             let mut read_byte = |p: &mut Peripherals| {
                 let byte = p.load(src_bank, src_addr);
@@ -245,6 +245,8 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
             p.dma[i].dma_size = 0;
         }
     }
+
+    trace!("DMA completed after {} master clock cycles", dma_cy);
 
     dma_cy
 }
