@@ -314,9 +314,12 @@ impl Cpu {
             0x0a => instr!(asl_a),
             0x2a => instr!(rol_a),
             0x7e => instr!(ror absolute_indexed_x),
+            0x25 => instr!(and direct),
             0x29 => instr!(and immediate_acc),
             0x2f => instr!(and absolute_long),
             0x05 => instr!(ora direct),
+            0x07 => instr!(ora indirect_long),
+            0x1d => instr!(ora absolute_indexed_x),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
             0xe6 => instr!(inc direct),
@@ -326,6 +329,7 @@ impl Cpu {
             0xc6 => instr!(dec direct),
             0xce => instr!(dec absolute),
             0xca => instr!(dex),
+            0x88 => instr!(dey),
 
             // Register and memory transfers
             0x5b => instr!(tcd),
@@ -360,6 +364,7 @@ impl Cpu {
             0xb9 => instr!(lda absolute_indexed_y),
             0xa6 => instr!(ldx direct),
             0xa2 => instr!(ldx immediate_index),
+            0xae => instr!(ldx absolute),
             0xa4 => instr!(ldy direct),
             0xa0 => instr!(ldy immediate_index),
             0xac => instr!(ldy absolute),
@@ -377,6 +382,7 @@ impl Cpu {
             0x10 => instr!(bpl rel),
             0x30 => instr!(bmi rel),
             0x70 => instr!(bvs rel),
+            0x90 => instr!(bcc rel),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x60 => instr!(rts),
@@ -806,6 +812,16 @@ impl Cpu {
             self.x = self.p.set_nz(self.x.wrapping_sub(1));
         }
     }
+    /// Decrement Y
+    fn dey(&mut self) {
+        // Changes N and Z. Timing does not depend on index register size.
+        if self.p.small_index() {
+            let res = self.p.set_nz_8((self.y as u8).wrapping_sub(1));
+            self.y = (self.y & 0xff00) | res as u16;
+        } else {
+            self.y = self.p.set_nz(self.y.wrapping_sub(1));
+        }
+    }
 
     /// Branch always
     fn bra(&mut self, am: AddressingMode) {
@@ -832,6 +848,14 @@ impl Cpu {
     fn bvs(&mut self, am: AddressingMode) {
         let a = am.address(self);
         if self.p.overflow() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Branch if carry clear
+    fn bcc(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if self.p.carry() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
