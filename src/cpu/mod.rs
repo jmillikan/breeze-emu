@@ -324,6 +324,7 @@ impl Cpu {
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
             0xe6 => instr!(inc direct),
+            0xee => instr!(inc absolute),
             0x1a => instr!(ina),
             0xe8 => instr!(inx),
             0xc8 => instr!(iny),

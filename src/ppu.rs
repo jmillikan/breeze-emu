@@ -203,6 +203,13 @@ pub struct Ppu {
     tmw: u8,
     tsw: u8,
 
+    /// `$2131` Color math
+    /// `shbo4321`
+    /// * `s`: 0 = Add, 1 = Subtract
+    /// * `h`: Enable half-color math (the result of color math is divided by 2, in most cases)
+    /// * `bo4321`: Enable color math on **B**ackdrop, **O**BJ, BG4/3/2/1
+    cgadsub: u8,
+
     /// `$2133` Screen Mode/Video Select
     /// `se--poIi`
     /// * `s`: "External Sync" (should always be 0)
@@ -246,7 +253,7 @@ impl Ppu {
             0x211a => self.m7sel = value,
             0x2121 => {
                 self.cgadd = value;
-                self.cg_low_buf = None;
+                self.cg_low_buf = None; // < FIXME: Is this correct?
             }
             0x2122 => match self.cg_low_buf {
                 None => self.cg_low_buf = Some(value),
@@ -278,6 +285,7 @@ impl Ppu {
                 if value & 0xe0 != 0 { panic!("invalid value for $212f: ${:02X}", value) }
                 self.tsw = value;
             }
+            0x2131 => self.cgadsub = value,
             0x2133 => {
                 if value != 0 { panic!("NYI: $2133 != 0") }
                 self.setini = value;
