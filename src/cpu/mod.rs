@@ -300,8 +300,10 @@ impl Cpu {
             0x08 => instr!(php),
             0x28 => instr!(plp),
             0x48 => instr!(pha),
-            0x5a => instr!(phy),
             0x68 => instr!(pla),
+            0xda => instr!(phx),
+            0xfa => instr!(plx),
+            0x5a => instr!(phy),
             0x7a => instr!(ply),
 
             // Processor status
@@ -383,6 +385,7 @@ impl Cpu {
             0xcd => instr!(cmp absolute),
             0xe0 => instr!(cpx immediate_index),
             0xc0 => instr!(cpy immediate_index),
+            0xcc => instr!(cpy absolute),
             0x80 => instr!(bra rel),
             0xdc => instr!(bra indirect_long),
             0x4c => instr!(bra absolute),
@@ -530,6 +533,18 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Push Index Register X
+    fn phx(&mut self) {
+        if self.p.small_index() {
+            let val = self.x as u8;
+            self.pushb(val);
+        } else {
+            let val = self.x;
+            self.pushw(val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Pop Index Register X
     fn plx(&mut self) {
         // Changes N and Z
         if self.p.small_index() {

@@ -10,10 +10,11 @@ use std::io::Read;
 use rom::Rom;
 use snes::Snes;
 
+#[macro_use] mod byte_array;
+#[macro_use] mod log_util;
 mod apu;
 mod cpu;
 mod dma;
-#[macro_use] mod log_util;
 mod ppu;
 mod rom;
 mod snes;

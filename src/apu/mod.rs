@@ -21,6 +21,8 @@ pub type Apu = Spc700;
 
 
 const RAM_SIZE: usize = 65536;
+byte_array!(Ram[RAM_SIZE] with u16 indexing please);
+
 const RESET_VEC: u16 = 0xFFFE;
 
 /// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
@@ -30,7 +32,7 @@ const RESET_VEC: u16 = 0xFFFE;
 pub struct Spc700 {
     // 64KB of RAM
     // (this is not the address space, even though both are 64KB!)
-    mem: [u8; RAM_SIZE],
+    mem: Ram,
 
     /// $f2 - DSP address selection ($f3 - DSP data)
     reg_dsp_addr: u8,
@@ -54,18 +56,17 @@ pub struct Spc700 {
     pub trace: bool,
 }
 
-// Public interface
-impl Spc700 {
-    pub fn new() -> Spc700 {
+impl Default for Spc700 {
+    fn default() -> Self {
         const IPL_START: usize = RAM_SIZE - 64;
 
-        let mut mem = [0; RAM_SIZE as usize];
+        let mut mem = Ram::default();
         for i in 0..64 {
-            mem[IPL_START as usize + i] = IPL_ROM[i];
+            mem[IPL_START as u16 + i] = IPL_ROM[i as usize];
         }
 
-        let pcl = mem[RESET_VEC as usize] as u16;
-        let pch = mem[RESET_VEC as usize + 1] as u16;
+        let pcl = mem[RESET_VEC] as u16;
+        let pch = mem[RESET_VEC + 1] as u16;
         let pc = (pch << 8) | pcl;
 
         Spc700 {
@@ -79,11 +80,16 @@ impl Spc700 {
             y: 0,
             sp: 0,
             pc: pc,
-            psw: StatusReg(0),  // FIXME is 0 correct`?
+            psw: StatusReg(0),  // FIXME is 0 correct?
             cy: 0,
             trace: false,
         }
     }
+}
+
+// Public interface
+impl Spc700 {
+    pub fn new() -> Spc700 { Spc700::default() }
 
     /// Store a byte in an IO port (0-3)
     ///
@@ -98,7 +104,7 @@ impl Spc700 {
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
     pub fn read_port(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
-        let val = self.mem[0xf4 + port as usize];
+        let val = self.mem[0xf4 + port as u16];
         val
     }
 }
@@ -164,7 +170,7 @@ impl Spc700 {
                 val
             }
             // NB: $f8 and $f9 work like regular RAM
-            _ => self.mem[addr as usize],
+            _ => self.mem[addr],
         }
     }
 
@@ -197,7 +203,7 @@ impl Spc700 {
             0xfc => self.timers[2].div = val,
             0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:04X}", addr),
             // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
-            _ => self.mem[addr as usize] = val,
+            _ => self.mem[addr] = val,
         }
     }
 
@@ -223,7 +229,7 @@ impl Spc700 {
     fn trace_op(&self, pc: u16, opstr: &str) {
         trace!("{:04X}  {:02X} {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
-            self.mem[pc as usize],
+            self.mem[pc],
             opstr,
             self.a,
             self.x,

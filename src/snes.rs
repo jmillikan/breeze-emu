@@ -7,6 +7,7 @@ use ppu::Ppu;
 use rom::Rom;
 
 const WRAM_SIZE: usize = 128 * 1024;
+byte_array!(Wram[WRAM_SIZE]);
 
 /// Contains everything connected to the CPU via one of the two address buses. All memory accesses
 /// will be directed through this (the CPU already takes access time into account).
@@ -15,20 +16,25 @@ pub struct Peripherals {
     ppu: Ppu,
     rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
-    wram: [u8; WRAM_SIZE],
+    wram: Wram,
 
     pub dma: [DmaChannel; 8],
-    /// $420c - HDMAEN: HDMA enable flags
+    /// `$420c` - HDMAEN: HDMA enable flags
     /// (Note that general DMA doesn't have a register here, since all transactions are started
     /// immediately and the register can't be read)
     hdmaen: u8,
-    /// $4200 - NMITIMEN: Interrupt enable flags
+    /// `$4200` - NMITIMEN: Interrupt enable flags
     /// `n-xy---a`
     /// * `n`: Enable NMI on V-Blank
     /// * `x`: Enable IRQ on H-Counter match
     /// * `y`: Enable IRQ on V-Counter match
     /// * `a`: Enable auto-joypad read
-    interrupt_enable: u8,
+    nmien: u8,
+    /// `$4210` NMI flag and 5A22 Version
+    /// `x---vvvv`
+    /// * `n`: `self.nmi`
+    /// * `v`: Version
+    nmi: bool,
 
     /// Additional cycles spent doing IO (in master clock cycles). This is reset before each CPU
     /// instruction and added to the cycle count returned by the CPU.
@@ -41,10 +47,11 @@ impl Peripherals {
             rom: rom,
             apu: Apu::new(),
             ppu: Ppu::new(),
-            wram: [0; WRAM_SIZE],
+            wram: Wram::default(),
             dma: [DmaChannel::new(); 8],
             hdmaen: 0x00,
-            interrupt_enable: 0x00,
+            nmien: 0x00,
+            nmi: false,
             cy: 0,
         }
     }
@@ -59,6 +66,11 @@ impl Peripherals {
                 0x2138 ... 0x213f => self.ppu.load(addr),
                 // APU IO registers
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
+                0x4210 => {
+                    const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
+                    let nmi = if self.nmi {1} else {0} << 7;
+                    nmi | CPU_VERSION
+                }
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
                 0x8000 ... 0xffff => self.rom.loadb(bank, addr),
@@ -91,6 +103,9 @@ impl Peripherals {
                     // J: Enable Auto-Joypad-Read
                     if value & 0x20 != 0 { panic!("NYI: IRQ-H") }
                     if value & 0x10 != 0 { panic!("NYI: IRQ-V") }
+                    // Check useless bits
+                    if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
+                    self.nmien = value;
                 }
                 // MDMAEN - Party enable
                 0x420b => self.cy += do_dma(self, value),
@@ -114,7 +129,7 @@ impl Peripherals {
         }
     }
 
-    fn nmi_enabled(&self) -> bool { self.interrupt_enable & 0x80 != 0 }
+    fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
 }
 
 pub struct Snes {
@@ -130,7 +145,7 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 24_435_000;
+        const CY_LIMIT: u64 = 35_000_000;
         /// Start tracing at this master cycle (0 to trace everything)
         const TRACE_START: u64 = CY_LIMIT - 7_000;
 
@@ -182,12 +197,17 @@ impl Snes {
                 if result.hblank {
                     // TODO Do HDMA
                 }
-                if result.vblank && self.cpu.mem.nmi_enabled() {
-                    trace!("V-Blank NMI triggered!");
-                    self.cpu.trigger_nmi();
-                    // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU too
-                    // many cycles.
-                    break;
+                if result.vblank {
+                    // TODO autoread joypads
+                    if self.cpu.mem.nmi_enabled() {
+                        trace!("V-Blank NMI triggered! Trace started!");
+                        self.cpu.mem.nmi = true;
+                        self.cpu.trigger_nmi();
+                        self.cpu.trace = true;
+                        // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU
+                        // too many cycles.
+                        break;
+                    }
                 }
             }
         }

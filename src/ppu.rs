@@ -2,8 +2,6 @@
 //!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
-use std::ops::{Deref, DerefMut};
-
 /// Physical screen width
 pub const SCREEN_WIDTH: u16 = 256;
 /// Physical screen height
@@ -22,29 +20,12 @@ pub struct UpdateResult {
     pub new_frame: bool,
 }
 
-/// Create a newtype wrapper for `[u8; $size]` that implements `Deref`, `DerefMut` and `Default`.
-macro_rules! byte_array {
-    ( $name:ident [$size:expr] ) => {
-        struct $name([u8; $size]);
-        impl Default for $name {
-            fn default() -> Self { $name([0; $size]) }
-        }
-        impl Deref for $name {
-            type Target = [u8; $size];
-            fn deref(&self) -> &[u8; $size] { &self.0 }
-        }
-        impl DerefMut for $name {
-            fn deref_mut(&mut self) -> &mut [u8; $size] { &mut self.0 }
-        }
-    };
-}
-
 const OAM_SIZE: usize = 544;
 const CGRAM_SIZE: usize = 512;
 const VRAM_SIZE: usize = 64 * 1024;
-byte_array!(Oam[OAM_SIZE]);
-byte_array!(Cgram[CGRAM_SIZE]);
-byte_array!(Vram[VRAM_SIZE]);
+byte_array!(Oam[OAM_SIZE] with u16 indexing please);
+byte_array!(Cgram[CGRAM_SIZE] with u16 indexing please);
+byte_array!(Vram[VRAM_SIZE] with u16 indexing please);
 
 #[derive(Default)]
 pub struct Ppu {
@@ -121,13 +102,17 @@ pub struct Ppu {
     /// * `bbb`: Address select of first sprite/name table
     obsel: u8,
 
-    /// `$2102` Low byte of current OAM word address
+    /// `$2102` Low byte of current OAM word address ("reload value")
     oamaddl: u8,
     /// `$2103` High bit (bit 9) of OAM word address and priority rotation bit
     /// `p------b`
     /// * `p`: If set, give priority to sprite `(OAMAddr&0xFE)>>1` (internal OAM address)
-    /// * `b`: High bit of OAM word address
+    /// * `b`: High bit of OAM word address ("reload value")
     oamaddh: u8,
+    /// Internal OAM address register (10 bit)
+    oamaddr: u16,
+    /// Byte written to the LSB of the current OAM address
+    oam_lsb: u8,
 
     /// `$2106` Mosaic filter
     /// `xxxx4321`
@@ -236,8 +221,15 @@ impl Ppu {
         match addr {
             0x2100 => self.inidisp = value,
             0x2101 => self.obsel = value,
-            0x2102 => self.oamaddl = value,
-            0x2103 => self.oamaddh = value,
+            0x2102 => {
+                self.oamaddl = value;
+                self.update_oam_addr();
+            }
+            0x2103 => {
+                self.oamaddh = value;
+                self.update_oam_addr();
+            }
+            0x2104 => self.oam_store(value),
             0x2106 => self.mosaic = value,
             0x2107 => self.bg1sc = value,
             0x2108 => self.bg2sc = value,
@@ -258,8 +250,8 @@ impl Ppu {
             0x2122 => match self.cg_low_buf {
                 None => self.cg_low_buf = Some(value),
                 Some(lo) => {
-                    self.cgram[self.cgadd as usize * 2] = lo;
-                    self.cgram[self.cgadd as usize * 2 + 1] = value;
+                    self.cgram[self.cgadd as u16 * 2] = lo;
+                    self.cgram[self.cgadd as u16 * 2 + 1] = value;
                     self.cg_low_buf = None;
                     self.cgadd = self.cgadd.wrapping_add(1);
                 }
@@ -383,6 +375,30 @@ impl Ppu {
         }
     }
 
+    /// Update the internal OAM address register after a write to `$2102` or `$2103`
+    fn update_oam_addr(&mut self) {
+        self.oamaddr = (((self.oamaddh as u16 & 0x01) << 8) | self.oamaddl as u16) << 1;
+    }
+    fn oam_store(&mut self, val: u8) {
+        if self.oamaddr < 0x200 {
+            // Write to the first 512 Bytes
+            if self.oamaddr & 0x01 == 0 {
+                // Even address
+                self.oam_lsb = val;
+            } else {
+                // Odd address
+                // Address points to the MSB (=`val`) of the word we want to update
+                self.oam[self.oamaddr - 1] = self.oam_lsb;
+                self.oam[self.oamaddr] = val;
+            }
+        } else {
+            // Write to 512-544
+            self.oam[self.oamaddr] = val;
+        }
+
+        self.oamaddr = (self.oamaddr + 1) & 0x3f;   // reduce to 10 bits
+    }
+
     /// Get the value to increment the VRAM word address by
     fn vram_addr_increment(&self) -> u16 {
         match self.vmain & 0b11 {
@@ -410,18 +426,19 @@ impl Ppu {
     /// accordingly.
     fn vram_store_low(&mut self, data: u8) {
         let inc = if self.vmain & 0x80 != 0 { 0 } else { self.vram_addr_increment() };
-        self.vram[self.vmaddr as usize * 2] = data;
+        self.vram[self.vmaddr * 2] = data;
         self.vmaddr += inc;
     }
     /// Store to `$2119`. This writes the Byte to the current VRAM word address + 1 and increments
     /// it accordingly.
     fn vram_store_high(&mut self, data: u8) {
         let inc = if self.vmain & 0x80 != 0 { self.vram_addr_increment() } else { 0 };
-        self.vram[self.vmaddr as usize * 2 + 1] = data;
+        self.vram[self.vmaddr * 2 + 1] = data;
         self.vmaddr += inc;
     }
 
     /// Renders the current pixel. If in H/V/F-Blank, this does nothing.
     fn render_pixel(&mut self) {
+        // TODO
     }
 }
