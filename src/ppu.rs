@@ -2,6 +2,8 @@
 //!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
+use std::ops::{Deref, DerefMut};
+
 /// Physical screen width
 pub const SCREEN_WIDTH: u16 = 256;
 /// Physical screen height
@@ -20,6 +22,31 @@ pub struct UpdateResult {
     pub new_frame: bool,
 }
 
+/// Create a newtype wrapper for `[u8; $size]` that implements `Deref`, `DerefMut` and `Default`.
+macro_rules! byte_array {
+    ( $name:ident [$size:expr] ) => {
+        struct $name([u8; $size]);
+        impl Default for $name {
+            fn default() -> Self { $name([0; $size]) }
+        }
+        impl Deref for $name {
+            type Target = [u8; $size];
+            fn deref(&self) -> &[u8; $size] { &self.0 }
+        }
+        impl DerefMut for $name {
+            fn deref_mut(&mut self) -> &mut [u8; $size] { &mut self.0 }
+        }
+    };
+}
+
+const OAM_SIZE: usize = 544;
+const CGRAM_SIZE: usize = 512;
+const VRAM_SIZE: usize = 64 * 1024;
+byte_array!(Oam[OAM_SIZE]);
+byte_array!(Cgram[CGRAM_SIZE]);
+byte_array!(Vram[VRAM_SIZE]);
+
+#[derive(Default)]
 pub struct Ppu {
     /// Object Attribute Memory
     ///
@@ -36,7 +63,7 @@ pub struct Ppu {
     /// Layout of a byte in the last 32 Bytes of OAM:
     /// `xsxsxsxs` - **S**ize toggle bit and most significant bit of **X** coordinate
     /// The low bits contain the information for sprites with low IDs.
-    oam: [u8; 544],
+    oam: Oam,
 
     /// CGRAM - Stores the color palette
     ///
@@ -45,7 +72,7 @@ pub struct Ppu {
     /// `?bbbbbgg` `gggrrrrr` (the `?`-bit is ignored)
     ///
     /// FIXME LSB/MSB?
-    cgram: [u8; 512],
+    cgram: Cgram,
 
     /// VRAM - Stores background maps and tile/character data
     ///
@@ -56,7 +83,7 @@ pub struct Ppu {
     /// starting number
     ///
     /// Character data locations are set with the registers `$210B` (BG1/2) and `$210C` (BG3/4).
-    vram: [u8; 64 * 1024],
+    vram: Vram,
 
     /// Scanline counter
     ///
@@ -145,6 +172,14 @@ pub struct Ppu {
     /// * `y`: Vertical mirroring
     m7sel: u8,
 
+    /// `$2121` CGRAM word address (=color index)
+    ///
+    /// Automatically incremented after two writes to `$2122`.
+    cgadd: u8,
+    /// Store the low byte to write to the current CGRAM position after the high byte is written by
+    /// the CPU (writes are always done in pairs - like the low 512 bytes of OAM).
+    cg_low_buf: Option<u8>,
+
     /// `$212a` BG Window mask logic
     /// `44332211`
     ///
@@ -180,36 +215,7 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new() -> Ppu {
-        Ppu {
-            oam: [0; 544],
-            cgram: [0; 512],
-            vram: [0; 64 * 1024],
-            scanline: 0,
-            x: 0,
-            inidisp: 0x80,  // F-Blank on by default
-            obsel: 0,
-            oamaddl: 0,
-            oamaddh: 0,
-            mosaic: 0,
-            bg1sc: 0,
-            bg2sc: 0,
-            bg3sc: 0,
-            bg4sc: 0,
-            bg12nba: 0,
-            bg34nba: 0,
-            vmain: 0,
-            vmaddr: 0,
-            m7sel: 0,
-            wbglog: 0,
-            wobjlog: 0,
-            tm: 0,
-            ts: 0,
-            tmw: 0,
-            tsw: 0,
-            setini: 0,
-        }
-    }
+    pub fn new() -> Ppu { Ppu::default() }
 
     /// Load a PPU register (addresses `$2134` to `$213f`)
     pub fn load(&mut self, addr: u16) -> u8 {
@@ -238,6 +244,19 @@ impl Ppu {
             0x2118 => self.vram_store_low(value),
             0x2119 => self.vram_store_high(value),
             0x211a => self.m7sel = value,
+            0x2121 => {
+                self.cgadd = value;
+                self.cg_low_buf = None;
+            }
+            0x2122 => match self.cg_low_buf {
+                None => self.cg_low_buf = Some(value),
+                Some(lo) => {
+                    self.cgram[self.cgadd as usize * 2] = lo;
+                    self.cgram[self.cgadd as usize * 2 + 1] = value;
+                    self.cg_low_buf = None;
+                    self.cgadd = self.cgadd.wrapping_add(1);
+                }
+            },
             0x212a => self.wbglog = value,
             0x212b => {
                 if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }
