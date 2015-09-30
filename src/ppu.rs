@@ -165,6 +165,39 @@ pub struct Ppu {
     /// the CPU (writes are always done in pairs - like the low 512 bytes of OAM).
     cg_low_buf: Option<u8>,
 
+    /// `$2123` Window Mask Settings for BG1 and BG2
+    /// `ABCDabcd`
+    /// * `A`: Enable window 2 for BG2
+    /// * `B`: Invert window 2 for BG2
+    /// * `C`: Enable window 1 for BG2
+    /// * `D`: Invert window 1 for BG2
+    /// * `a`: Enable window 2 for BG1
+    /// * `b`: Invert window 2 for BG1
+    /// * `c`: Enable window 1 for BG1
+    /// * `d`: Invert window 1 for BG1
+    w12sel: u8,
+    /// `$2124` Window Mask Settings for BG3 and BG4
+    /// `ABCDabcd`
+    /// * `A`: Enable window 2 for BG4
+    /// * `B`: Invert window 2 for BG4
+    /// * `C`: Enable window 1 for BG4
+    /// * `D`: Invert window 1 for BG4
+    /// * `a`: Enable window 2 for BG3
+    /// * `b`: Invert window 2 for BG3
+    /// * `c`: Enable window 1 for BG3
+    /// * `d`: Invert window 1 for BG3
+    w34sel: u8,
+    /// `$2125` Window Mask Settings for OBJ and Color Window
+    /// `ABCDabcd`
+    /// * `A`: Enable window 2 for Color
+    /// * `B`: Invert window 2 for Color
+    /// * `C`: Enable window 1 for Color
+    /// * `D`: Invert window 1 for Color
+    /// * `a`: Enable window 2 for OBJ
+    /// * `b`: Invert window 2 for OBJ
+    /// * `c`: Enable window 1 for OBJ
+    /// * `d`: Invert window 1 for OBJ
+    wobjsel: u8,
     /// `$212a` BG Window mask logic
     /// `44332211`
     ///
@@ -180,14 +213,26 @@ pub struct Ppu {
     wobjlog: u8,
     /// `$212c`/`$212d` Enable layers on main/sub screen
     /// `---o4321`
-    /// OBJ layer, BG4/3/2/1
+    /// **O**BJ layer, BG**4**/**3**/**2**/**1**
     tm: u8,
     ts: u8,
     /// `$212e`/`$212f` Enable window masking on main/sub screen
     /// `---o4321`
+    /// **O**BJ layer, BG**4**/**3**/**2**/**1**
     tmw: u8,
     tsw: u8,
 
+    /// `$2130` Color Addition Select
+    /// `ccmm--sd`
+    /// * `cc`: Clip colors to black before math
+    ///  * `00`: Never
+    ///  * `01`: Outside Color Window
+    ///  * `10`: Inside Color Window
+    ///  * `11`: Always
+    /// * `mm`: Prevent color math (same meaning as `cc`)
+    /// * `s`: Add subscreen pixel instead of fixed color
+    /// * `d`: Direct color mode for 256-color BGs
+    cgwsel: u8,
     /// `$2131` Color math
     /// `shbo4321`
     /// * `s`: 0 = Add, 1 = Subtract
@@ -256,6 +301,9 @@ impl Ppu {
                     self.cgadd = self.cgadd.wrapping_add(1);
                 }
             },
+            0x2123 => self.w12sel = value,
+            0x2124 => self.w34sel = value,
+            0x2125 => self.wobjsel = value,
             0x212a => self.wbglog = value,
             0x212b => {
                 if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }
@@ -277,6 +325,7 @@ impl Ppu {
                 if value & 0xe0 != 0 { panic!("invalid value for $212f: ${:02X}", value) }
                 self.tsw = value;
             }
+            0x2130 => self.cgwsel = value,
             0x2131 => self.cgadsub = value,
             0x2133 => {
                 if value != 0 { panic!("NYI: $2133 != 0") }
