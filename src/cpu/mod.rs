@@ -388,9 +388,14 @@ impl Cpu {
 
             // Comparisons and control flow
             0xc9 => instr!(cmp immediate_acc),
+            0xc5 => instr!(cmp direct),
             0xcd => instr!(cmp absolute),
+            0xcf => instr!(cmp absolute_long),
             0xe0 => instr!(cpx immediate_index),
+            0xe4 => instr!(cpx direct),
+            0xec => instr!(cpx absolute),
             0xc0 => instr!(cpy immediate_index),
+            0xc4 => instr!(cpy direct),
             0xcc => instr!(cpy absolute),
             0x80 => instr!(bra rel),
             0xdc => instr!(bra indirect_long),
@@ -401,6 +406,7 @@ impl Cpu {
             0x30 => instr!(bmi rel),
             0x70 => instr!(bvs rel),
             0x90 => instr!(bcc rel),
+            0xb0 => instr!(bcs rel),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x60 => instr!(rts),
@@ -915,6 +921,14 @@ impl Cpu {
     fn bcc(&mut self, am: AddressingMode) {
         let a = am.address(self);
         if self.p.carry() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Branch if carry set
+    fn bcs(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if !self.p.carry() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }

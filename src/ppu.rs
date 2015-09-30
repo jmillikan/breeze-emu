@@ -246,6 +246,13 @@ pub struct Ppu {
     /// * `bo4321`: Enable color math on **B**ackdrop, **O**BJ, BG4/3/2/1
     cgadsub: u8,
 
+    /// `$2132` COLDATA: Fixed color data
+    /// Each write can set 0-3 color planes (RGB), so we store them separately, which makes things
+    /// easier.
+    coldata_r: u8,
+    coldata_g: u8,
+    coldata_b: u8,
+
     /// `$2133` Screen Mode/Video Select
     /// `se--poIi`
     /// * `s`: "External Sync" (should always be 0)
@@ -334,6 +341,12 @@ impl Ppu {
             }
             0x2130 => self.cgwsel = value,
             0x2131 => self.cgadsub = value,
+            0x2132 => {
+                let color = value & 0x1f;
+                if value & 0x80 != 0 { self.coldata_b = color; }
+                if value & 0x40 != 0 { self.coldata_g = color; }
+                if value & 0x20 != 0 { self.coldata_r = color; }
+            }
             0x2133 => {
                 if value != 0 { panic!("NYI: $2133 != 0") }
                 self.setini = value;
