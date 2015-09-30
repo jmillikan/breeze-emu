@@ -74,7 +74,7 @@ impl Peripherals {
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
                 0x8000 ... 0xffff => self.rom.loadb(bank, addr),
-                _ => panic!("invalid load from ${:02X}:{:04X}", bank, addr)
+                _ => panic!("invalid/unimplemented load from ${:02X}:{:04X}", bank, addr)
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize],
@@ -116,7 +116,6 @@ impl Peripherals {
                 }
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => {
-                    trace!("DMA CTRL: ${:02X} to ${:04X}", value, addr);
                     self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value);
                 }
                 0x8000 ... 0xffff => self.rom.storeb(bank, addr, value),

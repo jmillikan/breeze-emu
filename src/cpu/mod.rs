@@ -338,6 +338,7 @@ impl Cpu {
             0x1a => instr!(ina),
             0xe8 => instr!(inx),
             0xc8 => instr!(iny),
+            0x3a => instr!(dea),
             0xc6 => instr!(dec direct),
             0xce => instr!(dec absolute),
             0xca => instr!(dex),
@@ -852,6 +853,16 @@ impl Cpu {
             self.y = self.p.set_nz(self.y.wrapping_add(1));
         }
     }
+    /// Decrement Accumulator
+    fn dea(&mut self) {
+        // Changes N and Z. Timing does not depend on accumulator size.
+        if self.p.small_acc() {
+            let res = self.p.set_nz_8((self.a as u8).wrapping_sub(1));
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            self.a = self.p.set_nz(self.a.wrapping_sub(1));
+        }
+    }
     /// Decrement memory location
     fn dec(&mut self, am: AddressingMode) {
         let (bank, addr) = am.address(self);
@@ -920,7 +931,7 @@ impl Cpu {
     /// Branch if carry clear
     fn bcc(&mut self, am: AddressingMode) {
         let a = am.address(self);
-        if self.p.carry() {
+        if !self.p.carry() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
@@ -928,7 +939,7 @@ impl Cpu {
     /// Branch if carry set
     fn bcs(&mut self, am: AddressingMode) {
         let a = am.address(self);
-        if !self.p.carry() {
+        if self.p.carry() {
             self.branch(a);
             self.cy += CPU_CYCLE;
         }
