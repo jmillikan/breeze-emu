@@ -114,6 +114,12 @@ pub struct Ppu {
     /// Byte written to the LSB of the current OAM address
     oam_lsb: u8,
 
+    /// `$2105` BG mode and character size
+    /// `4321emmm`
+    /// * `4321`: Use 16x16 characters for BG**4**/**3**/**2**/**1** (if possible in this mode)
+    /// * `e`: Mode 1 BG3 priority bit (FIXME What?)
+    /// * `mmm`: BG mode
+    bgmode: u8,
     /// `$2106` Mosaic filter
     /// `xxxx4321`
     /// * `4321`: Enable mosaic filter for BG4/3/2/1
@@ -275,6 +281,7 @@ impl Ppu {
                 self.update_oam_addr();
             }
             0x2104 => self.oam_store(value),
+            0x2105 => self.bgmode = value,
             0x2106 => self.mosaic = value,
             0x2107 => self.bg1sc = value,
             0x2108 => self.bg2sc = value,

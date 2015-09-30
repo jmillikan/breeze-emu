@@ -317,7 +317,11 @@ impl Cpu {
 
             // Arithmetic
             0x0a => instr!(asl_a),
+            0x06 => instr!(asl direct),
+            0x16 => instr!(asl direct_indexed_x),
+            0x0e => instr!(asl absolute),
             0x2a => instr!(rol_a),
+            0x4a => instr!(lsr_a),
             0x7e => instr!(ror absolute_indexed_x),
             0x25 => instr!(and direct),
             0x29 => instr!(and immediate_acc),
@@ -376,9 +380,11 @@ impl Cpu {
             0xa6 => instr!(ldx direct),
             0xa2 => instr!(ldx immediate_index),
             0xae => instr!(ldx absolute),
+            0xbe => instr!(ldx absolute_indexed_y),
             0xa4 => instr!(ldy direct),
             0xa0 => instr!(ldy immediate_index),
             0xac => instr!(ldy absolute),
+            0xbc => instr!(ldy absolute_indexed_x),
 
             // Comparisons and control flow
             0xc9 => instr!(cmp immediate_acc),
@@ -700,6 +706,20 @@ impl Cpu {
             let res = (self.a << 1) | c as u16;
             self.a = self.p.set_nz(res);
             self.cy += CPU_CYCLE;
+        }
+    }
+
+    /// Logical Shift Accumulator Right
+    fn lsr_a(&mut self) {
+        // Sets N (always cleared), Z and C. The leftmost bit is filled with 0.
+        // FIXME New code, needs small review
+        if self.p.small_acc() {
+            let a = self.a as u8;
+            self.p.set_carry(self.a & 0x80 != 0);
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(a >> 1) as u16;
+        } else {
+            self.p.set_carry(self.a & 0x8000 != 0);
+            self.a = self.p.set_nz(self.a >> 1);
         }
     }
     /// Rotate Memory Right
