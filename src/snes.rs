@@ -3,6 +3,7 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::{do_dma, DmaChannel};
+use input::Input;
 use ppu::Ppu;
 use rom::Rom;
 
@@ -17,6 +18,7 @@ pub struct Peripherals {
     rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
     wram: Wram,
+    input: Input,
 
     pub dma: [DmaChannel; 8],
     /// `$420c` - HDMAEN: HDMA enable flags
@@ -48,6 +50,7 @@ impl Peripherals {
             apu: Apu::new(),
             ppu: Ppu::new(),
             wram: Wram::default(),
+            input: Input::default(),
             dma: [DmaChannel::new(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
@@ -71,6 +74,7 @@ impl Peripherals {
                     let nmi = if self.nmi {1} else {0} << 7;
                     nmi | CPU_VERSION
                 }
+                0x4218 ... 0x421f => self.input.load(addr),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
                 0x8000 ... 0xffff => self.rom.loadb(bank, addr),
@@ -197,7 +201,8 @@ impl Snes {
                     // TODO Do HDMA
                 }
                 if result.vblank {
-                    // TODO autoread joypads
+                    // XXX we assume that joypads are always autoread
+                    self.cpu.mem.input.update();
                     if self.cpu.mem.nmi_enabled() {
                         trace!("V-Blank NMI triggered! Trace started!");
                         self.cpu.mem.nmi = true;

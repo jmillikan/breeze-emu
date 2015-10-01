@@ -15,6 +15,7 @@ use snes::Snes;
 mod apu;
 mod cpu;
 mod dma;
+mod input;
 mod ppu;
 mod rom;
 mod snes;
