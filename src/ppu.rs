@@ -141,6 +141,25 @@ pub struct Ppu {
     bg12nba: u8,
     bg34nba: u8,
 
+    /// `$210d` BG1 Horizontal Scroll / Mode 7 BG Horizontal Scroll
+    /// BG1 offset is 10 bits, Mode 7 BG offset is 13 bits signed
+    bg1hofs: u16,
+    /// `$210e` BG1 Vertical Scroll / Mode 7 BG Vertical Scroll
+    bg1vofs: u16,
+    /// `$210d`/`$210e` are "write-twice" registers. Their value is updated on the second write.
+    /// This register stores the low byte, stored in the first write.
+    bg1_low_buf: Option<u8>,
+    /// `$210f` BG1 Horizontal Scroll
+    bg2hofs: u16,
+    bg2vofs: u16,
+    bg3hofs: u16,
+    bg3vofs: u16,
+    bg4hofs: u16,
+    bg4vofs: u16,
+    /// Like `BG1HOFS`/`BG1VOFS`, the other BG scroll registers are also "write-twice" registers,
+    /// but use a different buffer for the low byte of the written value. This one.
+    bg234_low_buf: Option<u8>,
+
     /// `$2115` Video Port Control (VRAM)
     /// `j---mmii`
     /// * `j`: Address increment mode
