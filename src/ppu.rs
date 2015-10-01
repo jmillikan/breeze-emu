@@ -274,8 +274,6 @@ impl Ppu {
 
     /// Store a byte in a PPU register (addresses `$2100` - `$2133`)
     pub fn store(&mut self, addr: u16, value: u8) {
-        trace_unique!("PPU store (first only): ${:02X} in ${:04X}", value, addr);
-
         match addr {
             0x2100 => self.inidisp = value,
             0x2101 => self.obsel = value,

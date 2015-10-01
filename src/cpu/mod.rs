@@ -325,11 +325,16 @@ impl Cpu {
             0x7e => instr!(ror absolute_indexed_x),
             0x25 => instr!(and direct),
             0x29 => instr!(and immediate_acc),
+            0x2d => instr!(and absolute),
             0x2f => instr!(and absolute_long),
             0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
             0x07 => instr!(ora indirect_long),
             0x1d => instr!(ora absolute_indexed_x),
+            0x45 => instr!(eor direct),
+            0x49 => instr!(eor immediate_acc),
+            0x4d => instr!(eor absolute),
+            0x4f => instr!(eor absolute_long),
             0x65 => instr!(adc direct),
             0x69 => instr!(adc immediate_acc),
             0xe9 => instr!(sbc immediate_acc),
@@ -595,6 +600,7 @@ impl Cpu {
 
     /// AND Accumulator with Memory (or immediate)
     fn and(&mut self, am: AddressingMode) {
+        // Sets N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
             let res = self.a as u8 & val;
@@ -609,6 +615,7 @@ impl Cpu {
     }
     /// OR Accumulator with Memory
     fn ora(&mut self, am: AddressingMode) {
+        // Sets N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
             let res = self.a as u8 | val;
@@ -617,6 +624,21 @@ impl Cpu {
         } else {
             let val = am.loadw(self);
             let res = self.a | val;
+            self.a = self.p.set_nz(res);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Exclusive Or Accumulator with Memory
+    fn eor(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        if self.p.small_acc() {
+            let val = am.loadb(self);
+            let res = self.a as u8 ^ val;
+            self.p.set_nz_8(res);
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            let val = am.loadw(self);
+            let res = self.a ^ val;
             self.a = self.p.set_nz(res);
             self.cy += CPU_CYCLE;
         }

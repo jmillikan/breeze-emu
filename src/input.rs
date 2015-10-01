@@ -31,10 +31,12 @@ impl Input {
     }
 
     pub fn load(&self, reg: u16) -> u8 {
-        match reg {
-            0x4218 => self.states[0].0 as u8,
-            0x4219 => (self.states[0].0 >> 8) as u8,
-            _ => panic!("invalid/unimplemented joypad register ${:04X}", reg),
+        let controller = (reg - 0x4218) / 2;
+        let hi = reg & 1 != 0;
+        let state = &self.states[controller as usize];
+        match hi {
+            false => state.0 as u8,
+            true => (state.0 >> 8) as u8,
         }
     }
 }
