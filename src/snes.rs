@@ -31,7 +31,7 @@ pub struct Peripherals {
     /// * `a`: Enable auto-joypad read
     nmien: u8,
     /// `$4210` NMI flag and 5A22 Version
-    /// `x---vvvv`
+    /// `n---vvvv`
     /// * `n`: `self.nmi`
     /// * `v`: Version
     nmi: bool,
