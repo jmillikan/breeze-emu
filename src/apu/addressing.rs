@@ -14,6 +14,8 @@ pub enum AddressingMode {
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     /// Address = `D + $ab`
     Direct(u8),
+    /// Address = `D + $ab + X`
+    DirectIndexedX(u8),
     /// Where X points to (in page 0, $00 - $ff)
     /// Address = `X`
     IndirectX,
@@ -30,9 +32,9 @@ pub enum AddressingMode {
     /// Absolute address
     /// Address = `!abcd`
     Abs(u16),
-    /// Address = `$abcd+X`
+    /// Address = `!abcd+X`
     AbsIndexedX(u16),
-    /// Address = `$abcd+Y`
+    /// Address = `!abcd+Y`
     AbsIndexedY(u16),
     /// Used for branch instructions
     Rel(i8),
@@ -123,6 +125,7 @@ impl AddressingMode {
             Immediate(_) => panic!("attempted to get address of immediate"),
             A | X | Y => panic!("attempted to get address of register"),
             Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
+            DirectIndexedX(offset) => direct(offset as u16, spc.psw.direct_page()) + spc.x as u16,
             IndirectX => spc.x as u16,  // FIXME add direct page?
             IndirectIndexed(offset) => {
                 // [d]+Y
@@ -131,8 +134,10 @@ impl AddressingMode {
                 addr
             }
             IndexedIndirect(offset) => {
-                // [d+X]
-                direct(offset as u16, spc.psw.direct_page()) + spc.x as u16
+                // [d+Y]
+                let addr_ptr = direct(offset as u16, spc.psw.direct_page()) + spc.x as u16;
+                let addr = spc.loadw(addr_ptr);
+                addr
             }
             AbsIndexedIndirect(abs) => {
                 let addr_ptr = abs + spc.x as u16;
@@ -157,6 +162,7 @@ impl fmt::Display for AddressingMode {
             Y =>                       write!(f, "y"),
             Immediate(val) =>          write!(f, "#${:02X}", val),
             Direct(offset) =>          write!(f, "${:02X}", offset),
+            DirectIndexedX(offset) =>  write!(f, "${:02X}+X", offset),
             IndirectX =>               write!(f, "(X)"),
             IndirectIndexed(offset) => write!(f, "[${:02X}]+Y", offset),
             IndexedIndirect(offset) => write!(f, "[${:02X}+X]", offset),

@@ -347,8 +347,9 @@ impl Spc700 {
             0x5e => instr!(cmp "cmp {1}, {0}" abs y),
             0x75 => instr!(cmp "cmp {1}, {0}" abs_indexed_x a),
 
-            0xde => instr!(cbne "cbne {}, {}" indexed_indirect rel),
+            0xde => instr!(cbne "cbne {}, {}" direct_indexed_x rel),
             0xfe => instr!(dbnz "dbnz {}, {}" y rel),
+            0x6e => instr!(dbnz "dbnz {}, {}" direct rel),
 
             0x02 => instr!(set1(0) "set1 {}.0" direct),
             0x22 => instr!(set1(1) "set1 {}.1" direct),
@@ -405,15 +406,16 @@ impl Spc700 {
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
             0xcc => instr!(mov "mov {1}, {0}" y abs),
-            0xdb => instr!(mov "mov {1}, {0}" y indexed_indirect),
+            0xdb => instr!(mov "mov {1}, {0}" y direct_indexed_x),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
+            0xf4 => instr!(mov "mov {1}, {0}" direct_indexed_x a),
             0xe6 => instr!(mov "mov {1}, {0}" indirect_x a),
+            0xe7 => instr!(mov "mov {1}, {0}" indexed_indirect a),
             0xe5 => instr!(mov "mov {1}, {0}" abs a),
             0xec => instr!(mov "mov {1}, {0}" abs y),
             0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
             0xf6 => instr!(mov "mov {1}, {0}" abs_indexed_y a),
-            0xf4 => instr!(mov "mov {1}, {0}" indexed_indirect a),
             0xba => instr!(movw_l "movw ya, {}" direct),
             0xda => instr!(movw_s "movw {}, ya" direct),
             0xbd => instr!(mov_sp_x "mov sp, x"),
@@ -717,6 +719,9 @@ impl Spc700 {
 impl Spc700 {
     fn direct(&mut self) -> AddressingMode {
         AddressingMode::Direct(self.fetchb())
+    }
+    fn direct_indexed_x(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndexedX(self.fetchb())
     }
     fn indirect_x(&mut self) -> AddressingMode {
         AddressingMode::IndirectX
