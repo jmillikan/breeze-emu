@@ -141,24 +141,42 @@ pub struct Ppu {
     bg12nba: u8,
     bg34nba: u8,
 
-    /// `$210d` BG1 Horizontal Scroll / Mode 7 BG Horizontal Scroll
-    /// BG1 offset is 10 bits, Mode 7 BG offset is 13 bits signed
+    /// `$210d` BG1 Horizontal Scroll
+    /// BG1 offset is 10 bits
     bg1hofs: u16,
-    /// `$210e` BG1 Vertical Scroll / Mode 7 BG Vertical Scroll
+    /// `$210d` Mode 7 BG Horizontal Scroll
+    /// 13 bits signed. Updated via the same register as `BG1HOFS`, but using the `m7_old`
+    /// mechanism, which works differently than the `bg_old` mechanism below.
+    m7hofs: u16,
+    /// `$210e` BG1 Vertical Scroll
     bg1vofs: u16,
-    /// `$210d`/`$210e` are "write-twice" registers. Their value is updated on the second write.
-    /// This register stores the low byte, stored in the first write.
-    bg1_low_buf: Option<u8>,
-    /// `$210f` BG1 Horizontal Scroll
+    /// `$210e` Mode 7 BG Vertical Scroll
+    m7vofs: u16,
+    /// `$210f` BG2 Horizontal Scroll
     bg2hofs: u16,
+    /// `$2110` BG2 Vertical Scroll
     bg2vofs: u16,
     bg3hofs: u16,
     bg3vofs: u16,
     bg4hofs: u16,
+    /// `$2114`
     bg4vofs: u16,
-    /// Like `BG1HOFS`/`BG1VOFS`, the other BG scroll registers are also "write-twice" registers,
-    /// but use a different buffer for the low byte of the written value. This one.
-    bg234_low_buf: Option<u8>,
+    /// BG registers are 16-bit "write-twice" registers. Their value is updated as follows
+    /// (assuming `VAL` is the value written to the register):
+    /// ```
+    /// BGnHOFS = (VAL<<8) | (bg_old&~7) | ((BGnHOFS>>8)&7);
+    /// bg_old = VAL;
+    ///    or
+    /// BGnVOFS = (VAL<<8) | bg_old;
+    /// bg_old = VAL;
+    /// ```
+    bg_old: u8,
+    /// Mode 7 16-bit "write-twice" registers are updated like this:
+    /// ```
+    /// m7_reg = new * 100h + m7_old
+    /// m7_old = new
+    /// ```
+    m7_old: u8,
 
     /// `$2115` Video Port Control (VRAM)
     /// `j---mmii`
@@ -188,6 +206,7 @@ pub struct Ppu {
     cgadd: u8,
     /// Store the low byte to write to the current CGRAM position after the high byte is written by
     /// the CPU (writes are always done in pairs - like the low 512 bytes of OAM).
+    /// FIXME: Is this correct?
     cg_low_buf: Option<u8>,
 
     /// `$2123` Window Mask Settings for BG1 and BG2
@@ -313,6 +332,11 @@ impl Ppu {
             0x210a => self.bg4sc = value,
             0x210b => self.bg12nba = value,
             0x210c => self.bg34nba = value,
+            0x210d | 0x210e => {
+                self.bg_store(addr, value);
+                self.m7_store(addr, value);
+            }
+            0x210f ... 0x2114 => self.bg_store(addr, value),
             0x2115 => self.vmain = value,
             0x2116 => self.vmaddr = (self.vmaddr & 0xff00) | value as u16,
             0x2117 => self.vmaddr = ((value as u16) << 8) | self.vmaddr & 0xff,
@@ -436,6 +460,8 @@ struct BgSettings {
     tilemap_addr: u16,
     mirror_h: bool,
     mirror_v: bool,
+    hscroll: u16,
+    vscroll: u16,
 }
 
 /// Private methods
@@ -454,11 +480,47 @@ impl Ppu {
             0b011 => if !alt {(16,16)} else {(32,32)},
             0b100 => if !alt {(16,16)} else {(64,64)},
             0b101 => if !alt {(32,32)} else {(64,64)},
+            // FIXME Figure out if we want to support these:
             //0b110 => if !alt {(16,32)} else {(32,64)},
             //0b111 => if !alt {(16,32)} else {(32,32)},
             invalid => panic!("invalid sprite size selected: {:b} (OBSEL = ${:02X})",
                 invalid, self.obsel)
         }
+    }
+
+    /// Store a byte to a "write-twice" `BGnxOFS` register
+    fn bg_store(&mut self, addr: u16, val: u8) {
+        let reg = match addr {
+            0x210d => &mut self.bg1hofs,
+            0x210e => &mut self.bg1vofs,
+            0x210f => &mut self.bg2hofs,
+            0x2110 => &mut self.bg2vofs,
+            0x2111 => &mut self.bg3hofs,
+            0x2112 => &mut self.bg3vofs,
+            _ => panic!("invalid BG register ${:04X}", addr),
+        };
+
+        if addr & 1 != 0 {
+            // Horizontal
+            *reg = ((val as u16) << 8) | (self.bg_old as u16 & !7) | ((*reg >> 8) & 7);
+        } else {
+            // Vertical
+            *reg = ((val as u16) << 8) | self.bg_old as u16;
+        }
+
+        self.bg_old = val;
+    }
+
+    /// Store a byte to a "write-twice" Mode 7 register
+    fn m7_store(&mut self, addr: u16, val: u8) {
+        let reg = match addr {
+            0x210d => &mut self.m7hofs,
+            0x210e => &mut self.m7vofs,
+            _ => panic!("invalid Mode 7 write-twice register ${:04X}", addr),
+        };
+
+        *reg = (val as u16) << 8 | self.m7_old as u16;
+        self.m7_old = val;
     }
 
     /// Update the internal OAM address register after a write to `$2102` or `$2103`

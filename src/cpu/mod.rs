@@ -337,6 +337,8 @@ impl Cpu {
             0x4f => instr!(eor absolute_long),
             0x65 => instr!(adc direct),
             0x69 => instr!(adc immediate_acc),
+            0x6d => instr!(adc absolute),
+            0x6f => instr!(adc absolute_long),
             0xe9 => instr!(sbc immediate_acc),
             0xe6 => instr!(inc direct),
             0xee => instr!(inc absolute),
