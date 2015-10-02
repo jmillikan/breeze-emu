@@ -417,6 +417,7 @@ impl Cpu {
             0xb0 => instr!(bcs rel),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
+            0x40 => instr!(rti),
             0x60 => instr!(rts),
             0x6b => instr!(rtl),
 
@@ -432,7 +433,6 @@ impl Cpu {
     /// Immediately executes an IRQ sequence and jumps to the NMI handler.
     pub fn trigger_nmi(&mut self) {
         if self.emulation {
-            // FIXME Do we still push the same 4 Bytes in emulation mode?
             self.interrupt(NMI_VEC8);
         } else {
             self.interrupt(NMI_VEC16);
@@ -441,7 +441,6 @@ impl Cpu {
 
     pub fn trigger_irq(&mut self) {
         if self.emulation {
-            // FIXME Do we still push the same 4 Bytes in emulation mode?
             self.interrupt(IRQ_VEC8);
         } else {
             self.interrupt(IRQ_VEC16);
@@ -452,16 +451,30 @@ impl Cpu {
     /// stack, sets the PBR to 0, loads the handler address from the given vector, and jumps to the
     /// handler.
     fn interrupt(&mut self, vector: u16) {
-        let pbr = self.pbr;
-        self.pushb(pbr);
+        if !self.emulation {
+            let pbr = self.pbr;
+            self.pushb(pbr);
+            self.pbr = 0;
+        }
+
         let pc = self.pc;
         self.pushw(pc);
         let p = self.p.0;
         self.pushb(p);
 
-        self.pbr = 0;
         let handler = self.loadw(0, vector);
         self.pc = handler;
+    }
+    fn return_from_interrupt(&mut self) {
+        let p = self.popb();
+        self.p.0 = p;
+        let pc = self.popw();
+        self.pc = pc;
+
+        if !self.emulation {
+            let pbr = self.popb();
+            self.pbr = pbr;
+        }
     }
 
     /// Common method for all comparison opcodes. Compares `a` to `b` by effectively computing
@@ -1056,6 +1069,8 @@ impl Cpu {
         self.pbr = pbr;
         self.pc = pc;
     }
+    /// Return from Interrupt
+    fn rti(&mut self) { self.return_from_interrupt() }
     /// Return from Subroutine (Short - Like JSR)
     fn rts(&mut self) {
         let pcl = self.popb() as u16;
