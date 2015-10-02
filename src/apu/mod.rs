@@ -325,8 +325,12 @@ impl Spc700 {
             0xfc => instr!(inc "inc {}" y),
             0xab => instr!(inc "inc {}" direct),
             0xac => instr!(inc "inc {}" abs),
+            0x3a => instr!(incw "incw {}" direct),
             0x28 => instr!(and "and {1}, {0}" immediate a),
             0x08 => instr!(or "or {1}, {0}" immediate a),
+            0x06 => instr!(or "or {1}, {0}" indirect_x a),
+            0x18 => instr!(or "or {1}, {0}" immediate direct),
+            0x09 => instr!(or "or {1}, {0}" direct direct),
             0x48 => instr!(eor "eor {1}, {0}" immediate a),
             0x44 => instr!(eor "eor {1}, {0}" direct a),
             0x1c => instr!(asl "asl {}" a),
@@ -396,17 +400,19 @@ impl Spc700 {
             0x5d => instr!(mov "mov {1}, {0}" a x),
             0xfd => instr!(mov "mov {1}, {0}" a y),
             0xc4 => instr!(mov "mov {1}, {0}" a direct),
+            0xd4 => instr!(mov "mov {1}, {0}" a direct_indexed_x),
             0xc5 => instr!(mov "mov {1}, {0}" a abs),
             0xd5 => instr!(mov "mov {1}, {0}" a abs_indexed_x),
             0xd6 => instr!(mov "mov {1}, {0}" a abs_indexed_y),
             0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
             0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
             0x7d => instr!(mov "mov {1}, {0}" x a),
+            0xd9 => instr!(mov "mov {1}, {0}" x direct_indexed_x),
             0xc9 => instr!(mov "mov {1}, {0}" x abs),
             0xdd => instr!(mov "mov {1}, {0}" y a),
             0xcb => instr!(mov "mov {1}, {0}" y direct),
-            0xcc => instr!(mov "mov {1}, {0}" y abs),
             0xdb => instr!(mov "mov {1}, {0}" y direct_indexed_x),
+            0xcc => instr!(mov "mov {1}, {0}" y abs),
             0xe4 => instr!(mov "mov {1}, {0}" direct a),
             0xeb => instr!(mov "mov {1}, {0}" direct y),
             0xf4 => instr!(mov "mov {1}, {0}" direct_indexed_x a),
@@ -673,6 +679,13 @@ impl Spc700 {
         let val = am.clone().loadb(self);
         let res = self.psw.set_nz(val.wrapping_add(1));
         am.storeb(self, res);
+    }
+    fn incw(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        let (lo, hi) = am.clone().loadw(self);
+        let val = ((hi as u16) << 8) | lo as u16;
+        let res = val.wrapping_add(1);
+        am.storew(self, ((res >> 8) as u8, res as u8));
     }
 
     /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
