@@ -338,6 +338,14 @@ impl Spc700 {
             0x6b => instr!(ror "ror {}" direct),
             0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
+            0xa8 => instr!(sbc "sbc {1}, {0}" immediate a),
+            0xa4 => instr!(sbc "sbc {1}, {0}" direct a),
+            0xb4 => instr!(sbc "sbc {1}, {0}" direct_indexed_x a),
+            0xa9 => instr!(sbc "sbc {1}, {0}" direct direct),
+            0xa6 => instr!(sbc "sbc {1}, {0}" indirect_x a),
+            0xa5 => instr!(sbc "sbc {1}, {0}" abs a),
+            0xb5 => instr!(sbc "sbc {1}, {0}" abs_indexed_x a),
+            0xb6 => instr!(sbc "sbc {1}, {0}" abs_indexed_y a),
             0xcf => instr!(mul "mul ya"),
 
             // Control flow and comparisons
@@ -610,7 +618,7 @@ impl Spc700 {
         self.a = res as u8;
     }
     fn adc(&mut self, src: AddressingMode, dest: AddressingMode) {
-        // Set N, V, H, Z and C
+        // Sets N, V, H, Z and C
         let c = if self.psw.carry() { 1 } else { 0 };
         let a = dest.clone().loadb(self);
         let b = src.loadb(self);
@@ -621,6 +629,18 @@ impl Spc700 {
         self.psw.set_overflow((a ^ b) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
         self.psw.set_nz(res);
         dest.storeb(self, res);
+    }
+    fn sbc(&mut self, src: AddressingMode, dest: AddressingMode) {
+        // Sets N, V, H, Z and C
+        // FIXME Set H and V
+        let c = if self.psw.carry() { 0 } else { 1 };
+        let a = dest.clone().loadb(self) as u16;
+        let b = src.loadb(self) as u16;
+        // a-b = a+!b+1
+        let res = a + !b + c;
+        self.psw.set_carry(res > 255);
+        self.psw.set_nz(res as u8);
+        dest.storeb(self, res as u8);
     }
     fn and(&mut self, r: AddressingMode, l: AddressingMode) {
         // Sets N and Z
