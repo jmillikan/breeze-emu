@@ -335,7 +335,13 @@ impl Spc700 {
             0x44 => instr!(eor "eor {1}, {0}" direct a),
             0x1c => instr!(asl "asl {}" a),
             0x5c => instr!(lsr "lsr {}" a),
+            0x4b => instr!(lsr "lsr {}" direct),
+            0x5b => instr!(lsr "lsr {}" direct_indexed_x),
+            0x4c => instr!(lsr "lsr {}" abs),
+            0x7c => instr!(ror "ror {}" a),
             0x6b => instr!(ror "ror {}" direct),
+            0x7b => instr!(ror "ror {}" direct_indexed_x),
+            0x6c => instr!(ror "ror {}" abs),
             0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
             0x7a => instr!(addw "addw ya, {}" direct),
@@ -348,6 +354,7 @@ impl Spc700 {
             0xb5 => instr!(sbc "sbc {1}, {0}" abs_indexed_x a),
             0xb6 => instr!(sbc "sbc {1}, {0}" abs_indexed_y a),
             0xcf => instr!(mul "mul ya"),
+            0x9e => instr!(div "div ya, x"),
 
             // Control flow and comparisons
             0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
@@ -397,6 +404,8 @@ impl Spc700 {
             0x2d => instr!(push "push {}" a),
             0x4d => instr!(push "push {}" x),
             0x6d => instr!(push "push {}" y),
+            0xae => instr!(pop "pop {}" a),
+            0xce => instr!(pop "pop {}" x),
             0xee => instr!(pop "pop {}" y),
 
             // "mov"
@@ -617,6 +626,14 @@ impl Spc700 {
         let res = self.y as u16 * self.a as u16;
         self.y = self.psw.set_nz((res >> 8) as u8);
         self.a = res as u8;
+    }
+    /// A=YA/X, Y=mod(YA,X)
+    fn div(&mut self) {
+        // Sets N, Z, V, H
+        // FIXME Set V and H
+        let ya = ((self.y as u16) << 8) | self.a as u16;
+        self.a = self.psw.set_nz((ya / self.x as u16) as u8);
+        self.y = (ya % self.x as u16) as u8;
     }
     fn adc(&mut self, src: AddressingMode, dest: AddressingMode) {
         // Sets N, V, H, Z and C
