@@ -338,6 +338,7 @@ impl Spc700 {
             0x6b => instr!(ror "ror {}" direct),
             0x88 => instr!(adc "adc {1}, {0}" immediate a),
             0x84 => instr!(adc "adc {1}, {0}" direct a),
+            0x7a => instr!(addw "addw ya, {}" direct),
             0xa8 => instr!(sbc "sbc {1}, {0}" immediate a),
             0xa4 => instr!(sbc "sbc {1}, {0}" direct a),
             0xb4 => instr!(sbc "sbc {1}, {0}" direct_indexed_x a),
@@ -629,6 +630,21 @@ impl Spc700 {
         self.psw.set_overflow((a ^ b) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
         self.psw.set_nz(res);
         dest.storeb(self, res);
+    }
+    fn addw(&mut self, am: AddressingMode) {
+        // Sets N, V, H, Z and C (H on high byte)
+        // FIXME: Set H and check if this is correct
+        // YA := YA + <byte> (Y = High, A = Low)
+        let ya = ((self.y as u16) << 8) | self.a as u16;
+        let val = am.loadb(self) as u16;
+        let res = ya as u32 + val as u32;
+        self.psw.set_carry(res & 0xffff0000 != 0);
+        let res = res as u16;
+        self.psw.set_overflow((ya ^ val) & 0x8000 == 0 && (ya ^ res) & 0x8000 == 0x8000);
+        self.psw.set_negative(res & 0x8000 != 0);
+        self.psw.set_zero(res == 0);
+        self.y = (res >> 8) as u8;
+        self.a = res as u8;
     }
     fn sbc(&mut self, src: AddressingMode, dest: AddressingMode) {
         // Sets N, V, H, Z and C
