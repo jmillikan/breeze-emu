@@ -264,7 +264,14 @@ impl Spc700 {
 
         macro_rules!e{($e:expr)=>($e)}
         macro_rules! instr {
-            ( $name:ident ($($arg:expr),*) $s:tt $am:ident ) => {{
+            ( _ $name:ident ) => {{
+                use log::LogLevel::Trace;
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, stringify!($name));
+                }
+                self.$name()
+            }};
+            ( $s:tt $name:ident ($($arg:expr),*) $am:ident ) => {{
                 // Used for bit set opcode
                 use log::LogLevel::Trace;
                 let am = self.$am();
@@ -273,7 +280,7 @@ impl Spc700 {
                 }
                 self.$name($($arg,)* am)
             }};
-            ( $name:ident ($($arg:expr),*) $s:tt $am:ident $am2:ident ) => {{
+            ( $s:tt $name:ident ($($arg:expr),*) $am:ident $am2:ident ) => {{
                 // Used for bit test opcode
                 use log::LogLevel::Trace;
                 let am = self.$am();
@@ -283,14 +290,22 @@ impl Spc700 {
                 }
                 self.$name($($arg,)* am, am2)
             }};
-            ( $name:ident $s:tt ) => {{
+            ( $s:tt $name:ident ) => {{
                 use log::LogLevel::Trace;
                 if log_enabled!(Trace) && self.trace {
                     self.trace_op(pc, e!($s));
                 }
                 self.$name()
             }};
-            ( $name:ident $s:tt $am:ident ) => {{
+            ( _ $name:ident $am:ident ) => {{
+                use log::LogLevel::Trace;
+                let am = self.$am();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(concat!(stringify!($name), " {}"), am));
+                }
+                self.$name(am)
+            }};
+            ( $s:tt $name:ident $am:ident ) => {{
                 use log::LogLevel::Trace;
                 let am = self.$am();
                 if log_enabled!(Trace) && self.trace {
@@ -298,7 +313,7 @@ impl Spc700 {
                 }
                 self.$name(am)
             }};
-            ( $name:ident $s:tt $am:ident $am2:ident ) => {{
+            ( $s:tt $name:ident $am:ident $am2:ident ) => {{
                 use log::LogLevel::Trace;
                 let am = self.$am();
                 let am2 = self.$am2();
@@ -313,139 +328,139 @@ impl Spc700 {
         self.cy = CYCLE_TABLE[op as usize];
         match op {
             // Processor status
-            0x20 => instr!(clrp "clrp"),
-            0x60 => instr!(clrc "clrc"),
-            0x80 => instr!(setc "setc"),
-            0xed => instr!(notc "notc"),
+            0x20 => instr!(_ clrp),
+            0x60 => instr!(_ clrc),
+            0x80 => instr!(_ setc),
+            0xed => instr!(_ notc),
 
             // Arithmetic
-            0x1d => instr!(dec "dec {}" x),
-            0xbc => instr!(inc "inc {}" a),
-            0x3d => instr!(inc "inc {}" x),
-            0xfc => instr!(inc "inc {}" y),
-            0xab => instr!(inc "inc {}" direct),
-            0xac => instr!(inc "inc {}" abs),
-            0x3a => instr!(incw "incw {}" direct),
-            0x28 => instr!(and "and {1}, {0}" immediate a),
-            0x08 => instr!(or "or {1}, {0}" immediate a),
-            0x06 => instr!(or "or {1}, {0}" indirect_x a),
-            0x18 => instr!(or "or {1}, {0}" immediate direct),
-            0x09 => instr!(or "or {1}, {0}" direct direct),
-            0x48 => instr!(eor "eor {1}, {0}" immediate a),
-            0x44 => instr!(eor "eor {1}, {0}" direct a),
-            0x1c => instr!(asl "asl {}" a),
-            0x5c => instr!(lsr "lsr {}" a),
-            0x4b => instr!(lsr "lsr {}" direct),
-            0x5b => instr!(lsr "lsr {}" direct_indexed_x),
-            0x4c => instr!(lsr "lsr {}" abs),
-            0x7c => instr!(ror "ror {}" a),
-            0x6b => instr!(ror "ror {}" direct),
-            0x7b => instr!(ror "ror {}" direct_indexed_x),
-            0x6c => instr!(ror "ror {}" abs),
-            0x88 => instr!(adc "adc {1}, {0}" immediate a),
-            0x84 => instr!(adc "adc {1}, {0}" direct a),
-            0x7a => instr!(addw "addw ya, {}" direct),
-            0xa8 => instr!(sbc "sbc {1}, {0}" immediate a),
-            0xa4 => instr!(sbc "sbc {1}, {0}" direct a),
-            0xb4 => instr!(sbc "sbc {1}, {0}" direct_indexed_x a),
-            0xa9 => instr!(sbc "sbc {1}, {0}" direct direct),
-            0xa6 => instr!(sbc "sbc {1}, {0}" indirect_x a),
-            0xa5 => instr!(sbc "sbc {1}, {0}" abs a),
-            0xb5 => instr!(sbc "sbc {1}, {0}" abs_indexed_x a),
-            0xb6 => instr!(sbc "sbc {1}, {0}" abs_indexed_y a),
-            0xcf => instr!(mul "mul ya"),
-            0x9e => instr!(div "div ya, x"),
+            0x1d => instr!(_ dec x),
+            0xbc => instr!(_ inc a),
+            0x3d => instr!(_ inc x),
+            0xfc => instr!(_ inc y),
+            0xab => instr!(_ inc direct),
+            0xac => instr!(_ inc abs),
+            0x3a => instr!(_ incw direct),
+            0x28 => instr!("and {1}, {0}" and immediate a),
+            0x08 => instr!("or {1}, {0}" or immediate a),
+            0x06 => instr!("or {1}, {0}" or indirect_x a),
+            0x18 => instr!("or {1}, {0}" or immediate direct),
+            0x09 => instr!("or {1}, {0}" or direct direct),
+            0x48 => instr!("eor {1}, {0}" eor immediate a),
+            0x44 => instr!("eor {1}, {0}" eor direct a),
+            0x1c => instr!(_ asl a),
+            0x5c => instr!(_ lsr a),
+            0x4b => instr!(_ lsr direct),
+            0x5b => instr!(_ lsr direct_indexed_x),
+            0x4c => instr!(_ lsr abs),
+            0x7c => instr!(_ ror a),
+            0x6b => instr!(_ ror direct),
+            0x7b => instr!(_ ror direct_indexed_x),
+            0x6c => instr!(_ ror abs),
+            0x88 => instr!("adc {1}, {0}" adc immediate a),
+            0x84 => instr!("adc {1}, {0}" adc direct a),
+            0x7a => instr!("addw ya, {}" addw direct),
+            0xa8 => instr!("sbc {1}, {0}" sbc immediate a),
+            0xa4 => instr!("sbc {1}, {0}" sbc direct a),
+            0xb4 => instr!("sbc {1}, {0}" sbc direct_indexed_x a),
+            0xa9 => instr!("sbc {1}, {0}" sbc direct direct),
+            0xa6 => instr!("sbc {1}, {0}" sbc indirect_x a),
+            0xa5 => instr!("sbc {1}, {0}" sbc abs a),
+            0xb5 => instr!("sbc {1}, {0}" sbc abs_indexed_x a),
+            0xb6 => instr!("sbc {1}, {0}" sbc abs_indexed_y a),
+            0xcf => instr!("mul ya" mul),
+            0x9e => instr!("div ya, x" div),
 
             // Control flow and comparisons
-            0x78 => instr!(cmp "cmp {1}, {0}" immediate direct),
-            0x64 => instr!(cmp "cmp {1}, {0}" direct a),
-            0x7e => instr!(cmp "cmp {1}, {0}" direct y),
-            0x69 => instr!(cmp "cmp {1}, {0}" direct direct),
-            0x68 => instr!(cmp "cmp {1}, {0}" immediate a),
-            0xc8 => instr!(cmp "cmp {1}, {0}" immediate x),
-            0xad => instr!(cmp "cmp {1}, {0}" immediate y),
-            0x5e => instr!(cmp "cmp {1}, {0}" abs y),
-            0x75 => instr!(cmp "cmp {1}, {0}" abs_indexed_x a),
+            0x78 => instr!("cmp {1}, {0}" cmp immediate direct),
+            0x64 => instr!("cmp {1}, {0}" cmp direct a),
+            0x7e => instr!("cmp {1}, {0}" cmp direct y),
+            0x69 => instr!("cmp {1}, {0}" cmp direct direct),
+            0x68 => instr!("cmp {1}, {0}" cmp immediate a),
+            0xc8 => instr!("cmp {1}, {0}" cmp immediate x),
+            0xad => instr!("cmp {1}, {0}" cmp immediate y),
+            0x5e => instr!("cmp {1}, {0}" cmp abs y),
+            0x75 => instr!("cmp {1}, {0}" cmp abs_indexed_x a),
 
-            0xde => instr!(cbne "cbne {}, {}" direct_indexed_x rel),
-            0xfe => instr!(dbnz "dbnz {}, {}" y rel),
-            0x6e => instr!(dbnz "dbnz {}, {}" direct rel),
+            0xde => instr!("cbne {}, {}" cbne direct_indexed_x rel),
+            0xfe => instr!("dbnz {}, {}" dbnz y rel),
+            0x6e => instr!("dbnz {}, {}" dbnz direct rel),
 
-            0x02 => instr!(set1(0) "set1 {}.0" direct),
-            0x22 => instr!(set1(1) "set1 {}.1" direct),
-            0x42 => instr!(set1(2) "set1 {}.2" direct),
-            0x62 => instr!(set1(3) "set1 {}.3" direct),
-            0x82 => instr!(set1(4) "set1 {}.4" direct),
-            0xa2 => instr!(set1(5) "set1 {}.5" direct),
-            0xc2 => instr!(set1(6) "set1 {}.6" direct),
-            0xe2 => instr!(set1(7) "set1 {}.7" direct),
-            0x13 => instr!(bbc(0) "bbc {}.0, {}" direct rel),
-            0x33 => instr!(bbc(1) "bbc {}.1, {}" direct rel),
-            0x53 => instr!(bbc(2) "bbc {}.2, {}" direct rel),
-            0x73 => instr!(bbc(3) "bbc {}.3, {}" direct rel),
-            0x93 => instr!(bbc(4) "bbc {}.4, {}" direct rel),
-            0xb3 => instr!(bbc(5) "bbc {}.5, {}" direct rel),
-            0xd3 => instr!(bbc(6) "bbc {}.6, {}" direct rel),
-            0xf3 => instr!(bbc(7) "bbc {}.7, {}" direct rel),
+            0x02 => instr!("set1 {}.0" set1(0) direct),
+            0x22 => instr!("set1 {}.1" set1(1) direct),
+            0x42 => instr!("set1 {}.2" set1(2) direct),
+            0x62 => instr!("set1 {}.3" set1(3) direct),
+            0x82 => instr!("set1 {}.4" set1(4) direct),
+            0xa2 => instr!("set1 {}.5" set1(5) direct),
+            0xc2 => instr!("set1 {}.6" set1(6) direct),
+            0xe2 => instr!("set1 {}.7" set1(7) direct),
+            0x13 => instr!("bbc {}.0, {}" bbc(0) direct rel),
+            0x33 => instr!("bbc {}.1, {}" bbc(1) direct rel),
+            0x53 => instr!("bbc {}.2, {}" bbc(2) direct rel),
+            0x73 => instr!("bbc {}.3, {}" bbc(3) direct rel),
+            0x93 => instr!("bbc {}.4, {}" bbc(4) direct rel),
+            0xb3 => instr!("bbc {}.5, {}" bbc(5) direct rel),
+            0xd3 => instr!("bbc {}.6, {}" bbc(6) direct rel),
+            0xf3 => instr!("bbc {}.7, {}" bbc(7) direct rel),
 
-            0x5f => instr!(bra "jmp {}" abs),                       // reuse `bra` fn
-            0x1f => instr!(bra "jmp {}" abs_indexed_indirect),      // reuse `bra` fn
-            0x2f => instr!(bra "bra {}" rel),
-            0xf0 => instr!(beq "beq {}" rel),
-            0xd0 => instr!(bne "bne {}" rel),
-            0xb0 => instr!(bcs "bcs {}" rel),
-            0x90 => instr!(bcc "bcc {}" rel),
-            0x30 => instr!(bmi "bmi {}" rel),
-            0x10 => instr!(bpl "bpl {}" rel),
+            0x5f => instr!("jmp {}" bra abs),                       // reuse `bra` fn
+            0x1f => instr!("jmp {}" bra abs_indexed_indirect),      // reuse `bra` fn
+            0x2f => instr!(_ bra rel),
+            0xf0 => instr!(_ beq rel),
+            0xd0 => instr!(_ bne rel),
+            0xb0 => instr!(_ bcs rel),
+            0x90 => instr!(_ bcc rel),
+            0x30 => instr!(_ bmi rel),
+            0x10 => instr!(_ bpl rel),
 
-            0x3f => instr!(call "call {}" abs),
-            0x6f => instr!(ret "ret"),
+            0x3f => instr!(_ call abs),
+            0x6f => instr!(_ ret),
 
-            0x2d => instr!(push "push {}" a),
-            0x4d => instr!(push "push {}" x),
-            0x6d => instr!(push "push {}" y),
-            0xae => instr!(pop "pop {}" a),
-            0xce => instr!(pop "pop {}" x),
-            0xee => instr!(pop "pop {}" y),
+            0x2d => instr!(_ push a),
+            0x4d => instr!(_ push x),
+            0x6d => instr!(_ push y),
+            0xae => instr!(_ pop a),
+            0xce => instr!(_ pop x),
+            0xee => instr!(_ pop y),
 
             // "mov"
             // NB: For moves, "a x" means "mov x, a" or "a -> x"
             // NB: Moves into registers will always set N and Z
-            0x8f => instr!(mov "mov {1}, {0}" immediate direct),
-            0xe8 => instr!(mov "mov {1}, {0}" immediate a),
-            0xcd => instr!(mov "mov {1}, {0}" immediate x),
-            0x8d => instr!(mov "mov {1}, {0}" immediate y),
-            0x5d => instr!(mov "mov {1}, {0}" a x),
-            0xfd => instr!(mov "mov {1}, {0}" a y),
-            0xc4 => instr!(mov "mov {1}, {0}" a direct),
-            0xd4 => instr!(mov "mov {1}, {0}" a direct_indexed_x),
-            0xc5 => instr!(mov "mov {1}, {0}" a abs),
-            0xd5 => instr!(mov "mov {1}, {0}" a abs_indexed_x),
-            0xd6 => instr!(mov "mov {1}, {0}" a abs_indexed_y),
-            0xc6 => instr!(mov "mov {1}, {0}" a indirect_x),
-            0xd7 => instr!(mov "mov {1}, {0}" a indirect_indexed),
-            0x7d => instr!(mov "mov {1}, {0}" x a),
-            0xd9 => instr!(mov "mov {1}, {0}" x direct_indexed_x),
-            0xc9 => instr!(mov "mov {1}, {0}" x abs),
-            0xdd => instr!(mov "mov {1}, {0}" y a),
-            0xcb => instr!(mov "mov {1}, {0}" y direct),
-            0xdb => instr!(mov "mov {1}, {0}" y direct_indexed_x),
-            0xcc => instr!(mov "mov {1}, {0}" y abs),
-            0xe4 => instr!(mov "mov {1}, {0}" direct a),
-            0xeb => instr!(mov "mov {1}, {0}" direct y),
-            0xf4 => instr!(mov "mov {1}, {0}" direct_indexed_x a),
-            0xe6 => instr!(mov "mov {1}, {0}" indirect_x a),
-            0xe7 => instr!(mov "mov {1}, {0}" indexed_indirect a),
-            0xe5 => instr!(mov "mov {1}, {0}" abs a),
-            0xec => instr!(mov "mov {1}, {0}" abs y),
-            0xf5 => instr!(mov "mov {1}, {0}" abs_indexed_x a),
-            0xf6 => instr!(mov "mov {1}, {0}" abs_indexed_y a),
-            0xba => instr!(movw_l "movw ya, {}" direct),
-            0xda => instr!(movw_s "movw {}, ya" direct),
-            0xbd => instr!(mov_sp_x "mov sp, x"),
-            0xaf => instr!(mov_xinc "mov (x++), a"),
+            0x8f => instr!("mov {1}, {0}" mov immediate direct),
+            0xe8 => instr!("mov {1}, {0}" mov immediate a),
+            0xcd => instr!("mov {1}, {0}" mov immediate x),
+            0x8d => instr!("mov {1}, {0}" mov immediate y),
+            0x5d => instr!("mov {1}, {0}" mov a x),
+            0xfd => instr!("mov {1}, {0}" mov a y),
+            0xc4 => instr!("mov {1}, {0}" mov a direct),
+            0xd4 => instr!("mov {1}, {0}" mov a direct_indexed_x),
+            0xc5 => instr!("mov {1}, {0}" mov a abs),
+            0xd5 => instr!("mov {1}, {0}" mov a abs_indexed_x),
+            0xd6 => instr!("mov {1}, {0}" mov a abs_indexed_y),
+            0xc6 => instr!("mov {1}, {0}" mov a indirect_x),
+            0xd7 => instr!("mov {1}, {0}" mov a indirect_indexed),
+            0x7d => instr!("mov {1}, {0}" mov x a),
+            0xd9 => instr!("mov {1}, {0}" mov x direct_indexed_x),
+            0xc9 => instr!("mov {1}, {0}" mov x abs),
+            0xdd => instr!("mov {1}, {0}" mov y a),
+            0xcb => instr!("mov {1}, {0}" mov y direct),
+            0xdb => instr!("mov {1}, {0}" mov y direct_indexed_x),
+            0xcc => instr!("mov {1}, {0}" mov y abs),
+            0xe4 => instr!("mov {1}, {0}" mov direct a),
+            0xeb => instr!("mov {1}, {0}" mov direct y),
+            0xf4 => instr!("mov {1}, {0}" mov direct_indexed_x a),
+            0xe6 => instr!("mov {1}, {0}" mov indirect_x a),
+            0xe7 => instr!("mov {1}, {0}" mov indexed_indirect a),
+            0xe5 => instr!("mov {1}, {0}" mov abs a),
+            0xec => instr!("mov {1}, {0}" mov abs y),
+            0xf5 => instr!("mov {1}, {0}" mov abs_indexed_x a),
+            0xf6 => instr!("mov {1}, {0}" mov abs_indexed_y a),
+            0xba => instr!("movw ya, {}" movw_l direct),
+            0xda => instr!("movw {}, ya" movw_s direct),
+            0xbd => instr!("mov sp, x" mov_sp_x),
+            0xaf => instr!("mov (x++), a" mov_xinc),
             _ => {
-                instr!(ill "ill");
+                instr!(_ ill);
                 panic!("illegal APU opcode: ${:02X}", op);
             }
         }
