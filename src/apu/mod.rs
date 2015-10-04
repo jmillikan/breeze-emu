@@ -368,8 +368,10 @@ impl Spc700 {
             0xa5 => instr!("sbc {1}, {0}" sbc abs a),
             0xb5 => instr!("sbc {1}, {0}" sbc abs_indexed_x a),
             0xb6 => instr!("sbc {1}, {0}" sbc abs_indexed_y a),
+            0x9a => instr!("subw ya, {0}" subw direct),
             0xcf => instr!("mul ya" mul),
             0x9e => instr!("div ya, x" div),
+            0x9f => instr!(_ xcn a),
 
             // Control flow and comparisons
             0x78 => instr!("cmp {1}, {0}" cmp immediate direct),
@@ -635,6 +637,14 @@ impl Spc700 {
         }
     }
 
+    /// Exchange nibbles of byte
+    fn xcn(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        let val = am.clone().loadb(self);
+        let res = (val >> 4) | (val << 4);
+        self.psw.set_nz(res);
+        am.storeb(self, res);
+    }
     /// `mul ya`: ya = y * a
     fn mul(&mut self) {
         // Sets N and Z. Y = High, A = Low.
@@ -689,6 +699,19 @@ impl Spc700 {
         self.psw.set_carry(res > 255);
         self.psw.set_nz(res as u8);
         dest.storeb(self, res as u8);
+    }
+    /// Subtract from YA (Carry is set, but ignored for the operation)
+    fn subw(&mut self, am: AddressingMode) {
+        // Sets N, V, H (on high byte), Z, C
+        // FIXME Set V and H
+        let ya = ((self.y as u32) << 8) | self.a as u32;
+        let sub = am.loadb(self) as u32;
+        let res = ya + !sub;
+        self.psw.set_carry(res & 0xffff0000 != 0);
+        self.psw.set_negative(res & 0x8000 != 0);
+        self.psw.set_zero(res == 0);
+        self.y = (ya >> 8) as u8;
+        self.a = ya as u8;
     }
     fn and(&mut self, r: AddressingMode, l: AddressingMode) {
         // Sets N and Z
