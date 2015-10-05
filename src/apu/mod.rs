@@ -404,13 +404,17 @@ impl Spc700 {
             // Control flow and comparisons
             0x78 => instr!(_ cmp immediate direct),
             0x64 => instr!(_ cmp direct a),
+            0x3e => instr!(_ cmp direct x),
             0x7e => instr!(_ cmp direct y),
             0x69 => instr!(_ cmp direct direct),
             0x68 => instr!(_ cmp immediate a),
             0xc8 => instr!(_ cmp immediate x),
             0xad => instr!(_ cmp immediate y),
+            0x65 => instr!(_ cmp abs a),
+            0x1e => instr!(_ cmp abs x),
             0x5e => instr!(_ cmp abs y),
             0x75 => instr!(_ cmp abs_indexed_x a),
+            0x76 => instr!(_ cmp abs_indexed_y a),
 
             0xde => instr!("cbne {}, {}" cbne direct_indexed_x rel),
             0xfe => instr!("dbnz {}, {}" dbnz y rel),

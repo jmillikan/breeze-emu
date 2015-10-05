@@ -1,5 +1,10 @@
 //! Logging utility macros
 
+use std::cell::Cell;
+use std::ops::Deref;
+use std::fmt::Debug;
+use std::thread::panicking;
+
 /// Executes `trace!` the first time this macro is evaluated, and does nothing if this is reached
 /// again.
 #[macro_export]
@@ -39,4 +44,23 @@ macro_rules! trace_unique {
             })
         }
     };
+}
+
+pub struct LogOnPanic<T: Copy + Debug>(Cell<T>);
+
+impl<T: Copy + Debug> LogOnPanic<T> {
+    pub fn new(t: T) -> Self { LogOnPanic(Cell::new(t)) }
+}
+
+impl<T: Copy + Debug> Deref for LogOnPanic<T> {
+    type Target = Cell<T>;
+    fn deref(&self) -> &Cell<T> { &self.0 }
+}
+
+impl<T: Copy + Debug> Drop for LogOnPanic<T> {
+    fn drop(&mut self) {
+        if panicking() {
+            println!("LogOnPanic: {:?}", self.0.get())
+        }
+    }
 }

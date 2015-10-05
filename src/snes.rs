@@ -4,6 +4,7 @@ use apu::Apu;
 use cpu::Cpu;
 use dma::{do_dma, DmaChannel};
 use input::Input;
+use log_util::LogOnPanic;
 use ppu::Ppu;
 use rom::Rom;
 
@@ -148,7 +149,7 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 31_765_000;
+        const CY_LIMIT: u64 = 32_135_000;
         /// Start tracing at this master cycle (0 to trace everything)
         const TRACE_START: u64 = CY_LIMIT - 5_000;
 
@@ -168,6 +169,7 @@ impl Snes {
         // Master clock cycles for the APU not yet accounted for (can be negative)
         let mut apu_master_cy_debt = 0;
         let mut ppu_master_cy_debt = 0;
+        let working_cy = LogOnPanic::new(0);
 
         while master_cy < CY_LIMIT {
             if master_cy >= TRACE_START {
@@ -214,6 +216,8 @@ impl Snes {
                     }
                 }
             }
+
+            working_cy.set(master_cy);
         }
 
         info!("EXITING. Master cycle count: {}, APU: {}, PPU: {}",
