@@ -352,7 +352,12 @@ impl Spc700 {
             0xed => instr!(_ notc),
 
             // Arithmetic
+            0x9c => instr!(_ dec a),
             0x1d => instr!(_ dec x),
+            0xdc => instr!(_ dec y),
+            0x8b => instr!(_ dec direct),
+            0x9b => instr!(_ dec direct_indexed_x),
+            0x8c => instr!(_ dec abs),
             0xbc => instr!(_ inc a),
             0x3d => instr!(_ inc x),
             0xfc => instr!(_ inc y),
