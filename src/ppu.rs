@@ -6,8 +6,10 @@
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
 /// Physical screen width
+/// (this is the width of a field, or a half-frame)
 pub const SCREEN_WIDTH: u16 = 256;
 /// Physical screen height
+/// (this is the height of a field, or a half-frame)
 pub const SCREEN_HEIGHT: u16 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
 /// Emulated refresh rate in Hz
 pub const REFRESH_RATE: u8 = 60;
@@ -420,13 +422,17 @@ impl Ppu {
         // FIXME Does each pixel take *exactly* 4 master clock cycles?
         if !self.in_h_blank() && !self.in_v_blank() {
             // This pixel is visible
+            let pixel;
             if self.forced_blank() {
-                self.set_cur_pixel(Rgb {r: 0, g: 0, b: 0});
+                pixel = Rgb {r: 0, g: 0, b: 0};
             } else {
                 // "Normal" pixel
-                let pixel = self.render_pixel();
-                self.set_cur_pixel(pixel);
+                pixel = self.render_pixel();
             }
+
+            let x = self.x;
+            let y = self.scanline;
+            self.set_pixel(x, y, pixel);
         }
 
         self.x += 1;
@@ -459,40 +465,6 @@ impl Ppu {
 
         (4, result)
     }
-}
-
-/// Unpacked OAM entry for internal use.
-struct OamEntry {
-    /// 0-511
-    tile: u16,
-    /// 0-511
-    x: u16,
-    y: u8,
-    /// 0-3
-    priority: u8,
-    /// 0-7
-    palette: u8,
-    hflip: bool,
-    vflip: bool,
-    size_toggle: bool,
-}
-
-/// Collected background settings
-struct BgSettings {
-    /// Mosaic pixel size. 1-16. 1 = Normal pixels.
-    mosaic: u8,
-    /// Tilemap address in VRAM
-    tilemap_addr: u16,
-    mirror_h: bool,
-    mirror_v: bool,
-    hscroll: u16,
-    vscroll: u16,
-}
-
-struct Rgb {
-    r: u8,
-    g: u8,
-    b: u8,
 }
 
 /// Private methods
@@ -615,7 +587,44 @@ impl Ppu {
         self.vram[self.vmaddr * 2 + 1] = data;
         self.vmaddr += inc;
     }
+}
 
+/// Unpacked OAM entry for internal use.
+struct OamEntry {
+    /// 0-511
+    tile: u16,
+    /// 0-511
+    x: u16,
+    y: u8,
+    /// 0-3
+    priority: u8,
+    /// 0-7
+    palette: u8,
+    hflip: bool,
+    vflip: bool,
+    size_toggle: bool,
+}
+
+/// Collected background settings
+struct BgSettings {
+    /// Mosaic pixel size. 1-16. 1 = Normal pixels.
+    mosaic: u8,
+    /// Tilemap address in VRAM
+    tilemap_addr: u16,
+    mirror_h: bool,
+    mirror_v: bool,
+    hscroll: u16,
+    vscroll: u16,
+}
+
+struct Rgb {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+/// Rendering
+impl Ppu {
     fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
         let start = (y as usize * SCREEN_WIDTH as usize + x as usize) * 3;
         self.framebuf[start] = rgb.r;
@@ -623,10 +632,40 @@ impl Ppu {
         self.framebuf[start+2] = rgb.b;
     }
 
-    fn set_cur_pixel(&mut self, rgb: Rgb) {
-        let x = self.x;
-        let y = self.scanline;
-        self.set_pixel(x, y, rgb);
+    /// Returns the OAM entry of the given sprite. Always returns a valid entry if `index` is valid
+    /// (0...127), panics otherwise.
+    fn get_oam_entry(&self, index: u8) -> OamEntry {
+        // FIXME Is this correct?
+        let start = index as u16 * 4;
+        let mut x = self.oam[start] as u16;
+        let y = self.oam[start + 1];
+        let mut tile = self.oam[start + 2] as u16;
+
+        // vhoopppc
+        let byte4 = self.oam[start + 3];
+        let vflip = byte4 & 0x80 != 0;
+        let hflip = byte4 & 0x40 != 0;
+        let priority = (byte4 & 0x30) >> 4;
+        let palette = (byte4 & 0x0e) >> 1;
+        tile |= (byte4 as u16 & 1) << 8;
+
+        // Read the second table. Each byte contains information of 4 sprites (2 bits per sprite):
+        // The LSb is the size-toggle bit, the second bit is the MSb of the x coord
+        let byte = self.oam[512 + index as u16 / 4];
+        let info = (byte >> (index & 0x03)) & 0x03;
+        let size_toggle = info & 0x01 != 0;
+        if info & 0x02 != 0 { x |= 1 << 8; }
+
+        OamEntry {
+            tile: tile,
+            x: x,
+            y: y,
+            priority: priority,
+            palette: palette,
+            hflip: hflip,
+            vflip: vflip,
+            size_toggle: size_toggle,
+        }
     }
 
     /// Renders the current pixel and returns its color. Assumes that the current pixel is visible
