@@ -1,11 +1,16 @@
 //! Emulates the Picture Processing Unit.
 //!
+//! We emulate the NTSC console, which has a refresh rate of 60 Hz and a screen resolution of
+//! 256x224 pixels by default.
+//!
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
 
 /// Physical screen width
 pub const SCREEN_WIDTH: u16 = 256;
 /// Physical screen height
 pub const SCREEN_HEIGHT: u16 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
+/// Emulated refresh rate in Hz
+pub const REFRESH_RATE: u8 = 60;
 
 /// The result of an `update` call. Either H-Blank or V-Blank might get entered, and IRQs can be
 /// caused.
@@ -23,12 +28,23 @@ pub struct UpdateResult {
 const OAM_SIZE: usize = 544;
 const CGRAM_SIZE: usize = 512;
 const VRAM_SIZE: usize = 64 * 1024;
+const FRAME_BUF_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize * 3;
 byte_array!(Oam[OAM_SIZE] with u16 indexing please);
 byte_array!(Cgram[CGRAM_SIZE] with u16 indexing please);
 byte_array!(Vram[VRAM_SIZE] with u16 indexing please);
+byte_array!(pub FrameBuf[FRAME_BUF_SIZE]);
 
 #[derive(Default)]
 pub struct Ppu {
+    /// PPU frame buffer. Contains raw RGB pixel data in `RGB24` format: The first byte is the red
+    /// component of the pixel in the top left corner of the frame, the second byte is the green
+    /// component and the third byte is the blue component. The fourth byte is then the red
+    /// component of the second pixel (at coordinate `(1,0)`), and so on.
+    ///
+    /// FIXME The size can change depending on the PPU config, make sure all frames fit in
+    /// FIXME How would this work in high resolution modes?
+    pub framebuf: FrameBuf,
+
     /// Object Attribute Memory
     ///
     /// The first 512 Bytes contain 4 Bytes per sprite (for a maximum of 128 simultaneous on-screen
@@ -402,7 +418,16 @@ impl Ppu {
     /// incremented, but obviously nothing will be drawn).
     pub fn update(&mut self) -> (u8, UpdateResult) {
         // FIXME Does each pixel take *exactly* 4 master clock cycles?
-        self.render_pixel();
+        if !self.in_h_blank() && !self.in_v_blank() {
+            // This pixel is visible
+            if self.forced_blank() {
+                self.set_cur_pixel(Rgb {r: 0, g: 0, b: 0});
+            } else {
+                // "Normal" pixel
+                let pixel = self.render_pixel();
+                self.set_cur_pixel(pixel);
+            }
+        }
 
         self.x += 1;
         let mut result = UpdateResult::default();
@@ -464,11 +489,17 @@ struct BgSettings {
     vscroll: u16,
 }
 
+struct Rgb {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
 /// Private methods
 impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
     fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
-    fn force_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
+    fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
 
     /// Get the configured sprite size in pixels
@@ -585,8 +616,22 @@ impl Ppu {
         self.vmaddr += inc;
     }
 
-    /// Renders the current pixel. If in H/V/F-Blank, this does nothing.
-    fn render_pixel(&mut self) {
-        // TODO
+    fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
+        let start = (y as usize * SCREEN_WIDTH as usize + x as usize) * 3;
+        self.framebuf[start] = rgb.r;
+        self.framebuf[start+1] = rgb.g;
+        self.framebuf[start+2] = rgb.b;
+    }
+
+    fn set_cur_pixel(&mut self, rgb: Rgb) {
+        let x = self.x;
+        let y = self.scanline;
+        self.set_pixel(x, y, rgb);
+    }
+
+    /// Renders the current pixel and returns its color. Assumes that the current pixel is visible
+    /// (ie. we're not in any blank mode).
+    fn render_pixel(&mut self) -> Rgb {
+        Rgb { r: 255, g: 0, b: 0 }
     }
 }

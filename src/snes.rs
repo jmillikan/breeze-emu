@@ -3,6 +3,7 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::{do_dma, DmaChannel};
+use frontend::{self, Renderer};
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
@@ -138,12 +139,14 @@ impl Peripherals {
 
 pub struct Snes {
     cpu: Cpu,
+    renderer: Box<Renderer>,
 }
 
 impl Snes {
     pub fn new(rom: Rom) -> Snes {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom)),
+            renderer: Box::new(frontend::SdlRenderer::new(&::sdl2::init().unwrap())),
         }
     }
 
@@ -203,6 +206,8 @@ impl Snes {
                     // TODO Do HDMA
                 }
                 if result.vblank {
+                    self.renderer.render(&*self.cpu.mem.ppu.framebuf);
+
                     // XXX we assume that joypads are always autoread
                     self.cpu.mem.input.update();
                     if self.cpu.mem.nmi_enabled() {
