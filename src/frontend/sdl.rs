@@ -22,7 +22,7 @@ impl SdlRenderer {
         let video = sdl.video().unwrap();
         let window = video.window("sneeze", SCREEN_WIDTH as u32 * 3, SCREEN_HEIGHT as u32 * 3)
             .build().unwrap();
-        let renderer = window.renderer().accelerated().present_vsync().build().unwrap();
+        let renderer = window.renderer().accelerated().build().unwrap();
         debug!("renderer: {:?}", renderer.info());
         let texture = renderer.create_texture(
             PixelFormatEnum::RGB24,

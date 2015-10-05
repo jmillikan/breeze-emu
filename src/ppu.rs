@@ -668,9 +668,27 @@ impl Ppu {
         }
     }
 
+    /// Looks up a color index in the CGRAM
+    fn lookup_color(&self, color: u8) -> Rgb {
+        // FIXME Byte order?
+        // FIXME Is this correct?
+        // 16-bit big endian value! (high byte, high address first)
+        // -bbbbbgg gggrrrrr
+        let lo = self.cgram[color as u16 * 2] as u16;
+        let hi = self.cgram[color as u16 * 2 + 1] as u16;
+        assert_eq!(hi & 0x80, 0);   // Unused bit must be 0 (just a sanity check)
+        
+        let val = (hi << 8) | lo;
+        let b = (val & 0x7c00) >> 10;
+        let g = (val & 0x03e0) >> 5;
+        let r = val & 0x001f;
+        Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 }
+    }
+
     /// Renders the current pixel and returns its color. Assumes that the current pixel is visible
     /// (ie. we're not in any blank mode).
     fn render_pixel(&mut self) -> Rgb {
-        Rgb { r: 255, g: 0, b: 0 }
+        let x = self.x as u8;
+        self.lookup_color(x)
     }
 }
