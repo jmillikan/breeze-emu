@@ -227,7 +227,7 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, opstr: &str) {
-        trace!("{:04X}  {:02X} {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
+        trace!("${:04X}    {:02X}  {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
             pc,
             self.mem[pc],
             opstr,
@@ -240,6 +240,8 @@ impl Spc700 {
     }
 
     pub fn dispatch(&mut self) -> u8 {
+        use log::LogLevel::Trace;
+
         // Cond. branches: +2 cycles if branch is taken
         static CYCLE_TABLE: [u8; 256] = [
             2,8,4,5,3,4,3,6, 2,6,5,4,5,4,6,8,   // $00-$0f
@@ -262,43 +264,53 @@ impl Spc700 {
 
         let pc = self.pc;
 
-        macro_rules!e{($e:expr)=>($e)}
+        macro_rules! e {
+            ($e:expr) => ($e)
+        }
         macro_rules! instr {
             ( _ $name:ident ) => {{
-                use log::LogLevel::Trace;
                 if log_enabled!(Trace) && self.trace {
                     self.trace_op(pc, stringify!($name));
                 }
                 self.$name()
             }};
-            ( $s:tt $name:ident ($($arg:expr),*) $am:ident ) => {{
-                // Used for bit set opcode
-                use log::LogLevel::Trace;
-                let am = self.$am();
-                if log_enabled!(Trace) && self.trace {
-                    self.trace_op(pc, &format!(e!($s), am));
-                }
-                self.$name($($arg,)* am)
-            }};
-            ( $s:tt $name:ident ($($arg:expr),*) $am:ident $am2:ident ) => {{
-                // Used for bit test opcode
-                use log::LogLevel::Trace;
-                let am = self.$am();
-                let am2 = self.$am2();
-                if log_enabled!(Trace) && self.trace {
-                    self.trace_op(pc, &format!(e!($s), am, am2));
-                }
-                self.$name($($arg,)* am, am2)
-            }};
             ( $s:tt $name:ident ) => {{
-                use log::LogLevel::Trace;
                 if log_enabled!(Trace) && self.trace {
                     self.trace_op(pc, e!($s));
                 }
                 self.$name()
             }};
+            ( _ $name:ident ($arg:tt) $am:ident ) => {{
+                let am = self.$am();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(concat!(stringify!($name), " {}.", $arg), am));
+                }
+                self.$name(e!($arg), am)
+            }};
+            ( $s:tt $name:ident ($arg:tt) $am:ident ) => {{
+                let am = self.$am();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(e!($s), am));
+                }
+                self.$name(e!($arg), am)
+            }};
+            ( _ $name:ident ($arg:tt) $am:ident $am2:ident ) => {{
+                let am = self.$am();
+                let am2 = self.$am2();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(concat!(stringify!($name), " {}.", $arg, ", {}"), am, am2));
+                }
+                self.$name(e!($arg), am, am2)
+            }};
+            ( $s:tt $name:ident ($arg:tt) $am:ident $am2:ident ) => {{
+                let am = self.$am();
+                let am2 = self.$am2();
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, &format!(e!($s), am, am2));
+                }
+                self.$name(e!($arg), am, am2)
+            }};
             ( _ $name:ident $am:ident ) => {{
-                use log::LogLevel::Trace;
                 let am = self.$am();
                 if log_enabled!(Trace) && self.trace {
                     self.trace_op(pc, &format!(concat!(stringify!($name), " {}"), am));
@@ -306,7 +318,6 @@ impl Spc700 {
                 self.$name(am)
             }};
             ( $s:tt $name:ident $am:ident ) => {{
-                use log::LogLevel::Trace;
                 let am = self.$am();
                 if log_enabled!(Trace) && self.trace {
                     self.trace_op(pc, &format!(e!($s), am));
@@ -314,7 +325,6 @@ impl Spc700 {
                 self.$name(am)
             }};
             ( _ $name:ident $am:ident $am2:ident ) => {{
-                use log::LogLevel::Trace;
                 let am = self.$am();
                 let am2 = self.$am2();
                 if log_enabled!(Trace) && self.trace {
@@ -323,7 +333,6 @@ impl Spc700 {
                 self.$name(am, am2)
             }};
             ( $s:tt $name:ident $am:ident $am2:ident ) => {{
-                use log::LogLevel::Trace;
                 let am = self.$am();
                 let am2 = self.$am2();
                 if log_enabled!(Trace) && self.trace {
@@ -407,22 +416,30 @@ impl Spc700 {
             0xfe => instr!("dbnz {}, {}" dbnz y rel),
             0x6e => instr!("dbnz {}, {}" dbnz direct rel),
 
-            0x02 => instr!("set1 {}.0" set1(0) direct),
-            0x22 => instr!("set1 {}.1" set1(1) direct),
-            0x42 => instr!("set1 {}.2" set1(2) direct),
-            0x62 => instr!("set1 {}.3" set1(3) direct),
-            0x82 => instr!("set1 {}.4" set1(4) direct),
-            0xa2 => instr!("set1 {}.5" set1(5) direct),
-            0xc2 => instr!("set1 {}.6" set1(6) direct),
-            0xe2 => instr!("set1 {}.7" set1(7) direct),
-            0x13 => instr!("bbc {}.0, {}" bbc(0) direct rel),
-            0x33 => instr!("bbc {}.1, {}" bbc(1) direct rel),
-            0x53 => instr!("bbc {}.2, {}" bbc(2) direct rel),
-            0x73 => instr!("bbc {}.3, {}" bbc(3) direct rel),
-            0x93 => instr!("bbc {}.4, {}" bbc(4) direct rel),
-            0xb3 => instr!("bbc {}.5, {}" bbc(5) direct rel),
-            0xd3 => instr!("bbc {}.6, {}" bbc(6) direct rel),
-            0xf3 => instr!("bbc {}.7, {}" bbc(7) direct rel),
+            0x02 => instr!(_ set1(0) direct),
+            0x22 => instr!(_ set1(1) direct),
+            0x42 => instr!(_ set1(2) direct),
+            0x62 => instr!(_ set1(3) direct),
+            0x82 => instr!(_ set1(4) direct),
+            0xa2 => instr!(_ set1(5) direct),
+            0xc2 => instr!(_ set1(6) direct),
+            0xe2 => instr!(_ set1(7) direct),
+            0x12 => instr!(_ clr1(0) direct),
+            0x32 => instr!(_ clr1(1) direct),
+            0x52 => instr!(_ clr1(2) direct),
+            0x72 => instr!(_ clr1(3) direct),
+            0x92 => instr!(_ clr1(4) direct),
+            0xb2 => instr!(_ clr1(5) direct),
+            0xd2 => instr!(_ clr1(6) direct),
+            0xf2 => instr!(_ clr1(7) direct),
+            0x13 => instr!(_ bbc(0) direct rel),
+            0x33 => instr!(_ bbc(1) direct rel),
+            0x53 => instr!(_ bbc(2) direct rel),
+            0x73 => instr!(_ bbc(3) direct rel),
+            0x93 => instr!(_ bbc(4) direct rel),
+            0xb3 => instr!(_ bbc(5) direct rel),
+            0xd3 => instr!(_ bbc(6) direct rel),
+            0xf3 => instr!(_ bbc(7) direct rel),
 
             0x5f => instr!("jmp {}" bra abs),                       // reuse `bra` fn
             0x1f => instr!("jmp {}" bra abs_indexed_indirect),      // reuse `bra` fn
@@ -575,6 +592,13 @@ impl Spc700 {
         // Sets no flags
         let mut val = am.clone().loadb(self);
         val |= 1 << bit;
+        am.storeb(self, val);
+    }
+    /// Clear bit
+    fn clr1(&mut self, bit: u8, am: AddressingMode) {
+        // Sets no flags
+        let mut val = am.clone().loadb(self);
+        val &= !(1 << bit);
         am.storeb(self, val);
     }
     /// Branch if bit clear
