@@ -135,7 +135,9 @@ pub struct Ppu {
     /// `$2105` BG mode and character size
     /// `4321emmm`
     /// * `4321`: Use 16x16 characters for BG**4**/**3**/**2**/**1** (if possible in this mode)
-    /// * `e`: Mode 1 BG3 priority bit (FIXME What?)
+    /// * `e`: Mode 1 BG3 priority bit. If set, BG3 tiles with priority 1 have the highest
+    ///   priority. If not set, these tiles have the third lowest priority (and end up between
+    ///   sprites with priority 0 and 1).
     /// * `mmm`: BG mode
     bgmode: u8,
     /// `$2106` Mosaic filter
@@ -668,16 +670,25 @@ impl Ppu {
         }
     }
 
+    /// Returns the active BG mode (0-7).
+    fn bg_mode(&self) -> u8 { self.bgmode & 0b111 }
+    /// Returns the backdrop color used as a default color (with color math applied, if enabled).
+    fn backdrop_color(&self) -> Rgb {
+        // TODO: Color math
+        self.lookup_color(0)
+    }
+
     /// Looks up a color index in the CGRAM
     fn lookup_color(&self, color: u8) -> Rgb {
-        // FIXME Byte order?
         // FIXME Is this correct?
         // 16-bit big endian value! (high byte, high address first)
         // -bbbbbgg gggrrrrr
         let lo = self.cgram[color as u16 * 2] as u16;
         let hi = self.cgram[color as u16 * 2 + 1] as u16;
-        assert_eq!(hi & 0x80, 0);   // Unused bit must be 0 (just a sanity check)
-        
+        // Unused bit should be 0 (just a sanity check, can be removed if games actually depend on
+        // this)
+        debug_assert_eq!(hi & 0x80, 0);
+
         let val = (hi << 8) | lo;
         let b = (val & 0x7c00) >> 10;
         let g = (val & 0x03e0) >> 5;
@@ -685,10 +696,183 @@ impl Ppu {
         Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 }
     }
 
+    /// Calculates the palette base index for a tile in the given background layer. `tile_palette`
+    /// is the palette number stored in the tilemap entry (the 3 `p` bits).
+    fn palette_base_for_bg_tile(&self, bg: u8, palette_num: u8) -> u8 {
+        match self.bg_mode() {
+            0 => palette_num * 4 + (bg - 1) * 32,
+            1 => match bg { // palette_num * color_count
+                1 | 2 => palette_num * 16,
+                3 => palette_num * 4,
+                _ => unreachable!(),    // no BG4
+            },
+            2 => palette_num * 16,
+            3 => match bg {
+                1 => 0,
+                2 => palette_num * 16,
+                _ => unreachable!(),    // no BG3/4
+            },
+            4 => match bg {
+                1 => 0,
+                2 => palette_num * 4,
+                _ => unreachable!(),    // no BG3/4
+            },
+            5 => match bg { // palette_num * color_count
+                1 => palette_num * 16,
+                2 => palette_num * 4,
+                _ => unreachable!(),    // no BG3/4
+            },
+            6 => palette_num * 16,      // BG1 has 16 colors
+            7 => panic!("NYI: palette_base_for_bg_tile for mode 7"),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the configured tile size (8 or 16) of the specified background layer (1-4).
+    fn bg_tile_size(&self, bg: u8) -> u8 {
+        // "If the BG character size for BG1/BG2/BG3/BG4 bit is set, then the BG is made of 16x16
+        // tiles. Otherwise, 8x8 tiles are used. However, note that Modes 5 and 6 always use
+        // 16-pixel wide tiles, and Mode 7 always uses 8x8 tiles."
+        match self.bg_mode() {
+            5 | 6 => 16,
+            7 => 8,
+            _ => {
+                // BGMODE: `4321----` (`-` = not relevant here)
+                if self.bgmode & (1 << (bg + 3)) == 0 {
+                    8
+                } else {
+                    16
+                }
+            }
+        }
+    }
+
+    /// Gets the scroll offset of the given BG layer
+    fn bg_scroll(&self, bg: u8) -> (u16, u16) {
+        // FIXME Are these correct (confused about H/V)?
+        match bg {
+            1 => (self.bg1hofs, self.bg1vofs),
+            2 => (self.bg2hofs, self.bg2vofs),
+            3 => (self.bg3hofs, self.bg3vofs),
+            4 => (self.bg4hofs, self.bg4vofs),
+            _ => unreachable!(),
+        }
+    }
+
     /// Renders the current pixel and returns its color. Assumes that the current pixel is visible
     /// (ie. we're not in any blank mode).
     fn render_pixel(&mut self) -> Rgb {
-        let x = self.x as u8;
-        self.lookup_color(x)
+        if self.x == 0 && self.scanline == 0 {
+            trace!("Starting new frame. BG mode {}", self.bg_mode());
+        }
+
+        macro_rules! e {
+            ( $e:expr ) => ( $e );
+        }
+
+        // This macro gets the current pixel from a tile with given priority in the given layer.
+        // If the pixel is non-transparent, it will return its RGB value (after applying color
+        // math). If it is transparent, it will do nothing (ie. the code following this macro is
+        // executed).
+        macro_rules! try_layer {
+            ( Sprites with priority $prio:tt ) => {
+                // TODO
+            };
+            ( BG $bg:tt tiles with priority $prio:tt ) => {
+                match self.lookup_bg_color(e!($bg), e!($prio)) {
+                    Some(rgb) => return rgb,
+                    None => {}
+                }
+            };
+        }
+
+        match self.bg_mode() {
+            0 => {
+                // I love macros <3
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 3 tiles with priority 1);
+                try_layer!(BG 4 tiles with priority 1);
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 3 tiles with priority 0);
+                try_layer!(BG 4 tiles with priority 0);
+                self.backdrop_color()
+            }
+            1 => {
+                if self.bgmode & 0x08 != 0 { try_layer!(BG 3 tiles with priority 1) }
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+                try_layer!(Sprites with priority 1);
+                if self.bgmode & 0x08 == 0 { try_layer!(BG 3 tiles with priority 1) }
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 3 tiles with priority 0);
+                self.backdrop_color()
+            }
+            2 ... 5 => {
+                // FIXME Do the background priorities differ here?
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+                self.backdrop_color()
+            }
+            6 => {
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(Sprites with priority 0);
+                self.backdrop_color()
+            }
+            mode => panic!("NYI: BG mode {}", mode),
+        }
+    }
+
+    /// Applies color math to the given RGB value (if enabled), assuming it is the color of the
+    /// current pixel.
+    fn maybe_apply_color_math(&self, color: Rgb) -> Rgb {
+        // TODO
+        color
+    }
+
+    /// Lookup the color of the given background layer (1-4) at the current pixel, using the given
+    /// priority (0-1) only. This will also scroll backgrounds accordingly and apply color math.
+    ///
+    /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
+    fn lookup_bg_color(&self, bg: u8, prio: u8) -> Option<Rgb> {
+        debug_assert!(bg >= 1 && bg <= 4);
+
+        // Apply BG scrolling and get the tile coordinates
+        // FIXME Does `BGnSC` mirroring apply here?
+        // FIXME Fix this: "Note that many games will set their vertical scroll values to -1 rather
+        // than 0. This is because the SNES loads OBJ data for each scanline during the previous
+        // scanline. The very first line, though, wouldn’t have any OBJ data loaded! So the SNES
+        // doesn’t actually output scanline 0, although it does everything to render it. These
+        // games want the first line of their tilemap to be the first line output, so they set
+        // their VOFS registers in this manner. Note that an interlace screen needs -2 rather than
+        // -1 to properly correct for the missing line 0 (and an emulator would need to add 2
+        // instead of 1 to account for this)."
+        let x = self.x;
+        let y = self.scanline;
+        let tile_size = self.bg_tile_size(bg);
+        let (xoff, yoff) = self.bg_scroll(bg);
+        let tile_x = (x + xoff) / tile_size as u16;
+        let tile_y = (y + yoff) / tile_size as u16;
+
+        None
     }
 }
