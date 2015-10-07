@@ -148,8 +148,20 @@ pub struct Ppu {
     /// `$2107`-`$210a` BGx Tilemap Address and Size
     /// `aaaaaayx`
     /// * `a`: VRAM address is `aaaaaa << 10`
-    /// * `y`: Vertical mirroring
-    /// * `x`: Horizontal mirroring
+    /// * `y`: Vertical mirroring off (when 0, the bottom tile maps are mirrored from the top)
+    /// * `x`: Horizontal mirroring off (when 0, the right tile maps are mirrored from the left)
+    ///
+    /// The value of `yx` defines the number of 32x32 tilemaps used (1, 2 or 4) as well as their
+    /// layout:
+    ///     00  32x32   AA
+    ///                 AA
+    ///     01  64x32   AB
+    ///                 AB
+    ///     10  32x64   AA
+    ///                 BB
+    ///     11  64x64   AB
+    ///                 CD
+    /// FIXME Is this mirroring stuff correct? It's confusing as hell!
     bg1sc: u8,
     bg2sc: u8,
     bg3sc: u8,
@@ -609,14 +621,36 @@ struct OamEntry {
 
 /// Collected background settings
 struct BgSettings {
-    /// Mosaic pixel size. 1-16. 1 = Normal pixels.
+    /// Mosaic pixel size (1-16). 1 = Normal pixels.
+    /// FIXME: I think there's a difference between disabled and enabled with 1x1 mosaic size in
+    /// some modes (highres presumably)
     mosaic: u8,
     /// Tilemap address in VRAM
+    /// "Starting at the tilemap address, the first $800 bytes are for tilemap A. Then come the
+    /// $800 bytes for B, then C then D."
     tilemap_addr: u16,
-    mirror_h: bool,
-    mirror_v: bool,
+    /// When `true`, this BGs tilemaps are mirrored sideways
+    tilemap_mirror_h: bool,
+    /// When `true`, this BGs tilemaps are mirrored downwards
+    tilemap_mirror_v: bool,
+    /// Either 8 or 16.
+    tile_size: u8,
+    /// Character Data / Tileset address in VRAM
+    chr_addr: u16,
     hscroll: u16,
     vscroll: u16,
+}
+
+/// Unpacked tilemap entry for internal (rendering) use
+struct TilemapEntry {
+    vflip: bool,
+    hflip: bool,
+    /// Priority bit (0-1)
+    priority: u8,
+    /// Tile palette (0-7)
+    palette: u8,
+    /// Index into the character/tile data, where the actual tile is stored
+    tile_number: u16,
 }
 
 struct Rgb {
@@ -627,6 +661,84 @@ struct Rgb {
 
 /// Rendering
 impl Ppu {
+    /// Reads the tilemap entry at the given VRAM word address.
+    ///     vhopppcc cccccccc (high, low)
+    ///     v/h        = Vertical/Horizontal flip this tile.
+    ///     o          = Tile priority.
+    ///     ppp        = Tile palette. The number of entries in the palette depends on the Mode and the BG.
+    ///     cccccccccc = Tile number.
+    fn tilemap_entry(&self, word_address: u16) -> TilemapEntry {
+        let lo = self.vram[word_address * 2];
+        let hi = self.vram[word_address * 2 + 1];
+
+        TilemapEntry {
+            vflip: hi & 0x80 != 0,
+            hflip: hi & 0x40 != 0,
+            priority: (hi & 0x20) >> 5,
+            palette: (hi & 0x1c) >> 2,
+            tile_number: ((hi as u16 & 0x03) << 8) | lo as u16,
+        }
+    }
+
+    /// Collects properties of a background layer
+    fn bg_settings(&self, bg: u8) -> BgSettings {
+        // The BGxSC register for our background layer
+        let bgsc = match bg {
+            1 => self.bg1sc,
+            2 => self.bg2sc,
+            3 => self.bg3sc,
+            4 => self.bg4sc,
+            _ => unreachable!(),
+        };
+        // Chr address >> 12
+        let chr = match bg {
+            1 => self.bg12nba & 0x0f,
+            2 => (self.bg12nba & 0xf0) >> 4,
+            3 => self.bg34nba & 0x0f,
+            4 => (self.bg34nba & 0xf0) >> 4,
+            _ => unreachable!(),
+        };
+        let (hscroll, vscroll) = match bg {
+            1 => (self.bg1hofs, self.bg1vofs),
+            2 => (self.bg2hofs, self.bg2vofs),
+            3 => (self.bg3hofs, self.bg3vofs),
+            4 => (self.bg4hofs, self.bg4vofs),
+            _ => unreachable!(),
+        };
+
+        BgSettings {
+            mosaic: if self.mosaic & (1 << (bg-1)) == 0 {
+                1
+            } else {
+                ((self.mosaic & 0xf0) >> 4) + 1
+            },
+            tilemap_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
+            tilemap_mirror_h: bgsc & 0b01 == 0, // inverted bit value
+            tilemap_mirror_v: bgsc & 0b10 == 0, // inverted bit value
+            tile_size: match self.bg_mode() {
+                // "If the BG character size for BG1/BG2/BG3/BG4 bit is set, then the BG is made of
+                // 16x16 tiles. Otherwise, 8x8 tiles are used. However, note that Modes 5 and 6
+                // always use 16-pixel wide tiles, and Mode 7 always uses 8x8 tiles."
+                5 | 6 => 16,
+                7 => 8,
+                _ => {
+                    // BGMODE: `4321----` (`-` = not relevant here)
+                    if self.bgmode & (1 << (bg + 3)) == 0 {
+                        8
+                    } else {
+                        16
+                    }
+                }
+            },
+            chr_addr: (chr as u16) << 12,
+            hscroll: hscroll,
+            vscroll: vscroll,
+        }
+    }
+
+    /// Determines whether the given BG layer is enabled
+    fn bg_enabled(&self, bg: u8) -> bool { self.tm & (1 << (bg-1)) != 0 }
+
     fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
         let start = (y as usize * SCREEN_WIDTH as usize + x as usize) * 3;
         self.framebuf[start] = rgb.r;
@@ -685,8 +797,7 @@ impl Ppu {
         // -bbbbbgg gggrrrrr
         let lo = self.cgram[color as u16 * 2] as u16;
         let hi = self.cgram[color as u16 * 2 + 1] as u16;
-        // Unused bit should be 0 (just a sanity check, can be removed if games actually depend on
-        // this)
+        // Unused bit should be 0 (just a sanity check, can be removed if games actually do this)
         debug_assert_eq!(hi & 0x80, 0);
 
         let val = (hi << 8) | lo;
@@ -696,16 +807,57 @@ impl Ppu {
         Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 }
     }
 
+    /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
+    /// 256).
+    ///
+    ///     Mode    # Colors for BG
+    ///     1   2   3   4
+    ///     ======---=---=---=---=
+    ///     0        4   4   4   4
+    ///     1       16  16   4   -
+    ///     2       16  16   -   -
+    ///     3      256  16   -   -
+    ///     4      256   4   -   -
+    ///     5       16   4   -   -
+    ///     6       16   -   -   -
+    ///     7      256   -   -   -
+    ///     7EXTBG 256 128   -   -
+    fn color_count_for_bg(&self, bg: u8) -> u16 {
+        match self.bg_mode() {
+            0 => 4,
+            1 => match bg {
+                1 | 2 => 16,
+                3 => 4,
+                _ => unreachable!(),
+            },
+            2 => 16,
+            3 => match bg {
+                1 => 256,
+                2 => 16,
+                _ => unreachable!(),
+            },
+            4 => match bg {
+                1 => 256,
+                2 => 4,
+                _ => unreachable!(),
+            },
+            5 => match bg {
+                1 => 16,
+                2 => 4,
+                _ => unreachable!(),
+            },
+            6 => 16,
+            7 => panic!("NYI: color_count_for_bg for mode 7"),   // (make sure to handle EXTBG)
+            _ => unreachable!(),
+        }
+    }
+
     /// Calculates the palette base index for a tile in the given background layer. `tile_palette`
     /// is the palette number stored in the tilemap entry (the 3 `p` bits).
     fn palette_base_for_bg_tile(&self, bg: u8, palette_num: u8) -> u8 {
         match self.bg_mode() {
             0 => palette_num * 4 + (bg - 1) * 32,
-            1 => match bg { // palette_num * color_count
-                1 | 2 => palette_num * 16,
-                3 => palette_num * 4,
-                _ => unreachable!(),    // no BG4
-            },
+            1 | 5 => palette_num * self.color_count_for_bg(bg) as u8,   // doesn't have 256 colors
             2 => palette_num * 16,
             3 => match bg {
                 1 => 0,
@@ -717,53 +869,16 @@ impl Ppu {
                 2 => palette_num * 4,
                 _ => unreachable!(),    // no BG3/4
             },
-            5 => match bg { // palette_num * color_count
-                1 => palette_num * 16,
-                2 => palette_num * 4,
-                _ => unreachable!(),    // no BG3/4
-            },
             6 => palette_num * 16,      // BG1 has 16 colors
             7 => panic!("NYI: palette_base_for_bg_tile for mode 7"),
             _ => unreachable!(),
         }
     }
 
-    /// Returns the configured tile size (8 or 16) of the specified background layer (1-4).
-    fn bg_tile_size(&self, bg: u8) -> u8 {
-        // "If the BG character size for BG1/BG2/BG3/BG4 bit is set, then the BG is made of 16x16
-        // tiles. Otherwise, 8x8 tiles are used. However, note that Modes 5 and 6 always use
-        // 16-pixel wide tiles, and Mode 7 always uses 8x8 tiles."
-        match self.bg_mode() {
-            5 | 6 => 16,
-            7 => 8,
-            _ => {
-                // BGMODE: `4321----` (`-` = not relevant here)
-                if self.bgmode & (1 << (bg + 3)) == 0 {
-                    8
-                } else {
-                    16
-                }
-            }
-        }
-    }
-
-    /// Gets the scroll offset of the given BG layer
-    fn bg_scroll(&self, bg: u8) -> (u16, u16) {
-        // FIXME Are these correct (confused about H/V)?
-        match bg {
-            1 => (self.bg1hofs, self.bg1vofs),
-            2 => (self.bg2hofs, self.bg2vofs),
-            3 => (self.bg3hofs, self.bg3vofs),
-            4 => (self.bg4hofs, self.bg4vofs),
-            _ => unreachable!(),
-        }
-    }
-
-    /// Renders the current pixel and returns its color. Assumes that the current pixel is visible
-    /// (ie. we're not in any blank mode).
+    /// Renders the current pixel and returns its color. Assumes that we're not in any blank mode.
     fn render_pixel(&mut self) -> Rgb {
         if self.x == 0 && self.scanline == 0 {
-            trace!("Starting new frame. BG mode {}", self.bg_mode());
+            trace!("Starting new frame. BG mode {}, BGs enabled: {:04b}", self.bg_mode(), self.tm & 0xf);
         }
 
         macro_rules! e {
@@ -853,11 +968,12 @@ impl Ppu {
     /// priority (0-1) only. This will also scroll backgrounds accordingly and apply color math.
     ///
     /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
-    fn lookup_bg_color(&self, bg: u8, prio: u8) -> Option<Rgb> {
-        debug_assert!(bg >= 1 && bg <= 4);
+    fn lookup_bg_color(&self, bg_num: u8, prio: u8) -> Option<Rgb> {
+        debug_assert!(bg_num >= 1 && bg_num <= 4);
+        if !self.bg_enabled(bg_num) { return None }
 
         // Apply BG scrolling and get the tile coordinates
-        // FIXME Does `BGnSC` mirroring apply here?
+        // FIXME Apply mosaic filter
         // FIXME Fix this: "Note that many games will set their vertical scroll values to -1 rather
         // than 0. This is because the SNES loads OBJ data for each scanline during the previous
         // scanline. The very first line, though, wouldn’t have any OBJ data loaded! So the SNES
@@ -868,11 +984,82 @@ impl Ppu {
         // instead of 1 to account for this)."
         let x = self.x;
         let y = self.scanline;
-        let tile_size = self.bg_tile_size(bg);
-        let (xoff, yoff) = self.bg_scroll(bg);
-        let tile_x = (x + xoff) / tile_size as u16;
-        let tile_y = (y + yoff) / tile_size as u16;
+        let bg = self.bg_settings(bg_num);
+        let tile_size = bg.tile_size;
+        let (xscroll, yscroll) = (bg.hscroll, bg.vscroll);
+        let tile_x = (x + xscroll) / tile_size as u16;
+        let tile_y = (y + yscroll) / tile_size as u16;
+        let off_x = ((x + xscroll) % tile_size as u16) as u8;
+        let off_y = ((y + yscroll) % tile_size as u16) as u8;
+        let (sx, sy) = (bg.tilemap_mirror_h, bg.tilemap_mirror_v);
 
-        None
+        // Calculate the VRAM word address, where the tilemap entry for our tile is stored
+        // FIXME Copied from http://wiki.superfamicom.org/snes/show/Backgrounds, no idea if correct
+        // (or even correctly interpreted, since the wiki is really confusing)
+        let tilemap_word_address =
+            (bg.tilemap_addr << 9) +
+            ((tile_y & 0x1f) << 5) +
+            (tile_x & 0x1f) +
+            if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} +
+            if sx {(tile_x & 0x20) << 5} else {0};
+        let tilemap_entry = self.tilemap_entry(tilemap_word_address);
+        if tilemap_entry.priority != prio { return None }
+
+        let palette_index = self.read_chr_entry(bg_num, &bg, &tilemap_entry, (off_x, off_y));
+
+        match palette_index {
+            0 => None,
+            _ => Some(self.lookup_color(palette_index)),
+        }
+    }
+
+    /// Calculates the (absolute) palette index of a pixel inside the given tile
+    fn read_chr_entry(
+            &self,
+            bg_num: u8,
+            bg: &BgSettings,
+            tilemap_entry: &TilemapEntry,
+            (x_off, y_off): (u8, u8)) -> u8 {
+        assert_eq!(bg.tile_size, 8);    // FIXME Support 16x16 tiles
+
+        // Calculate the number of bitplanes needed to store a color
+        let color_count = self.color_count_for_bg(bg_num);
+        let bitplane_count = color_count.leading_zeros() as u16;
+        debug_assert_eq!(color_count.count_ones(), 1);
+        debug_assert!(bitplane_count & 1 == 0, "odd number of bitplanes");
+
+        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
+        let start_addr = (bg.chr_addr << 1) + (tilemap_entry.tile_number * 8 * bitplane_count);
+
+        // Read the entry from the bitplanes. Depends on tile size (8/16) and color count
+        // (4/16/128/256). We always have a multiple of 2 bitplanes, and 2 bitplanes are stored
+        // interleaved with each other.
+
+        let bitplane_pairs = bitplane_count as u8 >> 1;
+        let bitplane_pair_size = 16;
+
+        // FIXME: I'm assuming all pairs of bitplanes are stored sequentially?
+        let mut palette_index = 0u8;
+        for i in (0..bitplane_pairs) {
+            let bitplane_bits = self.read_2_bitplanes(
+                start_addr + i as u16 * bitplane_pair_size,
+                (x_off, y_off));
+            palette_index = palette_index | (bitplane_bits << (2 * i));
+        }
+
+        palette_index
+    }
+
+    /// Reads 2 bits of the given coordinate within the bitplane's tile from 2 interleaved
+    /// bitplanes.
+    fn read_2_bitplanes(&self, bitplanes_start: u16, (x_off, y_off): (u8, u8)) -> u8 {
+        // FIXME Handle flipped tiles somewhere in here
+        // Bit 0 in low bytes, bit 1 in high bytes
+        let lo = self.vram[bitplanes_start + y_off as u16 * 2];
+        let hi = self.vram[bitplanes_start + y_off as u16 * 2 + 1];
+        let bit0 = (lo & (1 << x_off)) >> x_off;
+        let bit1 = (hi & (1 << x_off)) >> x_off;
+
+        (bit1 << 1) | bit0
     }
 }
