@@ -399,10 +399,12 @@ impl Ppu {
             0x212c => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212c: ${:02X}", value) }
                 self.tm = value;
+                debug!("TM set to ${:02X}", value);
             }
             0x212d => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212d: ${:02X}", value) }
                 self.ts = value;
+                debug!("TS set to ${:02X}", value);
             }
             0x212e => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212e: ${:02X}", value) }
@@ -878,7 +880,9 @@ impl Ppu {
     /// Renders the current pixel and returns its color. Assumes that we're not in any blank mode.
     fn render_pixel(&mut self) -> Rgb {
         if self.x == 0 && self.scanline == 0 {
-            trace!("Starting new frame. BG mode {}, BGs enabled: {:04b}", self.bg_mode(), self.tm & 0xf);
+            trace!("Starting new frame. BG mode {}, layers enabled: {:05b}",
+                self.bg_mode(),
+                self.tm & 0x1f);
         }
 
         macro_rules! e {

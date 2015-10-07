@@ -100,7 +100,6 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
                 0x4200 => {
-                    trace!("NMITIMEN = ${:02X}", value);
                     // NMITIMEN - NMI/IRQ enable
                     // E-HV---J
                     // E: Enable NMI
@@ -152,9 +151,9 @@ impl Snes {
 
     pub fn run(&mut self) {
         /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 60_000_000;
+        const CY_LIMIT: u64 = 35_000_000;
         /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = CY_LIMIT - 5_000;
+        const TRACE_START: u64 = CY_LIMIT * 2;
 
         const MASTER_CLOCK_FREQ: i32 = 21_477_000;
         /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
