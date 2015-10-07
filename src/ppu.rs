@@ -490,23 +490,6 @@ impl Ppu {
     fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
 
-    /// Get the configured sprite size in pixels
-    fn obj_size(&self, alt: bool) -> (u8, u8) {
-        match self.obsel & 0b111 {
-            0b000 => if !alt {(8,8)} else {(16,16)},
-            0b001 => if !alt {(8,8)} else {(32,32)},
-            0b010 => if !alt {(8,8)} else {(64,64)},
-            0b011 => if !alt {(16,16)} else {(32,32)},
-            0b100 => if !alt {(16,16)} else {(64,64)},
-            0b101 => if !alt {(32,32)} else {(64,64)},
-            // FIXME Figure out if we want to support these:
-            //0b110 => if !alt {(16,32)} else {(32,64)},
-            //0b111 => if !alt {(16,32)} else {(32,32)},
-            invalid => panic!("invalid sprite size selected: {:b} (OBSEL = ${:02X})",
-                invalid, self.obsel)
-        }
-    }
-
     /// Store a byte to a "write-twice" `BGnxOFS` register
     fn bg_store(&mut self, addr: u16, val: u8) {
         let reg = match addr {
@@ -609,8 +592,8 @@ impl Ppu {
 struct OamEntry {
     /// 0-511
     tile: u16,
-    /// 0-511
-    x: u16,
+    /// 9 bits, considered signed (-256 - 255)
+    x: i16,
     y: u8,
     /// 0-3
     priority: u8,
@@ -663,6 +646,23 @@ struct Rgb {
 
 /// Rendering
 impl Ppu {
+    /// Get the configured sprite size in pixels
+    fn obj_size(&self, alt: bool) -> (u8, u8) {
+        match self.obsel & 0b111 {
+            0b000 => if !alt {(8,8)} else {(16,16)},
+            0b001 => if !alt {(8,8)} else {(32,32)},
+            0b010 => if !alt {(8,8)} else {(64,64)},
+            0b011 => if !alt {(16,16)} else {(32,32)},
+            0b100 => if !alt {(16,16)} else {(64,64)},
+            0b101 => if !alt {(32,32)} else {(64,64)},
+            // FIXME Figure out if we want to support these:
+            //0b110 => if !alt {(16,32)} else {(32,64)},
+            //0b111 => if !alt {(16,32)} else {(32,32)},
+            invalid => panic!("invalid sprite size selected: {:b} (OBSEL = ${:02X})",
+                invalid, self.obsel)
+        }
+    }
+
     /// Reads the tilemap entry at the given VRAM word address.
     ///     vhopppcc cccccccc (high, low)
     ///     v/h        = Vertical/Horizontal flip this tile.
@@ -770,11 +770,15 @@ impl Ppu {
         let byte = self.oam[512 + index as u16 / 4];
         let info = (byte >> (index & 0x03)) & 0x03;
         let size_toggle = info & 0x01 != 0;
-        if info & 0x02 != 0 { x |= 1 << 8; }
+        if info & 0x02 != 0 {
+            // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
+            // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
+            x = 0xfff0 | x;
+        }
 
         OamEntry {
             tile: tile,
-            x: x,
+            x: x as i16,
             y: y,
             priority: priority,
             palette: palette,
@@ -895,12 +899,13 @@ impl Ppu {
         // executed).
         macro_rules! try_layer {
             ( Sprites with priority $prio:tt ) => {
-                // TODO
+                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio)) {
+                    return rgb
+                }
             };
             ( BG $bg:tt tiles with priority $prio:tt ) => {
-                match self.lookup_bg_color(e!($bg), e!($prio)) {
-                    Some(rgb) => return rgb,
-                    None => {}
+                if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio)) {
+                    return rgb
                 }
             };
         }
@@ -961,9 +966,70 @@ impl Ppu {
         }
     }
 
+    fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
+        // NB We check if OBJ is enabled later, since time/range overflow flags are set regardless
+        // FIXME Determine `FirstSprite` correctly (`$2103` priority rotation)
+        let first_sprite = 0;
+
+        // Find the first 32 sprites on the current scanline
+        // FIXME Use a "maximum" size array perhaps (on the stack!)
+        // FIXME Could use a OAM entry iterator instead
+        // FIXME Cache the result for the entire scanline, no need to calculate it for every pixel
+        let mut sprites_found = [0; 32];
+        let mut sprite_count = 0;   // # of sprites found (up to 32), valid length of `found`
+        for i in 0..128 {
+            let entry = self.get_oam_entry(i);
+            if self.sprite_on_scanline(&entry) {
+                if sprite_count < 32 {
+                    sprites_found[sprite_count] = i;
+                    sprite_count += 1;
+                } else {
+                    // FIXME: Sprite overflow. Set bit 6 of $213e.
+                    break
+                }
+            }
+        }
+
+        // "Starting with the last sprite in Range, load up to 34 8x8 tiles (from left-to-right,
+        // after flipping). If there are more than 34 tiles in Range, set bit 7 of $213e. Only
+        // those tiles with -8 < X < 256 are counted."
+        // A few notes:
+        // * Sprite tiles are always 8x8 pixels
+        // * "left-to-right" refers to how tiles of sprites are loaded, not the sprite order
+
+        // Start at the last sprite found
+        for i in (0..sprite_count).rev() {
+            let sprite = sprites_found[i];
+        }
+
+        if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
+
+        // TODO: Draw each tile in range
+
+        None
+    }
+
+    /// Determines if the given sprite is on the current scanline
+    fn sprite_on_scanline(&self, sprite: &OamEntry) -> bool {
+        let (w, h) = self.obj_size(sprite.size_toggle);
+        let (w, h) = (w as i16, h);
+
+        // "If any OBJ is at X=256, consider it as being at X=0 when considering Range and Time."
+        let x = if sprite.x == 256 { 0 } else { sprite.x };
+
+        // "Only those sprites with -size < X < 256 are considered in Range." (`size` is `w` here)
+        if -w < sprite.x && sprite.x < 256 {
+            // Sprites Y coordinate must be on the current scanline:
+            sprite.y as u16 <= self.scanline && sprite.y as u16 + h as u16 >= self.scanline
+        } else {
+            false
+        }
+    }
+
     /// Applies color math to the given RGB value (if enabled), assuming it is the color of the
     /// current pixel.
     fn maybe_apply_color_math(&self, color: Rgb) -> Rgb {
+        // FIXME needs more info (bg, no bg, ...)
         // TODO
         color
     }
