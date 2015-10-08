@@ -32,11 +32,12 @@ struct OamEntry {
 
 /// Informations about a single tile of a sprite, needed for drawing.
 struct SpriteTile {
+    /// Address of character data for this tile
+    chr_addr: u16,
     /// X position of the tile on the screen.
     x: i16,
-    /// Y position of the scanline inside the tile (0-7). To draw the tile, we just have to offset
-    /// by the scanline.
-    /// FIXME Can we just store the pixel row that's on the scanline?
+    /// Y position of the scanline inside the tile (0-7)
+    /// FIXME Can we just store the pixel row that's on the scanline? (for each priority)
     y_off: u8,
     /// Priority of the sprite (0-3)
     priority: u8,
@@ -183,7 +184,6 @@ impl Ppu {
         // FIXME Is this correct?
         let start = index as u16 * 4;
         let mut x = self.oam[start] as u16;
-        let y = self.oam[start + 1];
 
         // vhoopppN
         let byte4 = self.oam[start + 3];
@@ -207,7 +207,7 @@ impl Ppu {
             tile: self.oam[start + 2],
             name_table: byte4 & 1,
             x: x as i16,
-            y: y,
+            y: self.oam[start + 1],
             priority: priority,
             palette: palette,
             hflip: hflip,
@@ -313,14 +313,23 @@ impl Ppu {
     /// we're not in any blank mode.
     pub fn render_pixel(&mut self) -> Rgb {
         if self.x == 0 && self.scanline == 0 {
-            trace!("Starting new frame. BG mode {}, layers enabled: {:05b}",
+            trace!("New frame. BG mode {}, layers enabled: {:05b}, sprites are {:?} or {:?}",
                 self.bg_mode(),
-                self.tm & 0x1f);
+                self.tm & 0x1f,
+                self.obj_size(false),
+                self.obj_size(true));
         }
 
         if self.x == 0 {
             // Entered new scanline.
             self.collect_sprite_data_for_scanline();
+        }
+
+        if self.scanline < 64 && self.x < 64 {
+            // Debug: Draw the palette
+            let x = self.x >> 2;
+            let y = self.scanline >> 2;
+            return self.lookup_color(y as u8 * 16 + x as u8)
         }
 
         macro_rules! e {
@@ -411,6 +420,12 @@ impl Ppu {
         for i in 0..128 {
             let entry = self.get_oam_entry(i);
             if self.sprite_on_scanline(&entry) {
+                trace_unique!(
+                    "sprite {} on scanline {}: pos = ({},{}), size = {:?} palette = {}, prio = {}, \
+                    tile0 = {}, nametable = {}",
+                    i, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
+                    entry.palette, entry.priority, entry.tile, entry.name_table);
+
                 if let Some(_) = visible_sprites.push((i, entry)) {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
                     break
@@ -466,10 +481,12 @@ impl Ppu {
             // Start address of the row of tiles on the scanline
             let y_row_start_addr = tile_start_addr + 512 * y_tile;
 
+            // FIXME "Only those tiles with -8 < X < 256 are counted."
             // Add all tiles in this row to our tile list (left to right)
-            for i in 0..8 {
+            for i in 0..sprite_w_tiles as i16 {
                 if visible_tiles.len() < 34 {
                     visible_tiles.push(SpriteTile {
+                        chr_addr: y_row_start_addr + 32 * i as u16,
                         x: sprite.x + 8 * i,
                         y_off: tile_y_off,
                         priority: sprite.priority,
@@ -491,9 +508,22 @@ impl Ppu {
         for tile in &self.render_state.visible_sprite_tiles {
             if tile.priority == prio {
                 // The tile must be on this scanline, we just have to check X
-                if tile.x <= self.x as i16 && tile.x + 8 >= self.x as i16 {
-                    // FIXME Read the actual palette value
-                    return Some(self.lookup_color(5))
+                if tile.x <= self.x as i16 && tile.x + 8 > self.x as i16 {
+                    let x_offset = self.x as i16 - tile.x;
+                    debug_assert!(0 <= x_offset && x_offset <= 7, "x_offset = {}", x_offset);
+                    let rel_color = self.read_chr_entry(4,    // 16 colors
+                                                        tile.chr_addr,
+                                                        8,
+                                                        (x_offset as u8, tile.y_off));
+                    debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
+
+                    let abs_color = 128 + tile.palette * 16 + rel_color;
+                    // FIXME Color math
+                    let rgb = self.lookup_color(abs_color);
+                    trace_unique!("Sprite color = {:?} ({})", rgb, abs_color);
+                    if let Rgb{r:0,b:0,g:0} = rgb { return Some(Rgb{r:255,g:255,b:255}) }
+
+                    return Some(rgb)
                 }
             }
         }
@@ -572,7 +602,20 @@ impl Ppu {
         let tilemap_entry = self.tilemap_entry(tilemap_word_address);
         if tilemap_entry.priority != prio { return None }
 
-        let palette_index = self.read_chr_entry(bg_num, &bg, &tilemap_entry, (off_x, off_y));
+        // Calculate the number of bitplanes needed to store a color in this BG
+        let color_count = self.color_count_for_bg(bg_num);
+        let bitplane_count = color_count.leading_zeros() as u16;
+        debug_assert_eq!(color_count.count_ones(), 1);  // should be power of two
+
+        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
+        let bitplane_start_addr =
+            (bg.chr_addr << 1) +
+            (tilemap_entry.tile_number * 8 * bitplane_count);
+
+        let palette_index = self.read_chr_entry(bitplane_count as u8,
+                                                bitplane_start_addr,
+                                                tile_size,
+                                                (off_x, off_y));
 
         match palette_index {
             0 => None,
@@ -580,37 +623,30 @@ impl Ppu {
         }
     }
 
-    /// Calculates the (absolute) palette index of a pixel inside the given tile
-    fn read_chr_entry(
-            &self,
-            bg_num: u8,
-            bg: &BgSettings,
-            tilemap_entry: &TilemapEntry,
-            (x_off, y_off): (u8, u8)) -> u8 {
-        assert_eq!(bg.tile_size, 8);    // FIXME Support 16x16 tiles
-
-        // Calculate the number of bitplanes needed to store a color
-        let color_count = self.color_count_for_bg(bg_num);
-        let bitplane_count = color_count.leading_zeros() as u16;
-        debug_assert_eq!(color_count.count_ones(), 1);
-        debug_assert!(bitplane_count & 1 == 0, "odd number of bitplanes");
-
-        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
-        let start_addr = (bg.chr_addr << 1) + (tilemap_entry.tile_number * 8 * bitplane_count);
-
-        // Read the entry from the bitplanes. Depends on tile size (8/16) and color count
-        // (4/16/128/256). We always have a multiple of 2 bitplanes, and 2 bitplanes are stored
-        // interleaved with each other.
-
-        let bitplane_pairs = bitplane_count as u8 >> 1;
-        let bitplane_pair_size = 16;
+    /// Reads character data for a pixel and returns the palette index stored in the bitplanes.
+    ///
+    /// # Parameters
+    /// * `bitplane_count`: Number of bitplanes (must be even)
+    /// * `start_addr`: Address of the first bitplane (or the first 2)
+    /// * `tile_size`: 8 or 16
+    /// * `(x, y)`: Offset inside the tile
+    fn read_chr_entry(&self,
+                      bitplane_count: u8,
+                      start_addr: u16,
+                      tile_size: u8,
+                      (x, y): (u8, u8)) -> u8 {
+        // 2 bitplanes are stored interleaved with each other.
+        debug_assert!(bitplane_count & 1 == 0, "odd bitplane count");
+        debug_assert!(tile_size == 8, "non-8x8 tiles unsupported"); // FIXME support 16x16 tiles
+        let bitplane_pairs = bitplane_count >> 1;
+        let bitplane_pair_size = 16;    // FIXME depends on tile size (?)
 
         // FIXME: I'm assuming all pairs of bitplanes are stored sequentially?
         let mut palette_index = 0u8;
         for i in (0..bitplane_pairs) {
             let bitplane_bits = self.read_2_bitplanes(
                 start_addr + i as u16 * bitplane_pair_size,
-                (x_off, y_off));
+                (x, y));
             palette_index = palette_index | (bitplane_bits << (2 * i));
         }
 
@@ -620,7 +656,7 @@ impl Ppu {
     /// Reads 2 bits of the given coordinate within the bitplane's tile from 2 interleaved
     /// bitplanes.
     fn read_2_bitplanes(&self, bitplanes_start: u16, (x_off, y_off): (u8, u8)) -> u8 {
-        // FIXME Handle flipped tiles somewhere in here
+        // FIXME Handle flipped tiles somewhere in here (or not in here)
         // Bit 0 in low bytes, bit 1 in high bytes
         let lo = self.vram[bitplanes_start + y_off as u16 * 2];
         let hi = self.vram[bitplanes_start + y_off as u16 * 2 + 1];

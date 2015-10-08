@@ -205,7 +205,14 @@ impl Snes {
                     // TODO Do HDMA
                 }
                 if result.vblank {
-                    self.renderer.render(&*self.cpu.mem.ppu.framebuf);
+                    // FIXME We should render the frame earlier (result.vblank is set after the
+                    // hblank of the last frame is left, which is later than necessary)
+                    if !self.cpu.mem.ppu.forced_blank() {
+                        loop {
+                            self.renderer.render(&*self.cpu.mem.ppu.framebuf);
+                            ::std::thread::sleep(::std::time::Duration::from_millis(100));
+                        }
+                    }
 
                     // XXX we assume that joypads are always autoread
                     self.cpu.mem.input.update();

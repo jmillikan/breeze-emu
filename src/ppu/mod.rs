@@ -341,6 +341,7 @@ pub struct Ppu {
     setini: u8,
 }
 
+#[derive(Debug)]
 struct Rgb {
     r: u8,
     g: u8,
@@ -479,6 +480,7 @@ impl Ppu {
                     SCREEN_HEIGHT => {
                         // V-Blank starts now!
                         result.vblank = true;
+                        trace!("PPU entered VBlank");
                     }
                     262 => {
                         // V-Blank ends now! The next `update` call will render the first visible
@@ -500,7 +502,7 @@ impl Ppu {
 impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
     fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
-    fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
+    pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
 
     fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
@@ -560,13 +562,17 @@ impl Ppu {
                 // Address points to the MSB (=`val`) of the word we want to update
                 self.oam[self.oamaddr - 1] = self.oam_lsb;
                 self.oam[self.oamaddr] = val;
+
+                trace!("OAM STORE: ${:02X} to ${:04X}", self.oam_lsb, self.oamaddr-1);
+                trace!("OAM STORE: ${:02X} to ${:04X}", val, self.oamaddr);
             }
         } else {
             // Write to 512-544
             self.oam[self.oamaddr] = val;
+            trace!("OAM STORE: ${:02X} to ${:04X}", val, self.oamaddr);
         }
-
-        self.oamaddr = (self.oamaddr + 1) & 0x3f;   // reduce to 10 bits
+        if self.oamaddr == 544 { panic!() }
+        self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
     }
 
     /// Get the value to increment the VRAM word address by
