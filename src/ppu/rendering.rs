@@ -2,24 +2,48 @@
 
 use super::{Ppu, Rgb};
 
+use arrayvec::ArrayVec;
+use std::mem::replace;
+
 /// "Persistent" render state stored inside the `Ppu`.
 #[derive(Default)]
-pub struct RenderState;
+pub struct RenderState {
+    /// Contains up to 34 `SpriteTile`s that are visible on the current scanline
+    visible_sprite_tiles: Vec<SpriteTile>,
+}
 
 /// Unpacked OAM entry for internal use.
 struct OamEntry {
-    /// 0-511
-    tile: u16,
+    /// First tile (0-255), needs to take name table selection bit into account
+    tile: u8,
+    /// Sprite's name table (0 or 1).
+    name_table: u8,
     /// 9 bits, considered signed (-256 - 255)
     x: i16,
     y: u8,
     /// 0-3
     priority: u8,
-    /// 0-7
+    /// 0-7. The first palette entry is `128+ppp*16`.
     palette: u8,
     hflip: bool,
     vflip: bool,
     size_toggle: bool,
+}
+
+/// Informations about a single tile of a sprite, needed for drawing.
+struct SpriteTile {
+    /// X position of the tile on the screen.
+    x: i16,
+    /// Y position of the scanline inside the tile (0-7). To draw the tile, we just have to offset
+    /// by the scanline.
+    /// FIXME Can we just store the pixel row that's on the scanline?
+    y_off: u8,
+    /// Priority of the sprite (0-3)
+    priority: u8,
+    /// Palette of the sprite (0-7)
+    palette: u8,
+
+    // FIXME hflip/vflip
 }
 
 /// Collected background settings
@@ -160,15 +184,13 @@ impl Ppu {
         let start = index as u16 * 4;
         let mut x = self.oam[start] as u16;
         let y = self.oam[start + 1];
-        let mut tile = self.oam[start + 2] as u16;
 
-        // vhoopppc
+        // vhoopppN
         let byte4 = self.oam[start + 3];
         let vflip = byte4 & 0x80 != 0;
         let hflip = byte4 & 0x40 != 0;
         let priority = (byte4 & 0x30) >> 4;
         let palette = (byte4 & 0x0e) >> 1;
-        tile |= (byte4 as u16 & 1) << 8;
 
         // Read the second table. Each byte contains information of 4 sprites (2 bits per sprite):
         // The LSb is the size-toggle bit, the second bit is the MSb of the x coord
@@ -182,7 +204,8 @@ impl Ppu {
         }
 
         OamEntry {
-            tile: tile,
+            tile: self.oam[start + 2],
+            name_table: byte4 & 1,
             x: x as i16,
             y: y,
             priority: priority,
@@ -295,6 +318,11 @@ impl Ppu {
                 self.tm & 0x1f);
         }
 
+        if self.x == 0 {
+            // Entered new scanline.
+            self.collect_sprite_data_for_scanline();
+        }
+
         macro_rules! e {
             ( $e:expr ) => ( $e );
         }
@@ -368,28 +396,22 @@ impl Ppu {
                 try_layer!(Sprites with priority 0);
                 self.backdrop_color()
             }
-            mode => panic!("NYI: BG mode {}", mode),
+            7 => panic!("NYI: BG mode 7"),
+            _ => unreachable!(),
         }
     }
 
-    fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
-        // NB We check if OBJ is enabled later, since time/range overflow flags are set regardless
+    fn collect_sprite_data_for_scanline(&mut self) {
         // FIXME Determine `FirstSprite` correctly (`$2103` priority rotation)
         let first_sprite = 0;
 
         // Find the first 32 sprites on the current scanline
-        // FIXME Use a "maximum" size array perhaps (on the stack!)
-        // FIXME Could use a OAM entry iterator instead
-        // FIXME Cache the result for the entire scanline, no need to calculate it for every pixel
-        let mut sprites_found = [0; 32];
-        let mut sprite_count = 0;   // # of sprites found (up to 32), valid length of `found`
+        // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
+        let mut visible_sprites = ArrayVec::<[_; 32]>::new();
         for i in 0..128 {
             let entry = self.get_oam_entry(i);
             if self.sprite_on_scanline(&entry) {
-                if sprite_count < 32 {
-                    sprites_found[sprite_count] = i;
-                    sprite_count += 1;
-                } else {
+                if let Some(_) = visible_sprites.push((i, entry)) {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
                     break
                 }
@@ -401,16 +423,80 @@ impl Ppu {
         // those tiles with -8 < X < 256 are counted."
         // A few notes:
         // * Sprite tiles are always 8x8 pixels
+        // * Sprites do not have tile maps like BGs do
         // * "left-to-right" refers to how tiles of sprites are loaded, not the sprite order
+        // * Tiles are loaded iff they are on the current scanline (and have `-8 < X < 256`)
+        // FIXME Is this ^^ correct?
+
+        // FIXME Use `ArrayVec<[_; 34]>` when it works
+        let mut visible_tiles = replace(&mut self.render_state.visible_sprite_tiles, Vec::new());
+        visible_tiles.clear();
+
+        let name_base = self.obsel as u16 & 0b111;
+        let name_select = (self.obsel as u16 >> 3) & 0b11;
 
         // Start at the last sprite found
-        for i in (0..sprite_count).rev() {
-            let sprite = sprites_found[i];
+        'collect_tiles: for &(id, ref sprite) in visible_sprites.iter().rev() {
+            // How many tiles are there?
+            let (sprite_w, sprite_h) = self.obj_size(sprite.size_toggle);
+            let (sprite_w_tiles, sprite_h_tiles) = (sprite_w / 8, sprite_h / 8);
+            // Offset into the sprite
+            let sprite_y_off = self.scanline - sprite.y as u16;
+            // Tile Y coordinate of the tile row we're interested in (tiles on the scanline)
+            let y_tile = sprite_y_off / 8;
+            // Y offset into the tile row
+            let tile_y_off = (sprite_y_off % 8) as u8;
+
+            // Calculate VRAM address of first tile. Depends on base/name bits in `$2101`.
+            let tile_start_addr = ((name_base << 13) +
+                ((sprite.tile as u16) << 4) +
+                (sprite.name_table as u16 * ((name_select + 1) << 12))) & 0x7fff;
+
+            // The character data for the first tile is stored at `tile_start_addr`, in the same
+            // format as BG character data (bitplanes, etc.). Keep in mind that sprites do not have
+            // tilemaps.
+            // One 8x8 tile is 32 Bytes large (4 bits per pixel).
+            // Tiles in a single (8 pixel high) row of the sprite are stored sequentially: Tile
+            // coord (1,0) is stored directly behind (0,0), which is stored at `tile_start_addr`.
+            // Rows of tiles, however, are always stored 512 Bytes (or 16 tiles/128 pixels) apart:
+            // If tile (0,0) is at address $0000, tile (0,1) is at $0200. This is independent of
+            // the sprite size, which means that there are "holes" in the sprite character data,
+            // which are used to store the data of other sprites.
+
+            // Start address of the row of tiles on the scanline
+            let y_row_start_addr = tile_start_addr + 512 * y_tile;
+
+            // Add all tiles in this row to our tile list (left to right)
+            for i in 0..8 {
+                if visible_tiles.len() < 34 {
+                    visible_tiles.push(SpriteTile {
+                        x: sprite.x + 8 * i,
+                        y_off: tile_y_off,
+                        priority: sprite.priority,
+                        palette: sprite.palette,
+                    });
+                } else {
+                    // FIXME Set sprite tile overflow flag
+                    break 'collect_tiles
+                }
+            }
         }
 
+        self.render_state.visible_sprite_tiles = visible_tiles;
+    }
+
+    fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
         if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
 
-        // TODO: Draw each tile in range
+        for tile in &self.render_state.visible_sprite_tiles {
+            if tile.priority == prio {
+                // The tile must be on this scanline, we just have to check X
+                if tile.x <= self.x as i16 && tile.x + 8 >= self.x as i16 {
+                    // FIXME Read the actual palette value
+                    return Some(self.lookup_color(5))
+                }
+            }
+        }
 
         None
     }
@@ -420,11 +506,16 @@ impl Ppu {
         let (w, h) = self.obj_size(sprite.size_toggle);
         let (w, h) = (w as i16, h);
 
-        // "If any OBJ is at X=256, consider it as being at X=0 when considering Range and Time."
-        let x = if sprite.x == 256 { 0 } else { sprite.x };
+        // "If any OBJ is at X=256 (or X=-256, same difference), consider it as being at X=0 when
+        // considering Range and Time."
+        // X=256 can not occur, since X is a signed 9-bit value (range is -256 - 255)
+        let x = if sprite.x == -256 { 0 } else { sprite.x };
 
         // "Only those sprites with -size < X < 256 are considered in Range." (`size` is `w` here)
-        if -w < sprite.x && sprite.x < 256 {
+        // We don't check `X < 256`, since that cannot occur (X is a signed 9-bit integer)
+        // A sprite moved past the right edge of the screen will wrap to `-256`, which is handled
+        // by this check.
+        if -w < sprite.x {
             // Sprites Y coordinate must be on the current scanline:
             sprite.y as u16 <= self.scanline && sprite.y as u16 + h as u16 >= self.scanline
         } else {

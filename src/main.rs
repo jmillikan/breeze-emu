@@ -3,6 +3,7 @@
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate sdl2;
+extern crate arrayvec;
 
 use std::fs::File;
 use std::io::Read;
