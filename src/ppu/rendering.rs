@@ -421,8 +421,8 @@ impl Ppu {
             let entry = self.get_oam_entry(i);
             if self.sprite_on_scanline(&entry) {
                 trace_unique!(
-                    "sprite {} on scanline {}: pos = ({},{}), size = {:?} palette = {}, prio = {}, \
-                    tile0 = {}, nametable = {}",
+                    "sprite {} on scanline {}: pos = ({}, {}), size = {:?} palette = {}, \
+                    prio = {}, tile0 = {}, nametable = {}",
                     i, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
                     entry.palette, entry.priority, entry.tile, entry.name_table);
 
@@ -447,8 +447,8 @@ impl Ppu {
         let mut visible_tiles = replace(&mut self.render_state.visible_sprite_tiles, Vec::new());
         visible_tiles.clear();
 
-        let name_base = self.obsel as u16 & 0b111;
-        let name_select = (self.obsel as u16 >> 3) & 0b11;
+        let name_base: u16 = self.obsel as u16 & 0b111;
+        let name_select: u16 = (self.obsel as u16 >> 3) & 0b11;
 
         // Start at the last sprite found
         'collect_tiles: for &(id, ref sprite) in visible_sprites.iter().rev() {
@@ -462,10 +462,12 @@ impl Ppu {
             // Y offset into the tile row
             let tile_y_off = (sprite_y_off % 8) as u8;
 
-            // Calculate VRAM address of first tile. Depends on base/name bits in `$2101`.
-            let tile_start_addr = ((name_base << 13) +
+            // Calculate VRAM word address of first tile. Depends on base/name bits in `$2101`.
+            let tile_start_word_addr =
+                ((name_base << 13) +
                 ((sprite.tile as u16) << 4) +
                 (sprite.name_table as u16 * ((name_select + 1) << 12))) & 0x7fff;
+            let tile_start_addr = tile_start_word_addr * 2;
 
             // The character data for the first tile is stored at `tile_start_addr`, in the same
             // format as BG character data (bitplanes, etc.). Keep in mind that sprites do not have
@@ -511,18 +513,17 @@ impl Ppu {
                 if tile.x <= self.x as i16 && tile.x + 8 > self.x as i16 {
                     let x_offset = self.x as i16 - tile.x;
                     debug_assert!(0 <= x_offset && x_offset <= 7, "x_offset = {}", x_offset);
-                    let rel_color = self.read_chr_entry(4,    // 16 colors
+                    trace_unique!("rendering tile with CHR data at ${:04X}, palette {}",
+                        tile.chr_addr, tile.palette);
+                    let rel_color = self.read_chr_entry(4,  // 16 colors
                                                         tile.chr_addr,
-                                                        8,
+                                                        8,  // 8x8 tiles
                                                         (x_offset as u8, tile.y_off));
                     debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
 
                     let abs_color = 128 + tile.palette * 16 + rel_color;
                     // FIXME Color math
                     let rgb = self.lookup_color(abs_color);
-                    trace_unique!("Sprite color = {:?} ({})", rgb, abs_color);
-                    if let Rgb{r:0,b:0,g:0} = rgb { return Some(Rgb{r:255,g:255,b:255}) }
-
                     return Some(rgb)
                 }
             }
@@ -660,8 +661,9 @@ impl Ppu {
         // Bit 0 in low bytes, bit 1 in high bytes
         let lo = self.vram[bitplanes_start + y_off as u16 * 2];
         let hi = self.vram[bitplanes_start + y_off as u16 * 2 + 1];
-        let bit0 = (lo & (1 << x_off)) >> x_off;
-        let bit1 = (hi & (1 << x_off)) >> x_off;
+        // X values in a byte: 01234567
+        let bit0 = (lo >> (7 - x_off)) & 1;
+        let bit1 = (hi >> (7 - x_off)) & 1;
 
         (bit1 << 1) | bit0
     }

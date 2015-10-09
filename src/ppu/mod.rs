@@ -601,15 +601,17 @@ impl Ppu {
     /// Store to `$2118`. This writes the Byte to the current VRAM word address and increments it
     /// accordingly.
     fn vram_store_low(&mut self, data: u8) {
-        let inc = if self.vmain & 0x80 != 0 { 0 } else { self.vram_addr_increment() };
-        self.vram[self.vmaddr * 2] = data;
+        let inc = if self.vmain & 0x80 == 0 { self.vram_addr_increment() } else { 0 };
+        let addr = self.vram_translate_addr(self.vmaddr * 2);
+        self.vram[addr] = data;
         self.vmaddr += inc;
     }
     /// Store to `$2119`. This writes the Byte to the current VRAM word address + 1 and increments
     /// it accordingly.
     fn vram_store_high(&mut self, data: u8) {
-        let inc = if self.vmain & 0x80 != 0 { self.vram_addr_increment() } else { 0 };
-        self.vram[self.vmaddr * 2 + 1] = data;
+        let inc = if self.vmain & 0x80 == 0 { 0 } else { self.vram_addr_increment() };
+        let addr = self.vram_translate_addr(self.vmaddr * 2 + 1);
+        self.vram[addr] = data;
         self.vmaddr += inc;
     }
 }
