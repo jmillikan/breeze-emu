@@ -810,6 +810,7 @@ impl Spc700 {
         let c = if self.psw.carry() { 0x80 } else { 0 };
         self.psw.set_carry(val & 0x01 != 0);
         let res = self.psw.set_nz((val >> 1) | c);
+        op.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
         // Sets N and Z
