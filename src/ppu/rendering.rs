@@ -426,7 +426,7 @@ impl Ppu {
                     i, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
                     entry.palette, entry.priority, entry.tile, entry.name_table);
 
-                if let Some(_) = visible_sprites.push((i, entry)) {
+                if let Some(_) = visible_sprites.push(entry) {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
                     break
                 }
@@ -451,7 +451,7 @@ impl Ppu {
         let name_select: u16 = (self.obsel as u16 >> 3) & 0b11;
 
         // Start at the last sprite found
-        'collect_tiles: for &(id, ref sprite) in visible_sprites.iter().rev() {
+        'collect_tiles: for sprite in visible_sprites.iter().rev() {
             // How many tiles are there?
             let (sprite_w, sprite_h) = self.obj_size(sprite.size_toggle);
             let (sprite_w_tiles, sprite_h_tiles) = (sprite_w / 8, sprite_h / 8);
