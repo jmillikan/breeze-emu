@@ -700,7 +700,7 @@ impl Spc700 {
     /// `mul ya`: ya = y * a
     fn mul(&mut self) {
         // Sets N and Z. Y = High, A = Low.
-        let res = self.y as u16 * self.a as u16;
+        let res = (self.y as u16).wrapping_mul(self.a as u16);
         self.y = self.psw.set_nz((res >> 8) as u8);
         self.a = res as u8;
     }
@@ -717,7 +717,7 @@ impl Spc700 {
         let c = if self.psw.carry() { 1 } else { 0 };
         let a = dest.clone().loadb(self);
         let b = src.loadb(self);
-        let res = a as u16 + b as u16 + c as u16;
+        let res = (a as u16).wrapping_add(b as u16).wrapping_add(c as u16);
         self.psw.set_carry(res > 255);
         self.psw.set_half_carry(((a & 0x0f) + (b & 0x0f) + c) & 0xf0 != 0);
         let res = res as u8;
@@ -731,7 +731,7 @@ impl Spc700 {
         // YA := YA + <byte> (Y = High, A = Low)
         let ya = ((self.y as u16) << 8) | self.a as u16;
         let val = am.loadb(self) as u16;
-        let res = ya as u32 + val as u32;
+        let res = (ya as u32).wrapping_add(val as u32);
         self.psw.set_carry(res & 0xffff0000 != 0);
         let res = res as u16;
         self.psw.set_overflow((ya ^ val) & 0x8000 == 0 && (ya ^ res) & 0x8000 == 0x8000);
@@ -747,7 +747,7 @@ impl Spc700 {
         let a = dest.clone().loadb(self) as u16;
         let b = src.loadb(self) as u16;
         // a-b = a+!b+1
-        let res = a + !b + c;
+        let res = a.wrapping_add(!b).wrapping_add(c);
         self.psw.set_carry(res > 255);
         self.psw.set_nz(res as u8);
         dest.storeb(self, res as u8);
@@ -758,7 +758,7 @@ impl Spc700 {
         // FIXME Set V and H
         let ya = ((self.y as u32) << 8) | self.a as u32;
         let sub = am.loadb(self) as u32;
-        let res = ya + !sub;
+        let res = ya.wrapping_add(!sub);
         self.psw.set_carry(res & 0xffff0000 != 0);
         self.psw.set_negative(res & 0x8000 != 0);
         self.psw.set_zero(res == 0);
@@ -838,7 +838,7 @@ impl Spc700 {
         let addr = self.x as u16;
         let a = self.a;
         self.store(addr, a);
-        self.x += 1;
+        self.x = self.x.wrapping_add(1);
     }
     /// movw-load. Fetches a word from the addressing mode and puts it into Y (high) and A (low)
     /// (`movw ya, {X}`)
