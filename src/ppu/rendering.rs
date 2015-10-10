@@ -417,7 +417,7 @@ impl Ppu {
         // Find the first 32 sprites on the current scanline
         // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
         let mut visible_sprites = ArrayVec::<[_; 32]>::new();
-        for i in 0..128 {
+        for i in first_sprite..first_sprite+128 {
             let entry = self.get_oam_entry(i);
             if self.sprite_on_scanline(&entry) {
                 trace_unique!(
