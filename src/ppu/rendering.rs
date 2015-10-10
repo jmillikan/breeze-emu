@@ -453,8 +453,8 @@ impl Ppu {
         // Start at the last sprite found
         'collect_tiles: for sprite in visible_sprites.iter().rev() {
             // How many tiles are there?
-            let (sprite_w, sprite_h) = self.obj_size(sprite.size_toggle);
-            let (sprite_w_tiles, sprite_h_tiles) = (sprite_w / 8, sprite_h / 8);
+            let (sprite_w, _) = self.obj_size(sprite.size_toggle);
+            let sprite_w_tiles = sprite_w / 8;
             // Offset into the sprite
             let sprite_y_off = self.scanline - sprite.y as u16;
             // Tile Y coordinate of the tile row we're interested in (tiles on the scanline)
@@ -546,7 +546,7 @@ impl Ppu {
         // We don't check `X < 256`, since that cannot occur (X is a signed 9-bit integer)
         // A sprite moved past the right edge of the screen will wrap to `-256`, which is handled
         // by this check.
-        if -w < sprite.x {
+        if -w < x {
             // Sprites Y coordinate must be on the current scanline:
             sprite.y as u16 <= self.scanline && sprite.y as u16 + h as u16 >= self.scanline
         } else {

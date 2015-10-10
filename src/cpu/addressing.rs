@@ -78,7 +78,7 @@ impl AddressingMode {
     /// Loads a byte from where this AM points to (or returns the immediate value)
     pub fn loadb(self, cpu: &mut Cpu) -> u8 {
         match self {
-            AddressingMode::Immediate(val) => panic!("loadb on 16-bit immediate"),
+            AddressingMode::Immediate(_) => panic!("loadb on 16-bit immediate"),
             AddressingMode::Immediate8(val) => val,
             _ => {
                 let (bank, addr) = self.address(cpu);
@@ -89,7 +89,7 @@ impl AddressingMode {
     pub fn loadw(self, cpu: &mut Cpu) -> u16 {
         match self {
             AddressingMode::Immediate(val) => val,
-            AddressingMode::Immediate8(val) => panic!("loadw on 8-bit immediate"),
+            AddressingMode::Immediate8(_) => panic!("loadw on 8-bit immediate"),
             _ => {
                 let (bank, addr) = self.address(cpu);
                 cpu.loadw(bank, addr)

@@ -5,5 +5,5 @@ use super::Renderer;
 pub struct DummyRenderer;
 
 impl Renderer for DummyRenderer {
-    fn render(&mut self, frame_data: &[u8]) {}
+    fn render(&mut self, _frame_data: &[u8]) {}
 }

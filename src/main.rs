@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables)]    // FIXME Just for development
+#![allow(dead_code)]    // FIXME Just for development
 
 #[macro_use] extern crate log;
 extern crate env_logger;
