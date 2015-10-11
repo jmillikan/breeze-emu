@@ -34,6 +34,10 @@ pub struct Peripherals {
     /// * `y`: Enable IRQ on V-Counter match
     /// * `a`: Enable auto-joypad read
     nmien: u8,
+    /// `$4207`/`$4208` - HTIMEL/HTIMEH: H Timer (9-bit value)
+    htime: u16,
+    /// `$4209`/`$420a` - VTIMEL/VTIMEH: V Timer (9-bit value)
+    vtime: u16,
     /// `$4210` NMI flag and 5A22 Version
     /// `n---vvvv`
     /// * `n`: `self.nmi`
@@ -60,6 +64,8 @@ impl Peripherals {
             dma: [DmaChannel::new(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
+            htime: 0x1ff,
+            vtime: 0x1ff,
             nmi: false,
             irq: false,
             cy: 0,
@@ -78,7 +84,7 @@ impl Peripherals {
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
                 0x4210 => {
                     const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
-                    let nmi = if self.nmi {1} else {0} << 7;
+                    let nmi = if self.nmi { 0x80 } else { 0 };
                     self.nmi = false;   // Cleared on read
                     nmi | CPU_VERSION
                 }
@@ -117,11 +123,20 @@ impl Peripherals {
                     // H: Enable IRQ on H-Counter
                     // V: Enable IRQ on V-Counter
                     // J: Enable Auto-Joypad-Read
-                    if value & 0x20 != 0 { panic!("NYI: IRQ-H") }
-                    if value & 0x10 != 0 { panic!("NYI: IRQ-V") }
+
                     // Check useless bits
                     if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
                     self.nmien = value;
+                }
+                0x4207 => self.htime = (self.htime & 0xff00) | value as u16,
+                0x4208 => {
+                    assert!(value & 0x01 == value, "invalid value for $4207: ${:02X}", value);
+                    self.htime = ((value as u16) << 8) | (self.htime & 0xff);
+                }
+                0x4209 => self.vtime = (self.vtime & 0xff00) | value as u16,
+                0x420a => {
+                    assert!(value & 0x01 == value, "invalid value for $4209: ${:02X}", value);
+                    self.vtime = ((value as u16) << 8) | (self.vtime & 0xff);
                 }
                 // MDMAEN - Party enable
                 0x420b => self.cy += do_dma(self, value),
@@ -145,6 +160,8 @@ impl Peripherals {
     }
 
     fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
+    fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
+    fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
 }
 
 pub struct Snes {
@@ -234,6 +251,18 @@ impl Snes {
                 }
                 if result.new_frame {
                     self.cpu.mem.nmi = false;   // Flag cleared on read or end of VBlank
+                }
+
+                let cpu = &mut self.cpu;
+                if cpu.mem.ppu.v_counter() == cpu.mem.vtime && cpu.mem.v_irq_enabled() {
+                    cpu.mem.irq = true;
+                    cpu.trigger_irq();
+                    break;
+                }
+                if cpu.mem.ppu.h_counter() == cpu.mem.htime && cpu.mem.h_irq_enabled() {
+                    cpu.mem.irq = true;
+                    cpu.trigger_irq();
+                    break;
                 }
             }
 

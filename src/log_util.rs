@@ -5,18 +5,26 @@ use std::ops::Deref;
 use std::fmt::Debug;
 use std::thread::panicking;
 
-/// Executes `trace!` the first time this macro is evaluated, and does nothing if this is reached
-/// again.
+/// Evaluates the given expression once (when first reached).
 #[macro_export]
-macro_rules! trace_once {
-    ( $($args:expr),* ) => {{
+macro_rules! once {
+    ( $e:expr ) => {{
         static mut REACHED = false;
         if unsafe { !REACHED } {
             unsafe {
                 REACHED = true;
             }
-            trace!( $($args),* );
+            $e
         }
+    }}
+}
+
+/// Executes `trace!` the first time this macro is evaluated, and does nothing if this is reached
+/// again.
+#[macro_export]
+macro_rules! trace_once {
+    ( $($args:expr),* ) => {{
+        once!(trace!( $($args),* ));
     }};
 }
 

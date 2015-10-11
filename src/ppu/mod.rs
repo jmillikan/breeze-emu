@@ -505,6 +505,8 @@ impl Ppu {
     fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
+    pub fn h_counter(&self) -> u16 { self.x }
+    pub fn v_counter(&self) -> u16 { self.scanline }
 
     fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
         let start = (y as usize * SCREEN_WIDTH as usize + x as usize) * 3;

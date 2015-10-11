@@ -11,11 +11,8 @@ use snes::Peripherals;
 /// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
 /// read access.
 const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
-    (0x7f, 0x8000),
 ];
 const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
-    //(0x00, 0x1ff),
-    //(0x7f, 0x8000),
 ];
 
 // Emulation mode vectors
