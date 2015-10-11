@@ -435,6 +435,7 @@ impl Cpu {
             0x89 => instr!(bit immediate_acc),
             0xc9 => instr!(cmp immediate_acc),
             0xc5 => instr!(cmp direct),
+            0xd5 => instr!(cmp direct_indexed_x),
             0xcd => instr!(cmp absolute),
             0xdd => instr!(cmp absolute_indexed_x),
             0xd9 => instr!(cmp absolute_indexed_y),
