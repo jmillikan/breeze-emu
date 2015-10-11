@@ -319,6 +319,8 @@ impl Cpu {
             0x0e => instr!(asl absolute),
             0x2a => instr!(rol_a),
             0x4a => instr!(lsr_a),
+            0x46 => instr!(lsr direct),
+            0x6a => instr!(ror_a),
             0x7e => instr!(ror absolute_indexed_x),
             0x25 => instr!(and direct),
             0x21 => instr!(and direct_indexed_indirect),
@@ -427,12 +429,16 @@ impl Cpu {
             0xac => instr!(ldy absolute),
             0xbc => instr!(ldy absolute_indexed_x),
 
-            // Comparisons and control flow
+            // Bit operations
             0x24 => instr!(bit direct),
             0x2c => instr!(bit absolute),
             0x34 => instr!(bit direct_indexed_x),
             0x3c => instr!(bit absolute_indexed_x),
             0x89 => instr!(bit immediate_acc),
+            0x14 => instr!(trb direct),
+            0x1c => instr!(trb absolute),
+
+            // Comparisons and control flow
             0xc9 => instr!(cmp immediate_acc),
             0xc5 => instr!(cmp direct),
             0xd5 => instr!(cmp direct_indexed_x),
@@ -801,11 +807,43 @@ impl Cpu {
         // FIXME New code, needs small review
         if self.p.small_acc() {
             let a = self.a as u8;
-            self.p.set_carry(self.a & 0x80 != 0);
+            self.p.set_carry(self.a & 0x01 != 0);
             self.a = (self.a & 0xff00) | self.p.set_nz_8(a >> 1) as u16;
         } else {
-            self.p.set_carry(self.a & 0x8000 != 0);
+            self.p.set_carry(self.a & 0x0001 != 0);
             self.a = self.p.set_nz(self.a >> 1);
+        }
+    }
+    /// Logical Shift Right
+    fn lsr(&mut self, am: AddressingMode) {
+        // Sets N (always cleared), Z and C. The leftmost bit is filled with 0.
+        if self.p.small_acc() {
+            let a = am.clone().loadb(self);
+            self.p.set_carry(a & 0x01 != 0);
+            let res = self.p.set_nz_8(a >> 1);
+            am.storeb(self, res);
+        } else {
+            let a = am.clone().loadw(self);
+            self.p.set_carry(a & 0x0001 != 0);
+            let res = self.p.set_nz(a >> 1);
+            am.storew(self, res);
+        }
+    }
+    /// Rotate accumulator right
+    fn ror_a(&mut self) {
+        // Sets N, Z, and C. Memory width can be changed. C is used to fill the leftmost bit.
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let val = self.a as u8;
+            self.p.set_carry(val & 0x80 != 0);
+            let res = self.p.set_nz_8((val >> 1) | (c << 7));
+            self.a = (self.a & 0xff00) | res as u16;
+        } else {
+            let val = self.a;
+            self.p.set_carry(val & 0x8000 != 0);
+            let res = self.p.set_nz((val >> 1) | ((c as u16) << 15));
+            self.a = res;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
     /// Rotate Memory Right
@@ -1050,6 +1088,49 @@ impl Cpu {
         }
     }
 
+    /// Test memory bits against accumulator
+    fn bit(&mut self, am: AddressingMode) {
+        if self.p.small_index() {
+            let val = am.clone().loadb(self);
+            self.p.set_zero(val & self.a as u8 == 0);
+            match am {
+                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
+                _ => {
+                    self.p.set_negative(val & 0x80 != 0);
+                    self.p.set_overflow(val & 0x40 != 0);
+                }
+            }
+        } else {
+            let val = am.clone().loadw(self);
+            self.p.set_zero(val & self.a == 0);
+            match am {
+                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
+                _ => {
+                    self.p.set_negative(val & 0x8000 != 0);
+                    self.p.set_overflow(val & 0x4000 != 0);
+                }
+            }
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Test and reset memory bits against accumulator
+    fn trb(&mut self, am: AddressingMode) {
+        // FIXME Is this correct?
+        if self.p.small_index() {
+            let val = am.clone().loadb(self);
+            self.p.set_zero(val & self.a as u8 == 0);
+            let res = val & !(self.a as u8);
+            am.storeb(self, res);
+        } else {
+            let val = am.clone().loadw(self);
+            self.p.set_zero(val & self.a == 0);
+            let res = val & !self.a;
+            am.storew(self, res);
+
+            self.cy += CPU_CYCLE;
+        }
+    }
+
     /// Compare Accumulator with Memory
     fn cmp(&mut self, am: AddressingMode) {
         if self.p.small_acc() {
@@ -1086,31 +1167,6 @@ impl Cpu {
             let val = am.loadw(self);
             let y = self.y;
             self.compare(y, val);
-            self.cy += CPU_CYCLE;
-        }
-    }
-    /// Test memory bits against accumulator
-    fn bit(&mut self, am: AddressingMode) {
-        if self.p.small_index() {
-            let val = am.clone().loadb(self);
-            self.p.set_zero(val & self.a as u8 == 0);
-            match am {
-                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
-                _ => {
-                    self.p.set_negative(val & 0x80 != 0);
-                    self.p.set_overflow(val & 0x40 != 0);
-                }
-            }
-        } else {
-            let val = am.clone().loadw(self);
-            self.p.set_zero(val & self.a == 0);
-            match am {
-                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
-                _ => {
-                    self.p.set_negative(val & 0x8000 != 0);
-                    self.p.set_overflow(val & 0x4000 != 0);
-                }
-            }
             self.cy += CPU_CYCLE;
         }
     }
