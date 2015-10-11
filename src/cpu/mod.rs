@@ -355,6 +355,7 @@ impl Cpu {
             0x7f => instr!(adc absolute_long_indexed_x),
             0x71 => instr!(adc indirect),
             0xe5 => instr!(sbc direct),
+            0xf5 => instr!(sbc direct_indexed_x),
             0xe9 => instr!(sbc immediate_acc),
             0xed => instr!(sbc absolute),
             0xf9 => instr!(sbc absolute_indexed_y),
