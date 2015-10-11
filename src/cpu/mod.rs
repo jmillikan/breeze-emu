@@ -329,17 +329,32 @@ impl Cpu {
             0x2f => instr!(and absolute_long),
             0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
+            0x12 => instr!(ora indirect),
             0x07 => instr!(ora indirect_long),
+            0x0d => instr!(ora absolute),
             0x1d => instr!(ora absolute_indexed_x),
+            0x19 => instr!(ora absolute_indexed_y),
             0x45 => instr!(eor direct),
             0x49 => instr!(eor immediate_acc),
             0x4d => instr!(eor absolute),
+            0x5d => instr!(eor absolute_indexed_x),
+            0x59 => instr!(eor absolute_indexed_y),
             0x4f => instr!(eor absolute_long),
+            0x5f => instr!(eor absolute_long_indexed_x),
             0x65 => instr!(adc direct),
+            0x75 => instr!(adc direct_indexed_x),
             0x69 => instr!(adc immediate_acc),
             0x6d => instr!(adc absolute),
+            0x7d => instr!(adc absolute_indexed_x),
+            0x79 => instr!(adc absolute_indexed_y),
             0x6f => instr!(adc absolute_long),
+            0x71 => instr!(adc indirect),
+            0xe5 => instr!(sbc direct),
             0xe9 => instr!(sbc immediate_acc),
+            0xed => instr!(sbc absolute),
+            0xf9 => instr!(sbc absolute_indexed_y),
+            0xfd => instr!(sbc absolute_indexed_x),
+            0xef => instr!(sbc absolute_long),
             0xe6 => instr!(inc direct),
             0xee => instr!(inc absolute),
             0x1a => instr!(ina),
@@ -380,6 +395,7 @@ impl Cpu {
             0x74 => instr!(stz direct_indexed_x),
             0x9e => instr!(stz absolute_indexed_x),
             0xa5 => instr!(lda direct),
+            0xb5 => instr!(lda direct_indexed_x),
             0xa9 => instr!(lda immediate_acc),
             0xb2 => instr!(lda indirect),
             0xa7 => instr!(lda indirect_long),
@@ -402,7 +418,10 @@ impl Cpu {
             0xc9 => instr!(cmp immediate_acc),
             0xc5 => instr!(cmp direct),
             0xcd => instr!(cmp absolute),
+            0xdd => instr!(cmp absolute_indexed_x),
+            0xd9 => instr!(cmp absolute_indexed_y),
             0xcf => instr!(cmp absolute_long),
+            0xdf => instr!(cmp absolute_long_indexed_x),
             0xe0 => instr!(cpx immediate_index),
             0xe4 => instr!(cpx direct),
             0xec => instr!(cpx absolute),
@@ -1239,16 +1258,16 @@ impl Cpu {
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())
     }
-    fn absolute_long(&mut self) -> AddressingMode {
-        let addr = self.fetchw();
-        let bank = self.fetchb();
-        AddressingMode::AbsoluteLong(bank, addr)
-    }
     fn absolute_indexed_x(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedX(self.fetchw())
     }
     fn absolute_indexed_y(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedY(self.fetchw())
+    }
+    fn absolute_long(&mut self) -> AddressingMode {
+        let addr = self.fetchw();
+        let bank = self.fetchb();
+        AddressingMode::AbsoluteLong(bank, addr)
     }
     fn absolute_long_indexed_x(&mut self) -> AddressingMode {
         let addr = self.fetchw();
