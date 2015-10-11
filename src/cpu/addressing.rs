@@ -11,6 +11,11 @@ pub enum AddressingMode {
     Immediate(u16),
     Immediate8(u8),
 
+    /// "Program Counter Relative-r"
+    /// Used for jumps
+    /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
+    Rel(i8),
+
     /// "Absolute-a"
     /// Access absolute offset in the current data bank
     /// (DBR, <val>)
@@ -22,8 +27,8 @@ pub enum AddressingMode {
     /// (DBR, <val> + X)
     AbsIndexedX(u16),
 
-    // "Absolute Indexed with Y-a,y"
-    // (DBR, <val> + Y)
+    /// "Absolute Indexed with Y-a,y"
+    /// (DBR, <val> + Y)
     AbsIndexedY(u16),
 
     // "Absolute Indirect-(a)" (PC?)
@@ -47,18 +52,19 @@ pub enum AddressingMode {
     /// (0, D + <val> + Y)
     DirectIndexedY(u8),
 
-    /// "Program Counter Relative-r"
-    /// Used for jumps
-    /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
-    Rel(i8),
-
-    // "Direct Indirect Indexed-(d),y" - Indirect-Y
-    // (DBR, D + <val> + Y)  [D+<val> wraps]
+    /// "Direct Indexed Indirect-(d,x)" - Indirect-X
+    /// addr := load2(0, D + <val> + X)
+    /// (DBR, addr)
+    DirectIndexedIndirect(u8),
 
     /// "Direct Indirect-(d)"
     /// addr := load2(0, D + <val>)
     /// (DBR, addr)
     Indirect(u8),
+
+    // "Direct Indirect Indexed-(d),y" - Indirect-Y
+    // addr := load2(D + <val>)
+    // (DBR, addr + Y)  (NOTE: Wraps across data bank!)
 
     /// "Direct Indirect Long-[d]"
     /// (bank, addr) := load3(0, D + <val>)
@@ -141,7 +147,7 @@ impl AddressingMode {
                 (cpu.dbr, offset + cpu.y)
             }
             Rel(rel) => {
-                (cpu.pbr, (cpu.pc as i32 + rel as i32) as u16)
+                (cpu.pbr, (cpu.pc as i16).wrapping_add(rel as i16) as u16)
             }
             Direct(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
@@ -156,6 +162,13 @@ impl AddressingMode {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.y))
+            }
+            DirectIndexedIndirect(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                let addr_ptr = cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x as u16);
+                let lo = cpu.loadb(0, addr_ptr) as u16;
+                let hi = cpu.loadb(0, addr_ptr + 1) as u16;
+                (cpu.dbr, (hi << 8) | lo)
             }
             Indirect(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
@@ -207,21 +220,22 @@ impl fmt::Display for AddressingMode {
         use self::AddressingMode::*;
 
         match *self {
-            Immediate(val) =>              write!(f, "#${:04X}", val),
-            Immediate8(val) =>             write!(f, "#${:02X}", val),
-            Absolute(addr) =>              write!(f, "${:04X}", addr),
-            AbsoluteLong(bank, addr) =>    write!(f, "${:02X}:{:04X}", bank, addr),
-            AbsLongIndexedX(bank, addr) => write!(f, "${:02X}:{:04X},x", bank, addr),
-            AbsIndexedX(offset) =>         write!(f, "${:04X},x", offset),
-            AbsIndexedY(offset) =>         write!(f, "${:04X},y", offset),
-            Rel(rel) =>                    write!(f, "{:+}", rel),
-            Direct(offset) =>              write!(f, "${:02X}", offset),
-            DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
-            DirectIndexedY(offset) =>      write!(f, "${:02X},y", offset),
-            Indirect(offset) =>            write!(f, "(${:02X})", offset),
-            IndirectLong(offset) =>        write!(f, "[${:02X}]", offset),
-            IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),
-            StackRel(offset) =>            write!(f, "${:02X},s", offset),
+            Immediate(val) =>                write!(f, "#${:04X}", val),
+            Immediate8(val) =>               write!(f, "#${:02X}", val),
+            Absolute(addr) =>                write!(f, "${:04X}", addr),
+            AbsoluteLong(bank, addr) =>      write!(f, "${:02X}:{:04X}", bank, addr),
+            AbsLongIndexedX(bank, addr) =>   write!(f, "${:02X}:{:04X},x", bank, addr),
+            AbsIndexedX(offset) =>           write!(f, "${:04X},x", offset),
+            AbsIndexedY(offset) =>           write!(f, "${:04X},y", offset),
+            Rel(rel) =>                      write!(f, "{:+}", rel),
+            Direct(offset) =>                write!(f, "${:02X}", offset),
+            DirectIndexedX(offset) =>        write!(f, "${:02X},x", offset),
+            DirectIndexedY(offset) =>        write!(f, "${:02X},y", offset),
+            DirectIndexedIndirect(offset) => write!(f, "(${:02X},x)", offset),
+            Indirect(offset) =>              write!(f, "(${:02X})", offset),
+            IndirectLong(offset) =>          write!(f, "[${:02X}]", offset),
+            IndirectLongIdx(offset) =>       write!(f, "[${:02X}],y", offset),
+            StackRel(offset) =>              write!(f, "${:02X},s", offset),
         }
     }
 }

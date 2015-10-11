@@ -324,6 +324,7 @@ impl Cpu {
             0x4a => instr!(lsr_a),
             0x7e => instr!(ror absolute_indexed_x),
             0x25 => instr!(and direct),
+            0x21 => instr!(and direct_indexed_indirect),
             0x29 => instr!(and immediate_acc),
             0x2d => instr!(and absolute),
             0x2f => instr!(and absolute_long),
@@ -355,6 +356,7 @@ impl Cpu {
             0xf9 => instr!(sbc absolute_indexed_y),
             0xfd => instr!(sbc absolute_indexed_x),
             0xef => instr!(sbc absolute_long),
+            0xff => instr!(sbc absolute_long_indexed_x),
             0xe6 => instr!(inc direct),
             0xee => instr!(inc absolute),
             0x1a => instr!(ina),
@@ -429,8 +431,8 @@ impl Cpu {
             0xc4 => instr!(cpy direct),
             0xcc => instr!(cpy absolute),
             0x80 => instr!(bra rel),
-            0xdc => instr!(bra indirect_long),
-            0x4c => instr!(bra absolute),
+            0xdc => instr!(jml indirect_long),
+            0x4c => instr!(jmp absolute),
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
@@ -959,7 +961,17 @@ impl Cpu {
         }
     }
 
-    /// Branch always
+    /// Jump long. Changes the PBR.
+    fn jml(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        self.branch(a);
+    }
+    /// Jump inside current program bank
+    fn jmp(&mut self, am: AddressingMode) {
+        let (_, addr) = am.address(self);
+        self.pc = addr;
+    }
+    /// Branch always (inside current program bank, but this isn't checked)
     fn bra(&mut self, am: AddressingMode) {
         let a = am.address(self);
         self.branch(a);
@@ -1288,6 +1300,9 @@ impl Cpu {
     }
     fn direct_indexed_y(&mut self) -> AddressingMode {
         AddressingMode::DirectIndexedY(self.fetchb())
+    }
+    fn direct_indexed_indirect(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndexedIndirect(self.fetchb())
     }
     /// Immediate value with accumulator size
     fn immediate_acc(&mut self) -> AddressingMode {
