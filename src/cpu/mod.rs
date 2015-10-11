@@ -318,6 +318,10 @@ impl Cpu {
             0x16 => instr!(asl direct_indexed_x),
             0x0e => instr!(asl absolute),
             0x2a => instr!(rol_a),
+            0x26 => instr!(rol direct),
+            0x2e => instr!(rol absolute),
+            0x3e => instr!(rol absolute_indexed_x),
+            0x36 => instr!(rol direct_indexed_x),
             0x4a => instr!(lsr_a),
             0x46 => instr!(lsr direct),
             0x6a => instr!(ror_a),
@@ -326,6 +330,8 @@ impl Cpu {
             0x21 => instr!(and direct_indexed_indirect),
             0x29 => instr!(and immediate_acc),
             0x2d => instr!(and absolute),
+            0x3d => instr!(and absolute_indexed_x),
+            0x39 => instr!(and absolute_indexed_y),
             0x2f => instr!(and absolute_long),
             0x3f => instr!(and absolute_long_indexed_x),
             0x03 => instr!(ora stack_rel),
@@ -435,6 +441,8 @@ impl Cpu {
             0x34 => instr!(bit direct_indexed_x),
             0x3c => instr!(bit absolute_indexed_x),
             0x89 => instr!(bit immediate_acc),
+            0x04 => instr!(tsb direct),
+            0x0c => instr!(tsb absolute),
             0x14 => instr!(trb direct),
             0x1c => instr!(trb absolute),
 
@@ -460,6 +468,7 @@ impl Cpu {
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
             0x30 => instr!(bmi rel),
+            0x50 => instr!(bvc rel),
             0x70 => instr!(bvs rel),
             0x90 => instr!(bcc rel),
             0xb0 => instr!(bcs rel),
@@ -800,6 +809,23 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Rotate Memory Left
+    fn rol(&mut self, am: AddressingMode) {
+        // Sets N, Z, and C. C is used to fill the rightmost bit.
+        let c: u8 = if self.p.carry() { 1 } else { 0 };
+        if self.p.small_acc() {
+            let a = am.clone().loadb(self);
+            self.p.set_carry(a & 0x80 != 0);
+            let res = self.p.set_nz_8((a << 1) | c);
+            am.storeb(self, res);
+        } else {
+            let a = am.clone().loadw(self);
+            self.p.set_carry(a & 0x8000 != 0);
+            let res = self.p.set_nz((a << 1) | c as u16);
+            am.storew(self, res);
+            self.cy += CPU_CYCLE;   // FIXME times 2?
+        }
+    }
 
     /// Logical Shift Accumulator Right
     fn lsr_a(&mut self) {
@@ -1047,6 +1073,14 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Branch if Overflow Clear
+    fn bvc(&mut self, am: AddressingMode) {
+        let a = am.address(self);
+        if !self.p.overflow() {
+            self.branch(a);
+            self.cy += CPU_CYCLE;
+        }
+    }
     /// Branch if Overflow Set
     fn bvs(&mut self, am: AddressingMode) {
         let a = am.address(self);
@@ -1113,8 +1147,27 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+    /// Test and set memory bits against accumulator
+    fn tsb(&mut self, am: AddressingMode) {
+        // Sets Z
+        // FIXME Is this correct?
+        if self.p.small_index() {
+            let val = am.clone().loadb(self);
+            self.p.set_zero(val & self.a as u8 == 0);
+            let res = val | self.a as u8;
+            am.storeb(self, res);
+        } else {
+            let val = am.clone().loadw(self);
+            self.p.set_zero(val & self.a == 0);
+            let res = val | self.a;
+            am.storew(self, res);
+
+            self.cy += 2 * CPU_CYCLE;
+        }
+    }
     /// Test and reset memory bits against accumulator
     fn trb(&mut self, am: AddressingMode) {
+        // Sets Z
         // FIXME Is this correct?
         if self.p.small_index() {
             let val = am.clone().loadb(self);
@@ -1127,7 +1180,7 @@ impl Cpu {
             let res = val & !self.a;
             am.storew(self, res);
 
-            self.cy += CPU_CYCLE;
+            self.cy += 2 * CPU_CYCLE;
         }
     }
 
