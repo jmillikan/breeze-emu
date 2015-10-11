@@ -328,6 +328,7 @@ impl Cpu {
             0x29 => instr!(and immediate_acc),
             0x2d => instr!(and absolute),
             0x2f => instr!(and absolute_long),
+            0x3f => instr!(and absolute_long_indexed_x),
             0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
             0x09 => instr!(ora immediate_acc),
@@ -361,13 +362,17 @@ impl Cpu {
             0xef => instr!(sbc absolute_long),
             0xff => instr!(sbc absolute_long_indexed_x),
             0xe6 => instr!(inc direct),
+            0xf6 => instr!(inc direct_indexed_x),
+            0xfe => instr!(inc absolute_indexed_x),
             0xee => instr!(inc absolute),
             0x1a => instr!(ina),
             0xe8 => instr!(inx),
             0xc8 => instr!(iny),
             0x3a => instr!(dea),
             0xc6 => instr!(dec direct),
+            0xd6 => instr!(dec direct_indexed_x),
             0xce => instr!(dec absolute),
+            0xde => instr!(dec absolute_indexed_x),
             0xca => instr!(dex),
             0x88 => instr!(dey),
 
@@ -382,6 +387,8 @@ impl Cpu {
             0xbb => instr!(tyx),
             0xeb => instr!(xba),
             0x85 => instr!(sta direct),
+            0x95 => instr!(sta direct_indexed_x),
+            0x92 => instr!(sta indirect),
             0x87 => instr!(sta indirect_long),
             0x97 => instr!(sta indirect_long_idx),
             0x8d => instr!(sta absolute),
@@ -401,6 +408,7 @@ impl Cpu {
             0x9e => instr!(stz absolute_indexed_x),
             0xa5 => instr!(lda direct),
             0xb5 => instr!(lda direct_indexed_x),
+            0xb1 => instr!(lda direct_indirect_indexed),
             0xa9 => instr!(lda immediate_acc),
             0xb2 => instr!(lda indirect),
             0xa7 => instr!(lda indirect_long),
@@ -411,10 +419,12 @@ impl Cpu {
             0xaf => instr!(lda absolute_long),
             0xbf => instr!(lda absolute_long_indexed_x),
             0xa6 => instr!(ldx direct),
+            0xb6 => instr!(ldx direct_indexed_y),
             0xa2 => instr!(ldx immediate_index),
             0xae => instr!(ldx absolute),
             0xbe => instr!(ldx absolute_indexed_y),
             0xa4 => instr!(ldy direct),
+            0xb4 => instr!(ldy direct_indexed_x),
             0xa0 => instr!(ldy immediate_index),
             0xac => instr!(ldy absolute),
             0xbc => instr!(ldy absolute_indexed_x),
@@ -1306,6 +1316,9 @@ impl Cpu {
     }
     fn direct_indexed_indirect(&mut self) -> AddressingMode {
         AddressingMode::DirectIndexedIndirect(self.fetchb())
+    }
+    fn direct_indirect_indexed(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndirectIndexed(self.fetchb())
     }
     /// Immediate value with accumulator size
     fn immediate_acc(&mut self) -> AddressingMode {

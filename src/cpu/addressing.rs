@@ -65,6 +65,7 @@ pub enum AddressingMode {
     // "Direct Indirect Indexed-(d),y" - Indirect-Y
     // addr := load2(D + <val>)
     // (DBR, addr + Y)  (NOTE: Wraps across data bank!)
+    DirectIndirectIndexed(u8),
 
     /// "Direct Indirect Long-[d]"
     /// (bank, addr) := load3(0, D + <val>)
@@ -170,6 +171,21 @@ impl AddressingMode {
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
                 (cpu.dbr, (hi << 8) | lo)
             }
+            DirectIndirectIndexed(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+
+                let addr_ptr = cpu.d.wrapping_add(offset as u16);
+                let lo = cpu.loadb(0, addr_ptr) as u32;
+                let hi = cpu.loadb(0, addr_ptr + 1) as u32;
+                let base_address = ((cpu.dbr as u32) << 16) | (hi << 8) | lo;
+                let eff_addr = base_address + cpu.y as u32;
+                assert!(eff_addr & 0xff000000 == 0, "address overflow");
+
+                let bank = (eff_addr >> 16) as u8;
+                let addr = eff_addr as u16;
+                (bank, addr)
+            }
             Indirect(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
@@ -232,6 +248,7 @@ impl fmt::Display for AddressingMode {
             DirectIndexedX(offset) =>        write!(f, "${:02X},x", offset),
             DirectIndexedY(offset) =>        write!(f, "${:02X},y", offset),
             DirectIndexedIndirect(offset) => write!(f, "(${:02X},x)", offset),
+            DirectIndirectIndexed(offset) => write!(f, "(${:02X}),y", offset),
             Indirect(offset) =>              write!(f, "(${:02X})", offset),
             IndirectLong(offset) =>          write!(f, "[${:02X}]", offset),
             IndirectLongIdx(offset) =>       write!(f, "[${:02X}],y", offset),
