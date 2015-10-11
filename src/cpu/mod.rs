@@ -430,6 +430,11 @@ impl Cpu {
             0xbc => instr!(ldy absolute_indexed_x),
 
             // Comparisons and control flow
+            0x24 => instr!(bit direct),
+            0x2c => instr!(bit absolute),
+            0x34 => instr!(bit direct_indexed_x),
+            0x3c => instr!(bit absolute_indexed_x),
+            0x89 => instr!(bit immediate_acc),
             0xc9 => instr!(cmp immediate_acc),
             0xc5 => instr!(cmp direct),
             0xcd => instr!(cmp absolute),
@@ -1082,6 +1087,31 @@ impl Cpu {
             let val = am.loadw(self);
             let y = self.y;
             self.compare(y, val);
+            self.cy += CPU_CYCLE;
+        }
+    }
+    /// Test memory bits against accumulator
+    fn bit(&mut self, am: AddressingMode) {
+        if self.p.small_index() {
+            let val = am.clone().loadb(self);
+            self.p.set_zero(val & self.a as u8 == 0);
+            match am {
+                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
+                _ => {
+                    self.p.set_negative(val & 0x80 != 0);
+                    self.p.set_overflow(val & 0x40 != 0);
+                }
+            }
+        } else {
+            let val = am.clone().loadw(self);
+            self.p.set_zero(val & self.a == 0);
+            match am {
+                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
+                _ => {
+                    self.p.set_negative(val & 0x8000 != 0);
+                    self.p.set_overflow(val & 0x4000 != 0);
+                }
+            }
             self.cy += CPU_CYCLE;
         }
     }
