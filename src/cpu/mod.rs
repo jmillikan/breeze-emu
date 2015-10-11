@@ -362,6 +362,7 @@ impl Cpu {
             0xbb => instr!(tyx),
             0xeb => instr!(xba),
             0x85 => instr!(sta direct),
+            0x87 => instr!(sta indirect_long),
             0x97 => instr!(sta indirect_long_idx),
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
@@ -369,8 +370,10 @@ impl Cpu {
             0x99 => instr!(sta absolute_indexed_y),
             0x9f => instr!(sta absolute_long_indexed_x),
             0x86 => instr!(stx direct),
+            0x96 => instr!(stx direct_indexed_y),
             0x8e => instr!(stx absolute),
             0x84 => instr!(sty direct),
+            0x94 => instr!(sty direct_indexed_y),
             0x8c => instr!(sty absolute),
             0x64 => instr!(stz direct),
             0x9c => instr!(stz absolute),
@@ -382,9 +385,10 @@ impl Cpu {
             0xa7 => instr!(lda indirect_long),
             0xb7 => instr!(lda indirect_long_idx),
             0xad => instr!(lda absolute),
-            0xaf => instr!(lda absolute_long),
             0xbd => instr!(lda absolute_indexed_x),
             0xb9 => instr!(lda absolute_indexed_y),
+            0xaf => instr!(lda absolute_long),
+            0xbf => instr!(lda absolute_long_indexed_x),
             0xa6 => instr!(ldx direct),
             0xa2 => instr!(ldx immediate_index),
             0xae => instr!(ldx absolute),
@@ -1262,6 +1266,9 @@ impl Cpu {
     }
     fn direct_indexed_x(&mut self) -> AddressingMode {
         AddressingMode::DirectIndexedX(self.fetchb())
+    }
+    fn direct_indexed_y(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndexedY(self.fetchb())
     }
     /// Immediate value with accumulator size
     fn immediate_acc(&mut self) -> AddressingMode {

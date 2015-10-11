@@ -43,8 +43,9 @@ pub enum AddressingMode {
     /// "Direct Indexed with X-d,x"
     /// (0, D + <val> + X)
     DirectIndexedX(u8),
-    // "Direct Indexed with Y-d,y"
-    // (0, D + <val> + Y)
+    /// "Direct Indexed with Y-d,y"
+    /// (0, D + <val> + Y)
+    DirectIndexedY(u8),
 
     /// "Program Counter Relative-r"
     /// Used for jumps
@@ -151,6 +152,11 @@ impl AddressingMode {
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
             }
+            DirectIndexedY(offset) => {
+                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.y))
+            }
             Indirect(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
@@ -211,6 +217,7 @@ impl fmt::Display for AddressingMode {
             Rel(rel) =>                    write!(f, "{:+}", rel),
             Direct(offset) =>              write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>      write!(f, "${:02X},x", offset),
+            DirectIndexedY(offset) =>      write!(f, "${:02X},y", offset),
             Indirect(offset) =>            write!(f, "(${:02X})", offset),
             IndirectLong(offset) =>        write!(f, "[${:02X}]", offset),
             IndirectLongIdx(offset) =>     write!(f, "[${:02X}],y", offset),

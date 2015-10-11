@@ -3,7 +3,8 @@
 //! We emulate the NTSC console, which has a refresh rate of 60 Hz and a screen resolution of
 //! 256x224 pixels by default.
 //!
-//! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html
+//! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html and
+//! http://wiki.superfamicom.org/
 
 mod rendering;
 
