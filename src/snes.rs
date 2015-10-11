@@ -82,6 +82,7 @@ impl Peripherals {
                 0x2138 ... 0x213f => self.ppu.load(addr),
                 // APU IO registers
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
+                0x4016 | 0x4017 => self.input.load(addr),
                 0x4210 => {
                     const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
                     let nmi = if self.nmi { 0x80 } else { 0 };
@@ -116,6 +117,7 @@ impl Peripherals {
                 // APU IO registers.
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => panic!("NYI: WRAM registers"),
+                0x4016 => self.input.store(addr, value),
                 0x4200 => {
                     // NMITIMEN - NMI/IRQ enable
                     // E-HV---J
@@ -162,6 +164,7 @@ impl Peripherals {
     fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
     fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
     fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
+    fn auto_joypad(&self) -> bool { self.nmien & 0x01 != 0 }
 }
 
 pub struct Snes {
@@ -238,6 +241,7 @@ impl Snes {
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);
 
                     // XXX we assume that joypads are always autoread
+
                     self.cpu.mem.input.update();
                     if self.cpu.mem.nmi_enabled() {
                         //trace!("V-Blank NMI triggered! Trace started!");

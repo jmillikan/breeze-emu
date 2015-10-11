@@ -9,23 +9,14 @@ use std::thread::panicking;
 #[macro_export]
 macro_rules! once {
     ( $e:expr ) => {{
-        static mut REACHED = false;
+        static mut REACHED: bool = false;
         if unsafe { !REACHED } {
             unsafe {
                 REACHED = true;
             }
-            $e
+            $e;
         }
     }}
-}
-
-/// Executes `trace!` the first time this macro is evaluated, and does nothing if this is reached
-/// again.
-#[macro_export]
-macro_rules! trace_once {
-    ( $($args:expr),* ) => {{
-        once!(trace!( $($args),* ));
-    }};
 }
 
 /// Executes `trace!` if the formatted message wasn't logged by this macro before.
