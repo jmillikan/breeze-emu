@@ -39,6 +39,10 @@ pub struct Peripherals {
     /// * `n`: `self.nmi`
     /// * `v`: Version
     nmi: bool,
+    /// `$4211` TIMEUP - IRQ flag
+    /// `i-------`
+    /// * `i`: IRQ flag (cleared on read)
+    irq: bool,
 
     /// Additional cycles spent doing IO (in master clock cycles). This is reset before each CPU
     /// instruction and added to the cycle count returned by the CPU.
@@ -57,6 +61,7 @@ impl Peripherals {
             hdmaen: 0x00,
             nmien: 0x00,
             nmi: false,
+            irq: false,
             cy: 0,
         }
     }
@@ -74,7 +79,13 @@ impl Peripherals {
                 0x4210 => {
                     const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
                     let nmi = if self.nmi {1} else {0} << 7;
+                    self.nmi = false;   // Cleared on read
                     nmi | CPU_VERSION
+                }
+                0x4211 => {
+                    let val = if self.irq { 0x80 } else { 0 };
+                    self.irq = false;
+                    val
                 }
                 0x4218 ... 0x421f => self.input.load(addr),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
@@ -220,6 +231,9 @@ impl Snes {
                         // too many cycles.
                         break;
                     }
+                }
+                if result.new_frame {
+                    self.cpu.mem.nmi = false;   // Flag cleared on read or end of VBlank
                 }
             }
 
