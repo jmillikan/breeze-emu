@@ -434,6 +434,8 @@ impl Cpu {
             0xa0 => instr!(ldy immediate_index),
             0xac => instr!(ldy absolute),
             0xbc => instr!(ldy absolute_indexed_x),
+            0x54 => instr!(mvn block_move),
+            0x44 => instr!(mvp block_move),
 
             // Bit operations
             0x24 => instr!(bit direct),
@@ -573,6 +575,40 @@ impl Cpu {
 
 /// Opcode implementations
 impl Cpu {
+    /// Move Next (incrementing address). Copies C+1 (16-bit A) bytes from the address in X to the
+    /// address in Y.
+    fn mvn(&mut self, am: AddressingMode) {
+        if let AddressingMode::BlockMove(destbank, srcbank) = am {
+            while self.a != 0xffff {
+                let (x, y) = (self.x, self.y);
+                let val = self.loadb(srcbank, x);
+                self.storeb(destbank, y, val);
+
+                self.x = self.x.wrapping_add(1);
+                self.y = self.y.wrapping_add(1);
+                self.a = self.a.wrapping_sub(1);
+            }
+        } else {
+            panic!("MVN with invalid addressing mode");
+        }
+    }
+    /// Move Previous (decrementing address)
+    fn mvp(&mut self, am: AddressingMode) {
+        if let AddressingMode::BlockMove(destbank, srcbank) = am {
+            while self.a != 0xffff {
+                let (x, y) = (self.x, self.y);
+                let val = self.loadb(srcbank, x);
+                self.storeb(destbank, y, val);
+
+                self.x = self.x.wrapping_sub(1);
+                self.y = self.y.wrapping_sub(1);
+                self.a = self.a.wrapping_sub(1);
+            }
+        } else {
+            panic!("MVP with invalid addressing mode");
+        }
+    }
+
     /// Push Program Bank Register
     fn phk(&mut self) {
         let pbr = self.pbr;
@@ -950,7 +986,12 @@ impl Cpu {
     }
     /// Transfer Y to X
     fn tyx(&mut self) {
-        self.x = self.y;
+        // Changes N and Z
+        if self.p.small_index() {
+            self.x = self.p.set_nz_8(self.y as u8) as u16;
+        } else {
+            self.x = self.p.set_nz(self.y);
+        }
     }
 
     /// Increment memory location
@@ -1409,6 +1450,11 @@ impl Cpu {
 
 /// Addressing mode construction
 impl Cpu {
+    fn block_move(&mut self) -> AddressingMode {
+        let dest = self.fetchb();
+        let src = self.fetchb();
+        AddressingMode::BlockMove(dest, src)
+    }
     fn indirect(&mut self) -> AddressingMode {
         AddressingMode::Indirect(self.fetchb())
     }
