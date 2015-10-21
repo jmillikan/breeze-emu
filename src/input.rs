@@ -1,5 +1,7 @@
 //! Emulates the controller ports `$4016 - $401f`
 
+use frontend::{InputSource, DummyInput};
+
 /// Controller input management.
 pub struct Input {
     sources: [Box<InputSource>; 4],
@@ -107,10 +109,10 @@ impl Input {
 /// Bits:
 /// `B Y Select Start Up Down Left Right - A X L R 0 0 0 0`
 #[derive(Clone, Copy, Default)]
-struct InputState(u16);
+pub struct InputState(u16);
 
 impl InputState {
-    fn new() -> Self { Self::default() }
+    pub fn new() -> Self { Self::default() }
 
     fn set(&mut self, bit: u8, value: bool) -> &mut Self {
         match value {
@@ -120,34 +122,19 @@ impl InputState {
         self
     }
 
-    fn a(&mut self, pressed: bool) -> &mut Self { self.set(7, pressed) }
-    fn b(&mut self, pressed: bool) -> &mut Self { self.set(15, pressed) }
-    fn x(&mut self, pressed: bool) -> &mut Self { self.set(6, pressed) }
-    fn y(&mut self, pressed: bool) -> &mut Self { self.set(14, pressed) }
+    pub fn a(&mut self, pressed: bool) -> &mut Self      { self.set(7, pressed) }
+    pub fn b(&mut self, pressed: bool) -> &mut Self      { self.set(15, pressed) }
+    pub fn x(&mut self, pressed: bool) -> &mut Self      { self.set(6, pressed) }
+    pub fn y(&mut self, pressed: bool) -> &mut Self      { self.set(14, pressed) }
 
-    fn l(&mut self, pressed: bool) -> &mut Self { self.set(5, pressed) }
-    fn r(&mut self, pressed: bool) -> &mut Self { self.set(4, pressed) }
+    pub fn l(&mut self, pressed: bool) -> &mut Self      { self.set(5, pressed) }
+    pub fn r(&mut self, pressed: bool) -> &mut Self      { self.set(4, pressed) }
 
-    fn start(&mut self, pressed: bool) -> &mut Self { self.set(12, pressed) }
-    fn select(&mut self, pressed: bool) -> &mut Self { self.set(13, pressed) }
+    pub fn start(&mut self, pressed: bool) -> &mut Self  { self.set(12, pressed) }
+    pub fn select(&mut self, pressed: bool) -> &mut Self { self.set(13, pressed) }
 
-    fn up(&mut self, pressed: bool) -> &mut Self { self.set(11, pressed) }
-    fn down(&mut self, pressed: bool) -> &mut Self { self.set(10, pressed) }
-    fn left(&mut self, pressed: bool) -> &mut Self { self.set(9, pressed) }
-    fn right(&mut self, pressed: bool) -> &mut Self { self.set(8, pressed) }
-}
-
-/// Should be implemented for all input implementations (such as controller, keyboard, perhaps
-/// stdin or something like that).
-trait InputSource {
-    /// Poll the input state. For synchronization purposes, we guarantee that this method is called
-    /// exactly once per frame, however, the exact time within a frame is left unspecified (we might
-    /// want to call this function as late as possible to optimize input latency).
-    fn poll(&mut self) -> InputState;
-}
-
-/// Dummy input for when a controller is not used. Buttons are never pressed.
-struct DummyInput;
-impl InputSource for DummyInput {
-    fn poll(&mut self) -> InputState { InputState::new() }
+    pub fn up(&mut self, pressed: bool) -> &mut Self     { self.set(11, pressed) }
+    pub fn down(&mut self, pressed: bool) -> &mut Self   { self.set(10, pressed) }
+    pub fn left(&mut self, pressed: bool) -> &mut Self   { self.set(9, pressed) }
+    pub fn right(&mut self, pressed: bool) -> &mut Self  { self.set(8, pressed) }
 }

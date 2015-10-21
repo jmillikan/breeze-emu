@@ -237,9 +237,9 @@ impl Snes {
                 }
                 if result.last_pixel {
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);
-                    self.cpu.mem.input.new_frame();
                 }
                 if result.vblank {
+                    self.cpu.mem.input.new_frame();
                     if self.cpu.mem.nmi_enabled() {
                         //trace!("V-Blank NMI triggered! Trace started!");
                         //self.cpu.trace = true;
