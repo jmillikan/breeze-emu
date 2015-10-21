@@ -30,6 +30,9 @@ pub struct UpdateResult {
     /// `true` if the current V-Blank was just left (but no visible pixels were rendered). The next
     /// `update` call will render the first (visible) pixel of a new frame.
     pub new_frame: bool,
+    /// `true` if the last visible pixel in the frame was just rendered. The emulator can now
+    /// present the frame to the user.
+    pub last_pixel: bool,
 }
 
 const OAM_SIZE: usize = 544;
@@ -472,6 +475,10 @@ impl Ppu {
             256 => {
                 // H-Blank starts now!
                 result.hblank = true;
+                if self.scanline == SCREEN_HEIGHT {
+                    // Last scanline in the frame rendered
+                    result.last_pixel = true;
+                }
             }
             340 => {
                 // H-Blank ends now!

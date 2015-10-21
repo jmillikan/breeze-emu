@@ -235,13 +235,11 @@ impl Snes {
                 if result.hblank {
                     // TODO Do HDMA
                 }
-                if result.vblank {
-                    // FIXME We should render the frame earlier (result.vblank is set after the
-                    // hblank of the last frame is left, which is later than necessary)
+                if result.last_pixel {
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);
-
                     self.cpu.mem.input.new_frame();
-
+                }
+                if result.vblank {
                     if self.cpu.mem.nmi_enabled() {
                         //trace!("V-Blank NMI triggered! Trace started!");
                         //self.cpu.trace = true;
