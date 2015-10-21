@@ -325,13 +325,6 @@ impl Ppu {
             self.collect_sprite_data_for_scanline();
         }
 
-        if self.scanline < 64 && self.x < 64 {
-            // Debug: Draw the palette
-            let x = self.x >> 2;
-            let y = self.scanline >> 2;
-            return self.lookup_color(y as u8 * 16 + x as u8)
-        }
-
         macro_rules! e {
             ( $e:expr ) => ( $e );
         }
@@ -532,7 +525,7 @@ impl Ppu {
         None
     }
 
-    /// Determines if the given sprite is on the current scanline
+    /// Determines if the given sprite has any tiles on the current scanline
     fn sprite_on_scanline(&self, sprite: &OamEntry) -> bool {
         let (w, h) = self.obj_size(sprite.size_toggle);
         let (w, h) = (w as i16, h);
