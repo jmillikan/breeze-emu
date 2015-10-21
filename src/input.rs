@@ -1,9 +1,14 @@
 //! Emulates the controller ports `$4016 - $401f`
 
-/// Controller input. `update` should be called once per frame (when entering V-Blank).
+/// Controller input management.
 pub struct Input {
     sources: [Box<InputSource>; 4],
     states: [InputState; 4],
+    /// Reset on frame render, set on lazy input update. Lazy input update is done the first time
+    /// the game reads any controller state in the current frame and is supposed to improve input
+    /// latency.
+    updated_this_frame: bool,
+
     /// Bit in the input state (where 0 = MSb, 15 = LSb) returned by next $4016/$4017 read resp.
     bitpos4016: u8,
     bitpos4017: u8,
@@ -20,6 +25,7 @@ impl Default for Input {
                 Box::new(DummyInput)
             ],
             states: [InputState::default(); 4],
+            updated_this_frame: false,
             bitpos4016: 0,
             bitpos4017: 0,
         }
@@ -27,15 +33,23 @@ impl Default for Input {
 }
 
 impl Input {
-    /// Polls all controllers and stores their state. Call this exactly once per frame.
-    pub fn update(&mut self) {
+    pub fn new_frame(&mut self) { self.updated_this_frame = false; }
+
+    /// Polls all controllers and stores their state. Called lazily when the game reads from an
+    /// input register.
+    fn update(&mut self) {
+        self.updated_this_frame = true;
         for i in 0..4 {
             self.states[i] = self.sources[i].poll();
         }
     }
 
-    /// Read from an input register
+    /// Read from an input register. Updates the controller state if this is the first load in this
+    /// frame.
     pub fn load(&mut self, reg: u16) -> u8 {
+        // Do we still need to fetch this frame's input data?
+        if !self.updated_this_frame { self.update(); }
+
         match reg {
             0x4016 => {
                 let bitpos = self.bitpos4016;

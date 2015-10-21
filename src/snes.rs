@@ -240,9 +240,8 @@ impl Snes {
                     // hblank of the last frame is left, which is later than necessary)
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);
 
-                    // XXX we assume that joypads are always autoread
+                    self.cpu.mem.input.new_frame();
 
-                    self.cpu.mem.input.update();
                     if self.cpu.mem.nmi_enabled() {
                         //trace!("V-Blank NMI triggered! Trace started!");
                         //self.cpu.trace = true;
