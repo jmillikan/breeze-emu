@@ -35,7 +35,12 @@ impl Default for Input {
 }
 
 impl Input {
-    pub fn new_frame(&mut self) { self.updated_this_frame = false; }
+    /// Called on V-Blank. Ensures that `update` was called this frame, and enabled lazy input
+    /// update for the following frame.
+    pub fn new_frame(&mut self) {
+        if !self.updated_this_frame { self.update(); }
+        self.updated_this_frame = false;
+    }
 
     /// Polls all controllers and stores their state. Called lazily when the game reads from an
     /// input register.
