@@ -18,8 +18,8 @@ pub trait Renderer {
     ///
     /// The renderer is also responsible for timing: It should only return to the caller when
     /// another frame should be rendered. This also affects input latency: As soon as the `render`
-    /// method returns, the input devices are queried. This allows intricate timing mechanisms for
-    /// better input latency and makes support for dynamic refresh easier. If the renderer returns
-    /// immediately, the emulator will run at maximum speed.
+    /// method returns, the input devices can be queried by the running program. This allows
+    /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
+    /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
     fn render(&mut self, frame_data: &[u8]);
 }

@@ -1,5 +1,4 @@
-//! Emulates the 4 controller ports (the SNES only has 2 controller ports, but I think each one
-//! supports up to 2 controllers).
+//! Emulates the controller ports `$4016 - $401f`
 
 /// Controller input. `update` should be called once per frame (when entering V-Blank).
 pub struct Input {
@@ -28,7 +27,7 @@ impl Default for Input {
 }
 
 impl Input {
-    /// Polls all controllers and stores their state
+    /// Polls all controllers and stores their state. Call this exactly once per frame.
     pub fn update(&mut self) {
         for i in 0..4 {
             self.states[i] = self.sources[i].poll();
@@ -127,6 +126,9 @@ impl InputState {
 /// Should be implemented for all input implementations (such as controller, keyboard, perhaps
 /// stdin or something like that).
 trait InputSource {
+    /// Poll the input state. For synchronization purposes, we guarantee that this method is called
+    /// exactly once per frame, however, the exact time within a frame is left unspecified (we might
+    /// want to call this function as late as possible to optimize input latency).
     fn poll(&mut self) -> InputState;
 }
 

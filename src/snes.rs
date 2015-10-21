@@ -3,7 +3,7 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::{do_dma, DmaChannel};
-use frontend::{self, Renderer};
+use frontend::Renderer;
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
@@ -173,10 +173,10 @@ pub struct Snes {
 }
 
 impl Snes {
-    pub fn new(rom: Rom) -> Snes {
+    pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom)),
-            renderer: Box::new(frontend::SdlRenderer::new(&::sdl2::init().unwrap())),
+            renderer: renderer,
         }
     }
 

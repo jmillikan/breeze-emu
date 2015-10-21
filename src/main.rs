@@ -32,6 +32,6 @@ fn main() {
 
     let rom = Rom::from_bytes(&buf).unwrap();
 
-    let mut snes = Snes::new(rom);
+    let mut snes = Snes::new(rom, Box::new(frontend::SdlRenderer::new(&::sdl2::init().unwrap())));
     snes.run();
 }
