@@ -129,6 +129,65 @@ impl DmaChannel {
     }
 }
 
+/// Perform a single DMA transaction according to `mode`. Reads and writes up to 4 bytes using the
+/// given read/write functions.
+fn dma_transaction<R, W>(p: &mut Peripherals,
+                         mode: TransferMode,
+                         read_byte: &mut R,
+                         write_byte: &mut W)
+                         where R: FnMut(&mut Peripherals) -> u8, W: FnMut(&mut Peripherals, u8) {
+    match mode {
+        /// Just reads and writes a single byte
+        OneOnce => {
+            let b = read_byte(p);
+            write_byte(p, b);
+        }
+        /// Read one Byte and writes it twice
+        OneTwice => {
+            let b = read_byte(p);
+            write_byte(p, b);
+            write_byte(p, b);
+        }
+        /// Reads two bytes and writes them to the destination
+        TwoOnce => {
+            let b = read_byte(p);
+            write_byte(p, b);
+            let b = read_byte(p);
+            write_byte(p, b);
+        }
+        /// Does `OneTwice` two times: Reads a byte, writes it twice, reads another byte,
+        /// writes it twice.
+        TwoTwice => {
+            let b = read_byte(p);
+            write_byte(p, b);
+            write_byte(p, b);
+            let b = read_byte(p);
+            write_byte(p, b);
+            write_byte(p, b);
+        }
+        /// Reads two Bytes, A and B. Writes A, B, A, B.
+        TwoTwiceAlternate => {
+            let a = read_byte(p);
+            let b = read_byte(p);
+            write_byte(p, a);
+            write_byte(p, b);
+            write_byte(p, a);
+            write_byte(p, b);
+        }
+        /// Reads and writes 4 Bytes.
+        FourOnce => {
+            let b = read_byte(p);
+            write_byte(p, b);
+            let b = read_byte(p);
+            write_byte(p, b);
+            let b = read_byte(p);
+            write_byte(p, b);
+            let b = read_byte(p);
+            write_byte(p, b);
+        }
+    }
+}
+
 /// Performs all DMA transactions enabled by the given bitmask. Returns the number of master cycles
 /// spent.
 pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
@@ -190,56 +249,7 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 
             dma_cy += bytes.get() * 8;  // 8 master cycles per byte
             while bytes.get() > 0 {
-                match mode {
-                    /// Just reads and writes a single byte
-                    OneOnce => {
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                    }
-                    /// Read one Byte and writes it twice
-                    OneTwice => {
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        write_byte(p, b);
-                    }
-                    /// Reads two bytes and writes them to the destination
-                    TwoOnce => {
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                    }
-                    /// Does `OneTwice` two times: Reads a byte, writes it twice, reads another byte,
-                    /// writes it twice.
-                    TwoTwice => {
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        write_byte(p, b);
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        write_byte(p, b);
-                    }
-                    /// Reads two Bytes, A and B. Writes A, B, A, B.
-                    TwoTwiceAlternate => {
-                        let a = read_byte(p);
-                        let b = read_byte(p);
-                        write_byte(p, a);
-                        write_byte(p, b);
-                        write_byte(p, a);
-                        write_byte(p, b);
-                    }
-                    /// Reads and writes 4 Bytes.
-                    FourOnce => {
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                        let b = read_byte(p);
-                        write_byte(p, b);
-                    }
-                }
+                dma_transaction(p, mode, &mut read_byte, &mut write_byte);
             }
 
             p.dma[i].dma_size = 0;
