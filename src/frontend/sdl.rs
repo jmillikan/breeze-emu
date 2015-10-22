@@ -39,6 +39,7 @@ impl SdlRenderer {
 
 impl super::Renderer for SdlRenderer {
     fn render(&mut self, frame_data: &[u8]) {
+        // FIXME Can this be done with fewer copies?
         self.texture.update(None, frame_data, SCREEN_WIDTH as usize * 3).unwrap();
         self.renderer.clear();
         self.renderer.copy(&self.texture, None, None);
