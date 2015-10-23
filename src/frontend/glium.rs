@@ -46,7 +46,6 @@ const FRAGMENT_SHADER_SRC: &'static str = r#"
 pub struct GliumRenderer {
     display: GlutinFacade,
     vbuf: VertexBuffer<Vertex>,
-    indices: NoIndices,
     program: Program,
 }
 
@@ -62,17 +61,12 @@ impl Default for GliumRenderer {
             Vertex::new(-1.0, -1.0),
             Vertex::new(1.0, -1.0),
         ];
-        let program = Program::from_source(
-            &display,
-            VERTEX_SHADER_SRC,
-            FRAGMENT_SHADER_SRC,
-            None).unwrap();
 
         GliumRenderer {
             vbuf: VertexBuffer::new(&display, &shape).unwrap(),
-            indices: NoIndices(PrimitiveType::TriangleStrip),
+            program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
+                .unwrap(),
             display: display,
-            program: program,
         }
     }
 }
@@ -96,7 +90,11 @@ impl GliumRenderer {
 impl super::Renderer for GliumRenderer {
     fn render(&mut self, frame_data: &[u8]) {
         let mut target = self.display.draw();
-        target.draw(&self.vbuf, &self.indices, &self.program, &uniforms::EmptyUniforms,
+        target.draw(
+            &self.vbuf,
+            &NoIndices(PrimitiveType::TriangleStrip),
+            &self.program,
+            &uniforms::EmptyUniforms,
             &Default::default()).unwrap();
         target.finish().unwrap();
 
