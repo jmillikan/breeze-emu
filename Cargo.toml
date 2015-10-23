@@ -8,4 +8,9 @@ log = "0.3"
 env_logger = "0.3"
 sdl2 = "0.9"
 arrayvec = "0.3"
-glium = { version = "0.10", optional = true }
+
+[dependencies.glium]
+version = "0.10"
+optional = true
+features = ["glutin"]
+default-features = false
