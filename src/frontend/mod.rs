@@ -8,7 +8,7 @@ use input::InputState;
 mod dummy;
 mod sdl;
 
-pub use self::dummy::{DummyInput, DummyRenderer};
+pub use self::dummy::DummyRenderer;
 pub use self::sdl::SdlRenderer;
 
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the

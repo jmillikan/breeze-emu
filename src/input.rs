@@ -1,10 +1,11 @@
 //! Emulates the controller ports `$4016 - $401f`
 
-use frontend::{InputSource, DummyInput};
+use frontend::{InputSource};
 
 /// Controller input management.
+#[derive(Default)]
 pub struct Input {
-    sources: [Box<InputSource>; 4],
+    sources: [Option<Box<InputSource>>; 4],
     states: [InputState; 4],
     /// Reset on frame render, set on lazy input update. Lazy input update is done the first time
     /// the game reads any controller state in the current frame and is supposed to improve input
@@ -14,24 +15,6 @@ pub struct Input {
     /// Bit in the input state (where 0 = MSb, 15 = LSb) returned by next $4016/$4017 read resp.
     bitpos4016: u8,
     bitpos4017: u8,
-}
-
-impl Default for Input {
-    /// Create the default input config. No controllers are attached.
-    fn default() -> Input {
-        Input {
-            sources: [
-                Box::new(DummyInput),
-                Box::new(DummyInput),
-                Box::new(DummyInput),
-                Box::new(DummyInput)
-            ],
-            states: [InputState::default(); 4],
-            updated_this_frame: false,
-            bitpos4016: 0,
-            bitpos4017: 0,
-        }
-    }
 }
 
 impl Input {
@@ -47,7 +30,9 @@ impl Input {
     fn update(&mut self) {
         self.updated_this_frame = true;
         for i in 0..4 {
-            self.states[i] = self.sources[i].poll();
+            if let Some(ref mut source) = self.sources[i] {
+                self.states[i] = source.poll();
+            }
         }
     }
 
