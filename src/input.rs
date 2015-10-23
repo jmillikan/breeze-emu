@@ -35,7 +35,7 @@ impl Default for Input {
 }
 
 impl Input {
-    /// Called on V-Blank. Ensures that `update` was called this frame, and enabled lazy input
+    /// Called on V-Blank. Ensures that `update` was called this frame, and enables lazy input
     /// update for the following frame.
     pub fn new_frame(&mut self) {
         if !self.updated_this_frame { self.update(); }

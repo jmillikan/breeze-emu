@@ -1,4 +1,7 @@
-//! Contains the emulator frontend implementation.
+//! Contains the emulator frontend implementations.
+
+// TODO We could easily do render tests with a custom `Renderer`, and even supply scripted input
+// with an `InputSource`
 
 use input::InputState;
 
@@ -30,7 +33,7 @@ pub trait Renderer {
 /// stdin or something like that).
 pub trait InputSource {
     /// Poll the input state. For synchronization purposes, we guarantee that this method is called
-    /// exactly once per frame, however, the exact time within a frame is left unspecified (we might
+    /// exactly once per frame. However, the exact time within a frame is left unspecified (we might
     /// want to call this function as late as possible to optimize input latency).
     fn poll(&mut self) -> InputState;
 }
