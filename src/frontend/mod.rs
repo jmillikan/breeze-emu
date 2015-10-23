@@ -5,11 +5,16 @@
 
 use input::InputState;
 
+#[cfg(feature = "glium")]
+mod glium;
 mod dummy;
 mod sdl;
 
-pub use self::dummy::DummyRenderer;
-pub use self::sdl::SdlRenderer;
+#[cfg(not(feature = "glium"))]
+pub type DefaultRenderer = sdl::SdlRenderer;
+
+#[cfg(feature = "glium")]
+pub type DefaultRenderer = glium::GliumRenderer;
 
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
 /// PPU and can then render this content in a frontend-specific way.

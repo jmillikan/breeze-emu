@@ -5,6 +5,10 @@ extern crate env_logger;
 extern crate sdl2;
 extern crate arrayvec;
 
+#[cfg(feature = "glium")]
+#[macro_use]
+extern crate glium;
+
 use std::fs::File;
 use std::io::Read;
 
@@ -32,6 +36,7 @@ fn main() {
 
     let rom = Rom::from_bytes(&buf).unwrap();
 
-    let mut snes = Snes::new(rom, Box::new(frontend::SdlRenderer::new()));
+    let renderer = frontend::DefaultRenderer::default();
+    let mut snes = Snes::new(rom, Box::new(renderer));
     snes.run();
 }
