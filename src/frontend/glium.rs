@@ -6,25 +6,48 @@ use glium::{DisplayBuild, Surface};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::{NoIndices, PrimitiveType};
 use glium::glutin::WindowBuilder;
+use glium::program::Program;
+use glium::uniforms;
 use glium::vertex::VertexBuffer;
 
 use std::process;
 
 #[derive(Copy, Clone)]
 struct Vertex {
-    pos: [f32; 2],
+    position: [f32; 2],
 }
 
 impl Vertex {
-    fn new(x: f32, y: f32) -> Self { Vertex { pos: [x, y] } }
+    fn new(x: f32, y: f32) -> Self { Vertex { position: [x, y] } }
 }
 
-implement_vertex!(Vertex, pos);
+implement_vertex!(Vertex, position);
+
+const VERTEX_SHADER_SRC: &'static str = r#"
+    #version 140
+
+    in vec2 position;
+
+    void main() {
+        gl_Position = vec4(position, 0.0, 1.0);
+    }
+"#;
+
+const FRAGMENT_SHADER_SRC: &'static str = r#"
+    #version 140
+
+    out vec4 color;
+
+    void main() {
+        color = vec4(1.0, 0.0, 0.0, 1.0);
+    }
+"#;
 
 pub struct GliumRenderer {
     display: GlutinFacade,
     vbuf: VertexBuffer<Vertex>,
-    index: NoIndices,
+    indices: NoIndices,
+    program: Program,
 }
 
 impl Default for GliumRenderer {
@@ -36,16 +59,20 @@ impl Default for GliumRenderer {
         let shape = [
             Vertex::new(-1.0, 1.0),
             Vertex::new(1.0, 1.0),
-            Vertex::new(1.0, -1.0),
             Vertex::new(-1.0, -1.0),
+            Vertex::new(1.0, -1.0),
         ];
-        let vbuf = VertexBuffer::new(&display, &shape).unwrap();
-        let index = NoIndices(PrimitiveType::TriangleStrip);
+        let program = Program::from_source(
+            &display,
+            VERTEX_SHADER_SRC,
+            FRAGMENT_SHADER_SRC,
+            None).unwrap();
 
         GliumRenderer {
+            vbuf: VertexBuffer::new(&display, &shape).unwrap(),
+            indices: NoIndices(PrimitiveType::TriangleStrip),
             display: display,
-            vbuf: vbuf,
-            index: index,
+            program: program,
         }
     }
 }
@@ -69,6 +96,8 @@ impl GliumRenderer {
 impl super::Renderer for GliumRenderer {
     fn render(&mut self, frame_data: &[u8]) {
         let mut target = self.display.draw();
+        target.draw(&self.vbuf, &self.indices, &self.program, &uniforms::EmptyUniforms,
+            &Default::default()).unwrap();
         target.finish().unwrap();
 
         self.handle_events();
