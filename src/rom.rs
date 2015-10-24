@@ -20,7 +20,7 @@ impl RomHeader {
         // The header size must be correct (the ROM loader won't pass a wrong size)
         assert_eq!(bytes.len(), 64);
 
-        debug!("{:?}", bytes);
+        debug!("raw rom header: {:?}", bytes);
 
         // First check: Is the title valid ASCII?
         let mut title = [0; 21];
@@ -36,7 +36,7 @@ impl RomHeader {
             }
         }
 
-        debug!("'{}'", str::from_utf8(&title).unwrap().trim_right());
+        info!("loading '{}'", str::from_utf8(&title).unwrap().trim_right());
 
         // "ROM makeup byte"
         let makeup = bytes[21];
@@ -56,7 +56,7 @@ impl RomHeader {
         let rom_size = 0x400 << bytes[23] as u32;
         let ram_size = 0x400 << bytes[24] as u32;
         debug!("ROM/RAM size values: {:02X} {:02X}", bytes[23], bytes[24]);
-        debug!("{} bytes of ROM, {} bytes of RAM", rom_size, ram_size);
+        info!("{} bytes of ROM, {} bytes of RAM", rom_size, ram_size);
 
         // bytes[25-26] is a vendor code (doesn't matter)
         debug!("vendor code: 0x{:02X}{:02X}", bytes[25], bytes[26]);
