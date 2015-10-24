@@ -8,6 +8,7 @@ use glium::index::{NoIndices, PrimitiveType};
 use glium::glutin::WindowBuilder;
 use glium::program::Program;
 use glium::texture::{ClientFormat, RawImage2d, Texture2d};
+use glium::uniforms::MagnifySamplerFilter;
 use glium::vertex::VertexBuffer;
 
 use std::process;
@@ -31,8 +32,8 @@ const VERTEX_SHADER_SRC: &'static str = r#"
     out vec2 tex_coords;
 
     void main() {
+        tex_coords = vec2((position.x + 1) * 0.5, 1 - (position.y + 1) * 0.5);
         gl_Position = vec4(position, 0.0, 1.0);
-        tex_coords = (position + vec2(1,1)) * vec2(0.5, -0.5);
     }
 "#;
 
@@ -117,7 +118,8 @@ impl super::Renderer for GliumRenderer {
             &NoIndices(PrimitiveType::TriangleStrip),
             &self.program,
             &uniform! {
-                tex: &self.texture,
+                tex: self.texture.sampled()
+                    .magnify_filter(MagnifySamplerFilter::Nearest),
             },
             &Default::default()).unwrap();
         target.finish().unwrap();
