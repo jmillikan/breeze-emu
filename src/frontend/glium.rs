@@ -60,7 +60,7 @@ pub struct GliumRenderer {
 impl Default for GliumRenderer {
     fn default() -> Self {
         let display = WindowBuilder::new()
-            .with_dimensions(SCREEN_WIDTH as u32 * 3, SCREEN_HEIGHT as u32 * 3)
+            .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
             .with_title("sneeze".to_owned())
             .build_glium().unwrap();
         let shape = [
@@ -74,7 +74,7 @@ impl Default for GliumRenderer {
             vbuf: VertexBuffer::new(&display, &shape).unwrap(),
             program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
                 .unwrap(),
-            texture: Texture2d::empty(&display, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
+            texture: Texture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)
                 .unwrap(),
             display: display,
         }
@@ -103,12 +103,12 @@ impl super::Renderer for GliumRenderer {
         self.texture.write(Rect {
             left: 0,
             bottom: 0,
-            width: SCREEN_WIDTH as u32,
-            height: SCREEN_HEIGHT as u32,
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
         }, RawImage2d {
             data: Cow::Borrowed(frame_data),
-            width: SCREEN_WIDTH as u32,
-            height: SCREEN_HEIGHT as u32,
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
             format: ClientFormat::U8U8U8,
         });
 

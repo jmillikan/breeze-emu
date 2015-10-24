@@ -637,7 +637,7 @@ impl Ppu {
 
         // FIXME: I'm assuming all pairs of bitplanes are stored sequentially?
         let mut palette_index = 0u8;
-        for i in (0..bitplane_pairs) {
+        for i in 0..bitplane_pairs {
             let bitplane_bits = self.read_2_bitplanes(
                 start_addr + i as u16 * bitplane_pair_size,
                 (x, y));

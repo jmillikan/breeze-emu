@@ -12,10 +12,10 @@ use self::rendering::RenderState;
 
 /// Physical screen width
 /// (this is the width of a field, or a half-frame)
-pub const SCREEN_WIDTH: u16 = 256;
+pub const SCREEN_WIDTH: u32 = 256;
 /// Physical screen height
 /// (this is the height of a field, or a half-frame)
-pub const SCREEN_HEIGHT: u16 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
+pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
 /// Emulated refresh rate in Hz
 pub const REFRESH_RATE: u8 = 60;
 
@@ -475,7 +475,7 @@ impl Ppu {
             256 => {
                 // H-Blank starts now!
                 result.hblank = true;
-                if self.scanline == SCREEN_HEIGHT {
+                if self.scanline as u32 == SCREEN_HEIGHT {
                     // Last scanline in the frame rendered
                     result.last_pixel = true;
                 }
@@ -484,7 +484,7 @@ impl Ppu {
                 // H-Blank ends now!
                 self.x = 0;
                 self.scanline += 1;
-                match self.scanline {
+                match self.scanline as u32 {
                     SCREEN_HEIGHT => {
                         // V-Blank starts now!
                         result.vblank = true;
@@ -509,7 +509,7 @@ impl Ppu {
 /// Private methods
 impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
-    fn in_v_blank(&self) -> bool { self.scanline >= SCREEN_HEIGHT }
+    fn in_v_blank(&self) -> bool { self.scanline as u32 >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
     pub fn h_counter(&self) -> u16 { self.x }

@@ -59,14 +59,14 @@ impl Default for SdlRenderer {
 
         SDL.with(|sdl| {
             let video = sdl.video().unwrap();
-            let window = video.window("sneeze", SCREEN_WIDTH as u32 * 3, SCREEN_HEIGHT as u32 * 3)
+            let window = video.window("sneeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
                 .build().unwrap();
             let renderer = window.renderer().accelerated().build().unwrap();
             debug!("renderer: {:?}", renderer.info());
             let texture = renderer.create_texture(
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,
-                (SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)).unwrap();
+                (SCREEN_WIDTH, SCREEN_HEIGHT)).unwrap();
 
             SdlRenderer {
                 renderer: renderer,
