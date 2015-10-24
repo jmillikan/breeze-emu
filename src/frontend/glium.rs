@@ -2,15 +2,16 @@
 
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
-use glium::{DisplayBuild, Surface};
+use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::{NoIndices, PrimitiveType};
 use glium::glutin::WindowBuilder;
 use glium::program::Program;
-use glium::uniforms;
+use glium::texture::{ClientFormat, RawImage2d, Texture2d};
 use glium::vertex::VertexBuffer;
 
 use std::process;
+use std::borrow::Cow;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -27,19 +28,24 @@ const VERTEX_SHADER_SRC: &'static str = r#"
     #version 140
 
     in vec2 position;
+    out vec2 tex_coords;
 
     void main() {
         gl_Position = vec4(position, 0.0, 1.0);
+        tex_coords = (position + vec2(1,1)) * vec2(0.5, -0.5);
     }
 "#;
 
 const FRAGMENT_SHADER_SRC: &'static str = r#"
     #version 140
 
+    in vec2 tex_coords;
     out vec4 color;
 
+    uniform sampler2D tex;
+
     void main() {
-        color = vec4(1.0, 0.0, 0.0, 1.0);
+        color = texture(tex, tex_coords);
     }
 "#;
 
@@ -47,6 +53,7 @@ pub struct GliumRenderer {
     display: GlutinFacade,
     vbuf: VertexBuffer<Vertex>,
     program: Program,
+    texture: Texture2d,
 }
 
 impl Default for GliumRenderer {
@@ -65,6 +72,8 @@ impl Default for GliumRenderer {
         GliumRenderer {
             vbuf: VertexBuffer::new(&display, &shape).unwrap(),
             program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
+                .unwrap(),
+            texture: Texture2d::empty(&display, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
                 .unwrap(),
             display: display,
         }
@@ -89,12 +98,27 @@ impl GliumRenderer {
 
 impl super::Renderer for GliumRenderer {
     fn render(&mut self, frame_data: &[u8]) {
+        // upload new texture data
+        self.texture.write(Rect {
+            left: 0,
+            bottom: 0,
+            width: SCREEN_WIDTH as u32,
+            height: SCREEN_HEIGHT as u32,
+        }, RawImage2d {
+            data: Cow::Borrowed(frame_data),
+            width: SCREEN_WIDTH as u32,
+            height: SCREEN_HEIGHT as u32,
+            format: ClientFormat::U8U8U8,
+        });
+
         let mut target = self.display.draw();
         target.draw(
             &self.vbuf,
             &NoIndices(PrimitiveType::TriangleStrip),
             &self.program,
-            &uniforms::EmptyUniforms,
+            &uniform! {
+                tex: &self.texture,
+            },
             &Default::default()).unwrap();
         target.finish().unwrap();
 
