@@ -30,7 +30,7 @@ const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
 /// One CPU cycle = 6 master clock cycles
-pub const CPU_CYCLE: u8 = 6;
+pub const CPU_CYCLE: u16 = 6;
 
 pub struct Cpu {
     a: u16,
@@ -51,7 +51,7 @@ pub struct Cpu {
     emulation: bool,
 
     /// Master clock cycle counter for the current instruction.
-    cy: u8,
+    cy: u16,
 
     pub trace: bool,
     pub mem: Peripherals,
@@ -90,9 +90,9 @@ impl Cpu {
 
     /// Adds the time needed to access the given memory location to the cycle counter.
     fn do_io_cycle(&mut self, bank: u8, addr: u16) {
-        const FAST: u8 = 0;
-        const SLOW: u8 = 2;
-        const XSLOW: u8 = 6;
+        const FAST: u16 = 0;
+        const SLOW: u16 = 2;
+        const XSLOW: u16 = 6;
 
         self.cy += match bank {
             0x00 ... 0x3f => match addr {
@@ -249,7 +249,7 @@ impl Cpu {
     }
 
     /// Executes a single opcode and returns the number of master clock cycles used.
-    pub fn dispatch(&mut self) -> u8 {
+    pub fn dispatch(&mut self) -> u16 {
         // CPU cycles each opcode takes (at the minimum).
         static CYCLE_TABLE: [u8; 256] = [
             7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
@@ -273,7 +273,7 @@ impl Cpu {
         let pc = self.pc;
         self.cy = 0;
         let op = self.fetchb();
-        self.cy += CYCLE_TABLE[op as usize] * CPU_CYCLE + 4;
+        self.cy += CYCLE_TABLE[op as usize] as u16 * CPU_CYCLE + 4;
         // FIXME: The +4 is a timing correction. I'm not sure what causes the inaccuracy, but I
         // suspect the addressing mode / memory access timing is a bit off.
 
