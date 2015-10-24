@@ -9,6 +9,7 @@ extern crate arrayvec;
 #[macro_use]
 extern crate glium;
 
+use std::env;
 use std::fs::File;
 use std::io::Read;
 
@@ -27,6 +28,9 @@ mod rom;
 mod snes;
 
 fn main() {
+    if env::var_os("RUST_LOG").is_none() {
+        env::set_var("RUST_LOG", "sneeze=INFO");
+    }
     env_logger::init().unwrap();
 
     let filename = std::env::args().skip(1).next().expect("no rom file specified");
