@@ -260,3 +260,11 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 
     dma_cy
 }
+
+pub fn do_hdma(channels: u8) -> u32 {
+    if channels == 0 { return 0 }
+
+    once!(warn!("NYI: HDMA (attempted with channel mask ${:08b})", channels));
+
+    0
+}

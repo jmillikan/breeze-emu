@@ -142,11 +142,8 @@ impl Peripherals {
                 }
                 // MDMAEN - Party enable
                 0x420b => self.cy += do_dma(self, value),
-                0x420c => {
-                    // HDMAEN - HDMA enable
-                    if value != 0 { panic!("NYI: HDMA") }
-                    self.hdmaen = value;
-                }
+                // HDMAEN - HDMA enable
+                0x420c => self.hdmaen = value,
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => {
                     self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value);
@@ -164,7 +161,6 @@ impl Peripherals {
     fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
     fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
     fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
-    fn auto_joypad(&self) -> bool { self.nmien & 0x01 != 0 }
 }
 
 pub struct Snes {
