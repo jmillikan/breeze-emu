@@ -1,5 +1,6 @@
 #![allow(dead_code)]    // FIXME Just for development
 
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate sdl2;
@@ -40,7 +41,12 @@ fn main() {
 
     let rom = Rom::from_bytes(&buf).unwrap();
 
-    let renderer = frontend::DefaultRenderer::default();
-    let mut snes = Snes::new(rom, Box::new(renderer));
+    let renderer_name = &*frontend::DEFAULT_RENDERER;
+    info!("using {} renderer", renderer_name);
+
+    let renderer = frontend::RENDERER_MAP.get(renderer_name)
+        .expect("default renderer has no entry in renderer map")()
+        .expect("default renderer not compiled in");
+    let mut snes = Snes::new(rom, renderer);
     snes.run();
 }

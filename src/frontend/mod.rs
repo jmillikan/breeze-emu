@@ -5,16 +5,55 @@
 
 use input::InputState;
 
+use std::collections::HashMap;
+
+mod dummy;
 #[cfg(feature = "glium")]
 mod glium;
-mod dummy;
 mod sdl;
 
-#[cfg(not(feature = "glium"))]
-pub type DefaultRenderer = sdl::SdlRenderer;
+lazy_static! {
+    pub static ref RENDERER_MAP: HashMap<&'static str, fn() -> Option<Box<Renderer>>> = {
+        macro_rules! make_fn {
+            ( #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
+                #[cfg($m)]
+                fn $name() -> Option<Box<Renderer>> {
+                    Some(Box::new($name::$tyname::default()))
+                }
 
-#[cfg(feature = "glium")]
-pub type DefaultRenderer = glium::GliumRenderer;
+                #[cfg(not($m))]
+                fn $name() -> Option<Box<Renderer>> {
+                    None
+                }
+
+                $name as fn() -> Option<Box<Renderer>>
+            }};
+            ( $name:ident :: $tyname:ident ) => {{
+                fn $name() -> Option<Box<Renderer>> {
+                    Some(Box::new($name::$tyname::default()))
+                }
+
+                $name as fn() -> Option<Box<Renderer>>
+            }};
+        }
+
+        let mut map = HashMap::new();
+        map.insert("glium", make_fn!(#[cfg(feature = "glium")] glium::GliumRenderer));
+        map.insert("sdl", make_fn!(sdl::SdlRenderer));
+        map.insert("dummy", make_fn!(dummy::DummyRenderer));
+        map
+    };
+
+    pub static ref DEFAULT_RENDERER: &'static str = {
+        if cfg!(feature = "glium") {
+            "glium"
+        } else if cfg!(feature = "sdl") {
+            "sdl"
+        } else {
+            "dummy" // let's hope nobody does this by accident
+        }
+    };
+}
 
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
 /// PPU and can then render this content in a frontend-specific way.

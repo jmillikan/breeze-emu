@@ -3,6 +3,7 @@
 use super::Renderer;
 
 /// Renderer that just does nothing.
+#[derive(Default)]
 pub struct DummyRenderer;
 
 impl Renderer for DummyRenderer {
