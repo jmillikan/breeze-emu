@@ -2,7 +2,7 @@
 
 use apu::Apu;
 use cpu::Cpu;
-use dma::{do_dma, DmaChannel};
+use dma::{do_dma, do_hdma, DmaChannel};
 use frontend::Renderer;
 use input::Input;
 use log_util::LogOnPanic;
@@ -182,10 +182,6 @@ impl Snes {
         /// Start tracing at this master cycle (0 to trace everything)
         const TRACE_START: u64 = CY_LIMIT - 10_000;
 
-        const MASTER_CLOCK_FREQ: i32 = 21_477_000;
-        /// APU clock speed. On real hardware, this can vary quite a bit (I think it uses a ceramic
-        /// resonator instead of a quartz).
-        const APU_CLOCK_FREQ: i32 = 1_024_000;
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
@@ -229,7 +225,8 @@ impl Snes {
                 total_ppu_cy += cy as u64;
 
                 if result.hblank {
-                    // TODO Do HDMA
+                    // FIXME Cycles
+                    do_hdma(self.cpu.mem.hdmaen);
                 }
                 if result.last_pixel {
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);
