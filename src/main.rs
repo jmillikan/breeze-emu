@@ -3,8 +3,10 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
-extern crate sdl2;
 extern crate arrayvec;
+
+#[cfg(feature = "sdl2")]
+extern crate sdl2;
 
 #[cfg(feature = "glium")]
 #[macro_use]

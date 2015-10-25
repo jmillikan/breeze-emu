@@ -10,6 +10,7 @@ use std::collections::HashMap;
 mod dummy;
 #[cfg(feature = "glium")]
 mod glium;
+#[cfg(feature = "sdl2")]
 mod sdl;
 
 lazy_static! {
@@ -39,7 +40,7 @@ lazy_static! {
 
         let mut map = HashMap::new();
         map.insert("glium", make_fn!(#[cfg(feature = "glium")] glium::GliumRenderer));
-        map.insert("sdl", make_fn!(sdl::SdlRenderer));
+        map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] sdl::SdlRenderer));
         map.insert("dummy", make_fn!(dummy::DummyRenderer));
         map
     };
@@ -47,7 +48,7 @@ lazy_static! {
     pub static ref DEFAULT_RENDERER: &'static str = {
         if cfg!(feature = "glium") {
             "glium"
-        } else if cfg!(feature = "sdl") {
+        } else if cfg!(feature = "sdl2") {
             "sdl"
         } else {
             "dummy" // let's hope nobody does this by accident
