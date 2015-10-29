@@ -9,7 +9,6 @@ use std::thread::panicking;
 ///
 /// *NOTE*: This isn't particularly thread-safe, so 2 threads reaching the statement at the same
 /// time may both run it.
-#[macro_export]
 macro_rules! once {
     ( $e:expr ) => {{
         static mut REACHED: bool = false;
@@ -26,7 +25,6 @@ macro_rules! once {
 ///
 /// Note that each invocation is tracked seperately: If you use multiple `trace_unique!`
 /// invocations, each might log the same message once.
-#[macro_export]
 macro_rules! trace_unique {
     ( $($args:expr),* ) => {
         if log_enabled!(::log::LogLevel::Trace) {
