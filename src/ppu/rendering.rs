@@ -404,8 +404,12 @@ impl Ppu {
     }
 
     fn collect_sprite_data_for_scanline(&mut self) {
-        // FIXME Determine `FirstSprite` correctly (`$2103` priority rotation)
-        let first_sprite = 0;
+        let first_sprite = if self.oamaddh & 0x80 == 0 {
+            0
+        } else {
+            // Priority rotation enabled
+            ((self.oamaddr & 0xfe) >> 1) as u8
+        };
 
         // Find the first 32 sprites on the current scanline
         // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
