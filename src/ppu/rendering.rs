@@ -198,7 +198,7 @@ impl Ppu {
         }
     }
 
-    /// Determines whether the given BG layer is enabled
+    /// Determines whether the given BG layer (1-4) is enabled
     fn bg_enabled(&self, bg: u8) -> bool { self.tm & (1 << (bg-1)) != 0 }
 
     /// Returns the OAM entry of the given sprite. Always returns a valid entry if `index` is valid

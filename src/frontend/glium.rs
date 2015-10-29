@@ -1,5 +1,7 @@
 //! Render to a window created by Glutin, using Glium's OpenGL functions
 
+// FIXME: Support resizing the window, like the SDL renderer does
+
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use glium::{DisplayBuild, Surface, Rect};

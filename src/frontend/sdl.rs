@@ -24,6 +24,7 @@ impl SdlManager {
     fn update(&mut self) {
         use sdl2::event::Event::*;
         use sdl2::event::WindowEventId;
+        use sdl2::keyboard::Scancode;
 
         for event in self.event_pump.poll_iter() {
             match event {
@@ -37,6 +38,17 @@ impl SdlManager {
                 }
                 _ => {}
             }
+        }
+
+        if self.event_pump.keyboard_state().is_scancode_pressed(Scancode::LCtrl) {
+            info!("<waiting>");
+            for event in self.event_pump.wait_iter() {
+                match event {
+                    KeyUp { scancode: Some(Scancode::LCtrl), .. } => { break }
+                    _ => {}
+                }
+            }
+            info!("<running>");
         }
     }
 
