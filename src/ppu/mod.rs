@@ -145,7 +145,7 @@ pub struct Ppu {
 
     /// `$2105` BG mode and character size
     /// `4321emmm`
-    /// * `4321`: Use 16x16 characters for BG**4**/**3**/**2**/**1** (if possible in this mode)
+    /// * `4321`: Use 16x16 tiles for BG**4**/**3**/**2**/**1** (if possible in this mode)
     /// * `e`: Mode 1 BG3 priority bit. If set, BG3 tiles with priority 1 have the highest
     ///   priority. If not set, these tiles have the third lowest priority (and end up between
     ///   sprites with priority 0 and 1).
@@ -474,6 +474,7 @@ impl Ppu {
         match self.x {
             256 => {
                 // H-Blank starts now!
+                // FIXME: Is this correct when currently in V-Blank?
                 result.hblank = true;
                 if self.scanline as u32 == SCREEN_HEIGHT {
                     // Last scanline in the frame rendered

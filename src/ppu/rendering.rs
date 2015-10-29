@@ -1,4 +1,27 @@
 //! PPU rendering code
+//!
+//! # Terminology
+//!
+//! * **Tile**/**Character**: A tile consists of 8x8 or 16x16 pixels worth of color indices and is
+//!   what makes up both sprites and backgrounds. Sprites are always made up of 8x8 tiles, while
+//!   backgrounds can use 16x16 pixel tiles by setting the appropriate bit in `BGMODE ($2105)`.
+//! * **Background**: A background is a big, connected layer of tiles that can (only) be moved as a
+//!   unit. Depending on the background mode, between 1 and 4 BG layers can be used, each with
+//!   between 4 and 256 colors.
+//! * **Sprite**: A sprite is an independently movable object up to 64x64 pixels in size. Sprites
+//!   always use 8x8 tiles and 16 colors, while each sprite can use a different palette. Sprites can
+//!   not be rotated (rotating objects in games are either prerendered or make use of BG mode 7,
+//!   which allows full matrix transformations on the layer).
+//! * **Name table**/**Character table**/**Character map**: These tables store tile data: Maps of
+//!   color indices to use for the tile's pixels. Sprites and all background modes except mode 7
+//!   store the color indices in "bitplanes", which makes their decoding tricky: A bitplane stores 1
+//!   bit for every pixel of the tile. Two bitplanes are interleaved: Bitplane 0 is stored in the
+//!   low byte, while bitplane 1 is stored in the high byte.
+//! * **Tile map**: Backgrounds consist of 1, 2 or 4 tile maps, each storing data for 32x32 tiles.
+//!   For each tile on the background, the tile map stores the tile's priority and H/V flip bits,
+//!   the palette, and the tile number. If 16x16 tiles are enabled, each entry in the tile map
+//!   stores data for a 16x16 tile consisting of 4 8x8 tiles: `TILE`, `TILE+1`, `TILE+16` and
+//!   `TILE+17`, where `TILE` is the stored tile number.
 
 use super::{Ppu, Rgb};
 
