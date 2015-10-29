@@ -216,11 +216,11 @@ impl Ppu {
         let palette = (byte4 & 0x0e) >> 1;
 
         // Read the second table. Each byte contains information of 4 sprites (2 bits per sprite):
-        // The LSb is the size-toggle bit, the second bit is the MSb of the x coord
+        // Bits 1/3/5/6 is the size-toggle bit, bits 0/2/4/6 is the MSb of the x coord
         let byte = self.oam[512 + index as u16 / 4];
-        let info = (byte >> (index & 0x03)) & 0x03;
-        let size_toggle = info & 0x01 != 0;
-        if info & 0x02 != 0 {
+        let info = (byte >> ((index & 0x03) * 2)) & 0x03;
+        let size_toggle = info & 0x02 != 0;
+        if info & 0x01 != 0 {
             // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
             // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
             x = 0xfff0 | x;
