@@ -76,11 +76,6 @@ impl Default for SdlRenderer {
     }
 }
 
-impl SdlRenderer {
-    /// Creates a new SDL renderer. This also creates a window.
-    pub fn new() -> Self { Self::default() }
-}
-
 impl super::Renderer for SdlRenderer {
     fn render(&mut self, frame_data: &[u8]) {
         // FIXME Can this be done with fewer copies?
