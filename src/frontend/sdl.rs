@@ -101,7 +101,7 @@ impl Default for SdlRenderer {
                 renderer: renderer,
                 texture: texture,
             };
-            this.resize_to(SCREEN_WIDTH, SCREEN_HEIGHT);
+            this.resize_to(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3);
 
             this
         })
