@@ -583,6 +583,7 @@ impl Ppu {
     /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
     fn lookup_bg_color(&self, bg_num: u8, prio: u8) -> Option<Rgb> {
         debug_assert!(bg_num >= 1 && bg_num <= 4);
+        debug_assert!(prio == 0 || prio == 1);
         if !self.bg_enabled(bg_num) { return None }
 
         // Apply BG scrolling and get the tile coordinates
@@ -620,7 +621,7 @@ impl Ppu {
 
         // Calculate the number of bitplanes needed to store a color in this BG
         let color_count = self.color_count_for_bg(bg_num);
-        let bitplane_count = color_count.leading_zeros() as u16;
+        let bitplane_count = (color_count - 1).count_ones() as u16;
         debug_assert_eq!(color_count.count_ones(), 1);  // should be power of two
 
         // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
