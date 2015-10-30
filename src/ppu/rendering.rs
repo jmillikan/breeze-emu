@@ -657,13 +657,12 @@ impl Ppu {
         debug_assert!(bitplane_count & 1 == 0, "odd bitplane count");
         debug_assert!(tile_size == 8, "non-8x8 tiles unsupported"); // FIXME support 16x16 tiles
         let bitplane_pairs = bitplane_count >> 1;
-        let bitplane_pair_size = 16;    // FIXME depends on tile size (?)
 
         // FIXME: I'm assuming all pairs of bitplanes are stored sequentially?
         let mut palette_index = 0u8;
         for i in 0..bitplane_pairs {
             let bitplane_bits = self.read_2_bitplanes(
-                start_addr + i as u16 * bitplane_pair_size,
+                start_addr + i as u16 * 16, // 16 Bytes per pair of bitplanes
                 (x, y));
             palette_index = palette_index | (bitplane_bits << (2 * i));
         }
