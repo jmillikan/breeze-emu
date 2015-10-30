@@ -71,7 +71,7 @@ pub struct Ppu {
     ///     Bit 9 (most significant bit) of starting **t**ile number.
     ///
     /// Layout of a byte in the last 32 Bytes of OAM:
-    /// `xsxsxsxs` - **S**ize toggle bit and most significant bit of **X** coordinate
+    /// `sxsxsxsx` - **S**ize toggle bit and most significant bit of **X** coordinate
     /// The low bits contain the information for sprites with low IDs.
     oam: Oam,
 

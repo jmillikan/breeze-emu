@@ -106,20 +106,20 @@ struct TilemapEntry {
 
 /// Rendering
 impl Ppu {
-    /// Get the configured sprite size in pixels
-    fn obj_size(&self, alt: bool) -> (u8, u8) {
+    /// Get the configured sprite size in pixels. If `size_toggle` is `false`, gets the size of
+    /// small sprites, otherwise gets the size of large sprites (OAM size bit set).
+    fn obj_size(&self, size_toggle: bool) -> (u8, u8) {
         match self.obsel & 0b111 {
-            0b000 => if !alt {(8,8)} else {(16,16)},
-            0b001 => if !alt {(8,8)} else {(32,32)},
-            0b010 => if !alt {(8,8)} else {(64,64)},
-            0b011 => if !alt {(16,16)} else {(32,32)},
-            0b100 => if !alt {(16,16)} else {(64,64)},
-            0b101 => if !alt {(32,32)} else {(64,64)},
+            0b000 => if !size_toggle {(8,8)} else {(16,16)},
+            0b001 => if !size_toggle {(8,8)} else {(32,32)},
+            0b010 => if !size_toggle {(8,8)} else {(64,64)},
+            0b011 => if !size_toggle {(16,16)} else {(32,32)},
+            0b100 => if !size_toggle {(16,16)} else {(64,64)},
+            0b101 => if !size_toggle {(32,32)} else {(64,64)},
             // FIXME Figure out if we want to support these:
-            //0b110 => if !alt {(16,32)} else {(32,64)},
-            //0b111 => if !alt {(16,32)} else {(32,32)},
-            invalid => panic!("invalid sprite size selected: {:b} (OBSEL = ${:02X})",
-                invalid, self.obsel)
+            0b110 => if !size_toggle {(16,32)} else {(32,64)},
+            0b111 => if !size_toggle {(16,32)} else {(32,32)},
+            _ => unreachable!(),
         }
     }
 
@@ -218,9 +218,11 @@ impl Ppu {
         // Read the second table. Each byte contains information of 4 sprites (2 bits per sprite):
         // Bits 1/3/5/6 is the size-toggle bit, bits 0/2/4/6 is the MSb of the x coord
         let byte = self.oam[512 + index as u16 / 4];
-        let info = (byte >> ((index & 0x03) * 2)) & 0x03;
-        let size_toggle = info & 0x02 != 0;
-        if info & 0x01 != 0 {
+        let index_in_byte = index & 0b11;
+        let msb_mask = 1 << (index_in_byte * 2);
+        let size_mask = 2 << (index_in_byte * 2);
+        let size_toggle = byte & size_mask != 0;
+        if byte & msb_mask != 0 {
             // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
             // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
             x = 0xfff0 | x;
