@@ -314,6 +314,7 @@ impl Ppu {
     /// Calculates the palette base index for a tile in the given background layer. `tile_palette`
     /// is the palette number stored in the tilemap entry (the 3 `p` bits).
     fn palette_base_for_bg_tile(&self, bg: u8, palette_num: u8) -> u8 {
+        debug_assert!(bg >= 1 && bg <= 4);
         match self.bg_mode() {
             0 => palette_num * 4 + (bg - 1) * 32,
             1 | 5 => palette_num * self.color_count_for_bg(bg) as u8,   // doesn't have 256 colors
@@ -576,14 +577,6 @@ impl Ppu {
         }
     }
 
-    /// Applies color math to the given RGB value (if enabled), assuming it is the color of the
-    /// current pixel.
-    fn maybe_apply_color_math(&self, color: Rgb) -> Rgb {
-        // FIXME needs more info (bg, no bg, ...)
-        // TODO
-        color
-    }
-
     /// Lookup the color of the given background layer (1-4) at the current pixel, using the given
     /// priority (0-1) only. This will also scroll backgrounds accordingly and apply color math.
     ///
@@ -635,6 +628,7 @@ impl Ppu {
             (bg.chr_addr << 1) +
             (tilemap_entry.tile_number * 8 * bitplane_count);
 
+        let palette_base = self.palette_base_for_bg_tile(bg_num, tilemap_entry.palette);
         let palette_index = self.read_chr_entry(bitplane_count as u8,
                                                 bitplane_start_addr,
                                                 tile_size,
@@ -642,7 +636,7 @@ impl Ppu {
 
         match palette_index {
             0 => None,
-            _ => Some(self.lookup_color(palette_index)),
+            _ => Some(self.lookup_color(palette_base + palette_index)),
         }
     }
 
