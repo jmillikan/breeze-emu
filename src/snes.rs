@@ -186,10 +186,8 @@ impl Snes {
     }
 
     pub fn run(&mut self) {
-        /// Exit after this number of master clock cycles
-        const CY_LIMIT: u64 = 150_000_000;
         /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = CY_LIMIT - 10_000;
+        const TRACE_START: u64 = !0;
 
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
@@ -198,14 +196,12 @@ impl Snes {
 
         // Master cycle counter, used only for debugging atm
         let mut master_cy: u64 = 0;
-        let mut total_apu_cy: u64 = 0;
-        let mut total_ppu_cy: u64 = 0;
         // Master clock cycles for the APU not yet accounted for (can be negative)
         let mut apu_master_cy_debt = 0;
         let mut ppu_master_cy_debt = 0;
         let working_cy = LogOnPanic::new(0);
 
-        while master_cy < CY_LIMIT {
+        loop {
             if master_cy >= TRACE_START {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
@@ -226,12 +222,10 @@ impl Snes {
                 // only run it if we owe it `APU_DIVIDER` master cycles - or one SPC700 cycle)
                 let apu_master_cy = self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
                 apu_master_cy_debt -= apu_master_cy;
-                total_apu_cy += apu_master_cy as u64;
             }
             while ppu_master_cy_debt > 0 {
                 let (cy, result) = self.cpu.mem.ppu.update();
                 ppu_master_cy_debt -= cy as i32;
-                total_ppu_cy += cy as u64;
 
                 if result.hblank {
                     // FIXME Cycles
@@ -271,8 +265,5 @@ impl Snes {
 
             working_cy.set(master_cy);
         }
-
-        info!("EXITING. Master cycle count: {}, APU: {}, PPU: {}",
-            master_cy, total_apu_cy, total_ppu_cy);
     }
 }
