@@ -177,11 +177,15 @@ pub struct Ppu {
     bg2sc: u8,
     bg3sc: u8,
     bg4sc: u8,
-    /// `$210b`/`$210c` BG Character Data Address
+    /// `$210b` BG1/2 Character Data Address
     /// `bbbbaaaa`
-    /// * `b`: Base address for BG2/4 is `bbbb << 12`
-    /// * `a`: Base address for BG1/3 is `bbbb << 12`
+    /// * `b`: Base address for BG2 is `bbbb << 12`
+    /// * `a`: Base address for BG1 is `aaaa << 12`
     bg12nba: u8,
+    /// `$210c` BG3/4 Character Data Address
+    /// `bbbbaaaa`
+    /// * `b`: Base address for BG4 is `bbbb << 12`
+    /// * `a`: Base address for BG3 is `aaaa << 12`
     bg34nba: u8,
 
     /// `$210d` BG1 Horizontal Scroll
