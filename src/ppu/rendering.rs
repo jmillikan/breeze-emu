@@ -76,17 +76,17 @@ struct BgSettings {
     /// FIXME: I think there's a difference between disabled and enabled with 1x1 mosaic size in
     /// some modes (highres presumably)
     mosaic: u8,
-    /// Tilemap address in VRAM
+    /// Tilemap word address in VRAM
     /// "Starting at the tilemap address, the first $800 bytes are for tilemap A. Then come the
     /// $800 bytes for B, then C then D."
-    tilemap_addr: u16,
+    tilemap_word_addr: u16,
     /// When `true`, this BGs tilemaps are mirrored sideways
     tilemap_mirror_h: bool,
     /// When `true`, this BGs tilemaps are mirrored downwards
     tilemap_mirror_v: bool,
     /// Either 8 or 16.
     tile_size: u8,
-    /// Character Data / Tileset address in VRAM
+    /// Character Data start address in VRAM
     chr_addr: u16,
     hscroll: u16,
     vscroll: u16,
@@ -152,7 +152,7 @@ impl Ppu {
             4 => self.bg4sc,
             _ => unreachable!(),
         };
-        // Chr address >> 12
+        // Chr start address >> 12
         let chr = match bg {
             1 => self.bg12nba & 0x0f,
             2 => (self.bg12nba & 0xf0) >> 4,
@@ -174,7 +174,7 @@ impl Ppu {
             } else {
                 ((self.mosaic & 0xf0) >> 4) + 1
             },
-            tilemap_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
+            tilemap_word_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
             tilemap_mirror_h: bgsc & 0b01 == 0, // inverted bit value
             tilemap_mirror_v: bgsc & 0b10 == 0, // inverted bit value
             tile_size: match self.bg_mode() {
@@ -605,18 +605,17 @@ impl Ppu {
         let tile_y = (y + yscroll) / tile_size as u16;
         let off_x = ((x + xscroll) % tile_size as u16) as u8;
         let off_y = ((y + yscroll) % tile_size as u16) as u8;
-        let (sx, sy) = (bg.tilemap_mirror_h, bg.tilemap_mirror_v);
+        let (sx, sy) = (!bg.tilemap_mirror_h, !bg.tilemap_mirror_v);
 
         // Calculate the VRAM word address, where the tilemap entry for our tile is stored
-        // FIXME Copied from http://wiki.superfamicom.org/snes/show/Backgrounds, no idea if correct
-        // (or even correctly interpreted, since the wiki is really confusing)
-        let tilemap_word_address =
-            (bg.tilemap_addr << 9) +
+        // FIXME Check if this really is correct
+        let tilemap_entry_word_address =
+            bg.tilemap_word_addr +
             ((tile_y & 0x1f) << 5) +
             (tile_x & 0x1f) +
             if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} +
             if sx {(tile_x & 0x20) << 5} else {0};
-        let tilemap_entry = self.tilemap_entry(tilemap_word_address);
+        let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
         if tilemap_entry.priority != prio { return None }
 
         // Calculate the number of bitplanes needed to store a color in this BG
@@ -627,7 +626,7 @@ impl Ppu {
         // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
         let bitplane_start_addr =
             (bg.chr_addr << 1) +
-            (tilemap_entry.tile_number * 8 * bitplane_count);
+            (tilemap_entry.tile_number * 8 * bitplane_count);   // 8 bytes per bitplane
 
         let palette_base = self.palette_base_for_bg_tile(bg_num, tilemap_entry.palette);
         let palette_index = self.read_chr_entry(bitplane_count as u8,
