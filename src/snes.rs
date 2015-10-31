@@ -34,6 +34,10 @@ pub struct Peripherals {
     /// * `y`: Enable IRQ on V-Counter match
     /// * `a`: Enable auto-joypad read
     nmien: u8,
+    /// `$4204`/`$4205` - WRDIVH/WRDIVL: Dividend C
+    wrdiv: u16,
+    /// `$4206` - WRDIVB: Divisor B
+    wrdivb: u8,
     /// `$4207`/`$4208` - HTIMEL/HTIMEH: H Timer (9-bit value)
     htime: u16,
     /// `$4209`/`$420a` - VTIMEL/VTIMEH: V Timer (9-bit value)
@@ -64,6 +68,8 @@ impl Peripherals {
             dma: [DmaChannel::new(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
+            wrdiv: 0xffff,
+            wrdivb: 0,
             htime: 0x1ff,
             vtime: 0x1ff,
             nmi: false,
@@ -130,6 +136,9 @@ impl Peripherals {
                     if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
                     self.nmien = value;
                 }
+                0x4204 => self.wrdiv = (self.wrdiv & 0xff00) | value as u16,
+                0x4205 => self.wrdiv = ((value as u16) << 8) | (self.wrdiv & 0xff),
+                0x4206 => self.wrdivb = value,
                 0x4207 => self.htime = (self.htime & 0xff00) | value as u16,
                 0x4208 => {
                     assert!(value & 0x01 == value, "invalid value for $4207: ${:02X}", value);
