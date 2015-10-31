@@ -109,7 +109,7 @@ impl Ppu {
     /// Get the configured sprite size in pixels. If `size_toggle` is `false`, gets the size of
     /// small sprites, otherwise gets the size of large sprites (OAM size bit set).
     fn obj_size(&self, size_toggle: bool) -> (u8, u8) {
-        match self.obsel & 0b111 {
+        match self.obsel >> 5 & 0b111 {
             0b000 => if !size_toggle {(8,8)} else {(16,16)},
             0b001 => if !size_toggle {(8,8)} else {(32,32)},
             0b010 => if !size_toggle {(8,8)} else {(64,64)},
