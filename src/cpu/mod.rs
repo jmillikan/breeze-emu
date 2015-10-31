@@ -480,6 +480,7 @@ impl Cpu {
             0x60 => instr!(rts),
             0x6b => instr!(rtl),
 
+            0xea => instr!(nop),
             _ => {
                 instr!(ill);
                 panic!("illegal CPU opcode: ${:02X}", op);
@@ -1445,6 +1446,7 @@ impl Cpu {
         }
     }
 
+    fn nop(&mut self) {}
     fn ill(&mut self) {}
 }
 
