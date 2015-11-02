@@ -34,10 +34,14 @@ pub struct Peripherals {
     /// * `y`: Enable IRQ on V-Counter match
     /// * `a`: Enable auto-joypad read
     nmien: u8,
-    /// `$4204`/`$4205` - WRDIVH/WRDIVL: Dividend C
+    /// `$4202` - WRMPYA: Multiplicand 1
+    wrmpya: u8,
+    /// `$4204`/`$4205` - WRDIVH/WRDIVL: Dividend
     wrdiv: u16,
-    /// `$4206` - WRDIVB: Divisor B
-    wrdivb: u8,
+    /// `$4216`/`$4217` - RDDIVH/RDDIVL: Unsigned Division Result (Quotient)
+    rddiv: u16,
+    /// `$4216`/`$4217` - RDMPYH/RDMPYL: Unsigned Division Remainder / Multiply Product
+    rdmpy: u16,
     /// `$4207`/`$4208` - HTIMEL/HTIMEH: H Timer (9-bit value)
     htime: u16,
     /// `$4209`/`$420a` - VTIMEL/VTIMEH: V Timer (9-bit value)
@@ -68,8 +72,10 @@ impl Peripherals {
             dma: [DmaChannel::new(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
+            wrmpya: 0,
             wrdiv: 0xffff,
-            wrdivb: 0,
+            rddiv: 0,
+            rdmpy: 0,
             htime: 0x1ff,
             vtime: 0x1ff,
             nmi: false,
@@ -100,6 +106,15 @@ impl Peripherals {
                     self.irq = false;
                     val
                 }
+                // RDDIVL - Unsigned Division Result (Quotient) (lower 8bit)
+                0x4214 => self.rddiv as u8,
+                // RDDIVH - Unsigned Division Result (Quotient) (upper 8bit)
+                0x4215 => (self.rddiv >> 8) as u8,
+                // RDMPYL
+                0x4216 => self.rdmpy as u8,
+                // RDMPYH
+                0x4217 => (self.rdmpy >> 8) as u8,
+                // Input ports
                 0x4218 ... 0x421f => self.input.load(addr),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
@@ -136,9 +151,16 @@ impl Peripherals {
                     if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
                     self.nmien = value;
                 }
+                0x4202 => self.wrmpya = value,
+                // WRMPYB: Performs multiplication on write
+                0x4203 => self.rdmpy = self.wrmpya as u16 * value as u16,
                 0x4204 => self.wrdiv = (self.wrdiv & 0xff00) | value as u16,
                 0x4205 => self.wrdiv = ((value as u16) << 8) | (self.wrdiv & 0xff),
-                0x4206 => self.wrdivb = value,
+                // WRDIVB: Performs division on write
+                0x4206 => {
+                    self.rddiv = if value == 0 { 0xffff } else { self.wrdiv / value as u16 };
+                    self.rdmpy = if value == 0 { value as u16 } else { self.wrdiv % value as u16 };
+                }
                 0x4207 => self.htime = (self.htime & 0xff00) | value as u16,
                 0x4208 => {
                     assert!(value & 0x01 == value, "invalid value for $4207: ${:02X}", value);
