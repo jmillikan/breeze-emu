@@ -1,5 +1,7 @@
 //! Emulates the controller ports `$4016 - $401f`
 
+#![allow(dead_code)]    // FIXME: Implement an input frontend that uses this
+
 use frontend::{InputSource};
 
 /// Controller input management.

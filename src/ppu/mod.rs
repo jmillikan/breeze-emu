@@ -16,8 +16,6 @@ pub const SCREEN_WIDTH: u32 = 256;
 /// Physical screen height
 /// (this is the height of a field, or a half-frame)
 pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
-/// Emulated refresh rate in Hz
-pub const REFRESH_RATE: u8 = 60;
 
 /// The result of an `update` call. Either H-Blank or V-Blank might get entered, and IRQs can be
 /// caused.
@@ -516,6 +514,7 @@ impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
     fn in_v_blank(&self) -> bool { self.scanline as u32 >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
+    #[allow(dead_code)] // FIXME: Take this into account
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
     pub fn h_counter(&self) -> u16 { self.x }
     pub fn v_counter(&self) -> u16 { self.scanline }

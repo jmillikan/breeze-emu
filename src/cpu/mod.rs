@@ -19,14 +19,19 @@ const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
 const IRQ_VEC8: u16 = 0xFFFE;
 const RESET_VEC8: u16 = 0xFFFC;
 const NMI_VEC8: u16 = 0xFFFA;
+#[allow(dead_code)]
 const ABORT_VEC8: u16 = 0xFFF8;
+#[allow(dead_code)]
 const COP_VEC8: u16 = 0xFFF4;
 
 // Native mode vectors
 const IRQ_VEC16: u16 = 0xFFEE;
 const NMI_VEC16: u16 = 0xFFEA;
+#[allow(dead_code)]
 const ABORT_VEC16: u16 = 0xFFE8;
+#[allow(dead_code)]
 const BRK_VEC16: u16 = 0xFFE6;
+#[allow(dead_code)]
 const COP_VEC16: u16 = 0xFFE4;
 
 /// One CPU cycle = 6 master clock cycles

@@ -87,11 +87,6 @@ impl RomHeader {
             ram_size: ram_size,
         })
     }
-
-    pub fn title(&self) -> &str {
-        // Trim the padding
-        str::from_utf8(&self.title).unwrap().trim_right()
-    }
 }
 
 /// A ROM image

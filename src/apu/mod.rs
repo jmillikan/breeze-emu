@@ -122,7 +122,9 @@ impl StatusReg {
     fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0 }
     fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
     fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
+    #[allow(dead_code)] // FIXME
     fn half_carry(&self) -> bool  { self.0 & HALF_CARRY_FLAG != 0 }
+    #[allow(dead_code)] // FIXME Nothing uses this?
     fn overflow(&self) -> bool    { self.0 & OVERFLOW_FLAG != 0 }
 
     fn set(&mut self, flag: u8, v: bool) {

@@ -48,7 +48,9 @@ struct OamEntry {
     priority: u8,
     /// 0-7. The first palette entry is `128+ppp*16`.
     palette: u8,
+    #[allow(dead_code)] // FIXME
     hflip: bool,
+    #[allow(dead_code)]
     vflip: bool,
     size_toggle: bool,
 }
@@ -75,6 +77,7 @@ struct BgSettings {
     /// Mosaic pixel size (1-16). 1 = Normal pixels.
     /// FIXME: I think there's a difference between disabled and enabled with 1x1 mosaic size in
     /// some modes (highres presumably)
+    #[allow(dead_code)] // FIXME NYI
     mosaic: u8,
     /// Tilemap word address in VRAM
     /// "Starting at the tilemap address, the first $800 bytes are for tilemap A. Then come the
@@ -94,7 +97,9 @@ struct BgSettings {
 
 /// Unpacked tilemap entry for internal (rendering) use
 struct TilemapEntry {
+    #[allow(dead_code)] // FIXME
     vflip: bool,
+    #[allow(dead_code)]
     hflip: bool,
     /// Priority bit (0-1)
     priority: u8,
@@ -127,7 +132,7 @@ impl Ppu {
     ///     vhopppcc cccccccc (high, low)
     ///     v/h        = Vertical/Horizontal flip this tile.
     ///     o          = Tile priority.
-    ///     ppp        = Tile palette. The number of entries in the palette depends on the Mode and the BG.
+    ///     ppp        = Tile palette base.
     ///     cccccccccc = Tile number.
     fn tilemap_entry(&self, word_address: u16) -> TilemapEntry {
         let lo = self.vram[word_address * 2];
@@ -470,7 +475,8 @@ impl Ppu {
         let mut visible_tiles = replace(&mut self.render_state.visible_sprite_tiles, Vec::new());
         visible_tiles.clear();
 
-        let name_base: u16 = self.obsel as u16 & 0b111;
+        // Word address of first sprite character table
+        let name_base: u16 = (self.obsel as u16 & 0b111) << 13;
         let name_select: u16 = (self.obsel as u16 >> 3) & 0b11;
 
         // Start at the last sprite found
@@ -487,8 +493,8 @@ impl Ppu {
 
             // Calculate VRAM word address of first tile. Depends on base/name bits in `$2101`.
             let tile_start_word_addr =
-                ((name_base << 13) +
-                ((sprite.tile as u16) << 4) +
+                (name_base |
+                ((sprite.tile as u16) << 4) |
                 (sprite.name_table as u16 * ((name_select + 1) << 12))) & 0x7fff;
             let tile_start_addr = tile_start_word_addr * 2;
 
@@ -558,20 +564,25 @@ impl Ppu {
     /// Determines if the given sprite has any tiles on the current scanline
     fn sprite_on_scanline(&self, sprite: &OamEntry) -> bool {
         let (w, h) = self.obj_size(sprite.size_toggle);
-        let (w, h) = (w as i16, h);
+        let (w, h) = (w as i16, h as u16);
 
         // "If any OBJ is at X=256 (or X=-256, same difference), consider it as being at X=0 when
         // considering Range and Time."
         // X=256 can not occur, since X is a signed 9-bit value (range is -256 - 255)
         let x = if sprite.x == -256 { 0 } else { sprite.x };
+        let y = sprite.y as u16;
 
         // "Only those sprites with -size < X < 256 are considered in Range." (`size` is `w` here)
         // We don't check `X < 256`, since that cannot occur (X is a signed 9-bit integer)
         // A sprite moved past the right edge of the screen will wrap to `-256`, which is handled
         // by this check.
         if -w < x {
-            // Sprites Y coordinate must be on the current scanline:
-            sprite.y as u16 <= self.scanline && sprite.y as u16 + h as u16 >= self.scanline
+            if y <= self.scanline && y + h >= self.scanline {
+                // Sprite is on scanline
+                true
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -610,10 +621,10 @@ impl Ppu {
         // Calculate the VRAM word address, where the tilemap entry for our tile is stored
         // FIXME Check if this really is correct
         let tilemap_entry_word_address =
-            bg.tilemap_word_addr +
-            ((tile_y & 0x1f) << 5) +
-            (tile_x & 0x1f) +
-            if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} +
+            bg.tilemap_word_addr |
+            ((tile_y & 0x1f) << 5) |
+            (tile_x & 0x1f) |
+            if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} |
             if sx {(tile_x & 0x20) << 5} else {0};
         let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
         if tilemap_entry.priority != prio { return None }

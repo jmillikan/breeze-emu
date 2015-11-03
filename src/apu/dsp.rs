@@ -1,5 +1,7 @@
 //! Emulates the DSP used in the APU.
 
+#![allow(dead_code)]    // FIXME Implement the DSP
+
 #[derive(Copy, Clone, Default)]
 struct Voice {
     // Registers
