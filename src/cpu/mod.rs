@@ -487,9 +487,9 @@ impl Cpu {
             // Jumps, calls and returns
             0x4c => instr!(jmp absolute),
             0x5c => instr!(jml absolute_long),
-            //0x6c => instr!(jmp absolute_indirect),
+            0x6c => instr!(jmp absolute_indirect),
             //0x7c => instr!(jmp absolute_indexed_indirect),
-            0xdc => instr!(jml direct_indirect_long),  // FIXME WRONG! `absolute_indirect_long` NYI!
+            0xdc => instr!(jml absolute_indirect_long),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x40 => instr!(rti),
@@ -1510,6 +1510,12 @@ impl Cpu {
         let addr = self.fetchw();
         let bank = self.fetchb();
         AddressingMode::AbsLongIndexedX(bank, addr)
+    }
+    fn absolute_indirect(&mut self) -> AddressingMode {
+        AddressingMode::AbsoluteIndirect(self.fetchw())
+    }
+    fn absolute_indirect_long(&mut self) -> AddressingMode {
+        AddressingMode::AbsoluteIndirectLong(self.fetchw())
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
