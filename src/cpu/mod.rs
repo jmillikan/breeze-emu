@@ -344,8 +344,8 @@ impl Cpu {
             0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
             0x09 => instr!(ora immediate_acc),
-            0x12 => instr!(ora indirect),
-            0x07 => instr!(ora indirect_long),
+            0x12 => instr!(ora direct_indirect),
+            0x07 => instr!(ora direct_indirect_long),
             0x0d => instr!(ora absolute),
             0x1d => instr!(ora absolute_indexed_x),
             0x19 => instr!(ora absolute_indexed_y),
@@ -366,7 +366,7 @@ impl Cpu {
             0x79 => instr!(adc absolute_indexed_y),
             0x6f => instr!(adc absolute_long),
             0x7f => instr!(adc absolute_long_indexed_x),
-            0x71 => instr!(adc indirect),
+            0x71 => instr!(adc direct_indirect),
             0xe5 => instr!(sbc direct),
             0xf5 => instr!(sbc direct_indexed_x),
             0xe9 => instr!(sbc immediate_acc),
@@ -402,9 +402,9 @@ impl Cpu {
             0xeb => instr!(xba),
             0x85 => instr!(sta direct),
             0x95 => instr!(sta direct_indexed_x),
-            0x92 => instr!(sta indirect),
-            0x87 => instr!(sta indirect_long),
-            0x97 => instr!(sta indirect_long_idx),
+            0x92 => instr!(sta direct_indirect),
+            0x87 => instr!(sta direct_indirect_long),
+            0x97 => instr!(sta direct_indirect_long_idx),
             0x8d => instr!(sta absolute),
             0x8f => instr!(sta absolute_long),
             0x9d => instr!(sta absolute_indexed_x),
@@ -424,9 +424,9 @@ impl Cpu {
             0xb5 => instr!(lda direct_indexed_x),
             0xb1 => instr!(lda direct_indirect_indexed),
             0xa9 => instr!(lda immediate_acc),
-            0xb2 => instr!(lda indirect),
-            0xa7 => instr!(lda indirect_long),
-            0xb7 => instr!(lda indirect_long_idx),
+            0xb2 => instr!(lda direct_indirect),
+            0xa7 => instr!(lda direct_indirect_long),
+            0xb7 => instr!(lda direct_indirect_long_idx),
             0xad => instr!(lda absolute),
             0xbd => instr!(lda absolute_indexed_x),
             0xb9 => instr!(lda absolute_indexed_y),
@@ -465,7 +465,7 @@ impl Cpu {
             0xd9 => instr!(cmp absolute_indexed_y),
             0xcf => instr!(cmp absolute_long),
             0xdf => instr!(cmp absolute_long_indexed_x),
-            0xd7 => instr!(cmp indirect_long_idx),
+            0xd7 => instr!(cmp direct_indirect_long_idx),
             0xe0 => instr!(cpx immediate_index),
             0xe4 => instr!(cpx direct),
             0xec => instr!(cpx absolute),
@@ -483,13 +483,13 @@ impl Cpu {
             0x70 => instr!(bvs rel),
             0x90 => instr!(bcc rel),
             0xb0 => instr!(bcs rel),
-            
+
             // Jumps, calls and returns
             0x4c => instr!(jmp absolute),
             0x5c => instr!(jml absolute_long),
             //0x6c => instr!(jmp absolute_indirect),
             //0x7c => instr!(jmp absolute_indexed_indirect),
-            0xdc => instr!(jml indirect_long),  // FIXME WRONG! `absolute_indirect_long` NYI!
+            0xdc => instr!(jml direct_indirect_long),  // FIXME WRONG! `absolute_indirect_long` NYI!
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x40 => instr!(rti),
@@ -1483,14 +1483,14 @@ impl Cpu {
         let src = self.fetchb();
         AddressingMode::BlockMove(dest, src)
     }
-    fn indirect(&mut self) -> AddressingMode {
-        AddressingMode::Indirect(self.fetchb())
+    fn direct_indirect(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndirect(self.fetchb())
     }
-    fn indirect_long(&mut self) -> AddressingMode {
-        AddressingMode::IndirectLong(self.fetchb())
+    fn direct_indirect_long(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndirectLong(self.fetchb())
     }
-    fn indirect_long_idx(&mut self) -> AddressingMode {
-        AddressingMode::IndirectLongIdx(self.fetchb())
+    fn direct_indirect_long_idx(&mut self) -> AddressingMode {
+        AddressingMode::DirectIndirectLongIdx(self.fetchb())
     }
     fn absolute(&mut self) -> AddressingMode {
         AddressingMode::Absolute(self.fetchw())

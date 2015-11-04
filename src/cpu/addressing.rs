@@ -60,7 +60,7 @@ pub enum AddressingMode {
     /// "Direct Indirect-(d)"
     /// addr := load2(0, D + <val>)
     /// (DBR, addr)
-    Indirect(u8),
+    DirectIndirect(u8),
 
     // "Direct Indirect Indexed-(d),y" - Indirect-Y
     // addr := load2(D + <val>)
@@ -70,12 +70,12 @@ pub enum AddressingMode {
     /// "Direct Indirect Long-[d]"
     /// (bank, addr) := load3(0, D + <val>)
     /// (bank, addr)
-    IndirectLong(u8),
+    DirectIndirectLong(u8),
 
     /// "Direct Indirect Long Indexed-[d],y" (or "Direct Indirect Indexed Long")
     /// (bank, addr) := load3(0, D + <val>)
     /// (bank, addr + Y)
-    IndirectLongIdx(u8),
+    DirectIndirectLongIdx(u8),
 
     /// "Stack Relative-d,s"
     /// (0, SP + <val>)
@@ -189,14 +189,14 @@ impl AddressingMode {
                 let addr = eff_addr as u16;
                 (bank, addr)
             }
-            Indirect(offset) => {
+            DirectIndirect(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
                 (cpu.dbr, (hi << 8) | lo)
             }
-            IndirectLong(offset) => {
+            DirectIndirectLong(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
@@ -204,7 +204,7 @@ impl AddressingMode {
                 let bank = cpu.loadb(0, addr_ptr + 2);
                 (bank, (hi << 8) | lo)
             }
-            IndirectLongIdx(offset) => {
+            DirectIndirectLongIdx(offset) => {
                 // "The 24-bit base address is pointed to by the sum of the second byte of the
                 // instruction and the Direct Register. The effective address is this 24-bit base
                 // address plus the Y Index Register."
@@ -253,9 +253,9 @@ impl fmt::Display for AddressingMode {
             DirectIndexedY(offset) =>        write!(f, "${:02X},y", offset),
             DirectIndexedIndirect(offset) => write!(f, "(${:02X},x)", offset),
             DirectIndirectIndexed(offset) => write!(f, "(${:02X}),y", offset),
-            Indirect(offset) =>              write!(f, "(${:02X})", offset),
-            IndirectLong(offset) =>          write!(f, "[${:02X}]", offset),
-            IndirectLongIdx(offset) =>       write!(f, "[${:02X}],y", offset),
+            DirectIndirect(offset) =>              write!(f, "(${:02X})", offset),
+            DirectIndirectLong(offset) =>          write!(f, "[${:02X}]", offset),
+            DirectIndirectLongIdx(offset) =>       write!(f, "[${:02X}],y", offset),
             StackRel(offset) =>              write!(f, "${:02X},s", offset),
             BlockMove(dest, src) =>          write!(f, "${:02X}, ${:02X}", src, dest),
         }
