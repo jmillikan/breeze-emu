@@ -419,12 +419,10 @@ impl Ppu {
             0x212c => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212c: ${:02X}", value) }
                 self.tm = value;
-                debug!("TM set to ${:02X}", value);
             }
             0x212d => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212d: ${:02X}", value) }
                 self.ts = value;
-                debug!("TS set to ${:02X}", value);
             }
             0x212e => {
                 if value & 0xe0 != 0 { panic!("invalid value for $212e: ${:02X}", value) }

@@ -449,6 +449,8 @@ impl Spc700 {
             0xfe => instr!("dbnz {}, {}" dbnz y rel),
             0x6e => instr!("dbnz {}, {}" dbnz direct rel),
 
+            0x0e => instr!(_ tset1 abs),
+            0x4e => instr!(_ tclr1 abs),
             0x02 => instr!(_ set1(0) direct),
             0x22 => instr!(_ set1(1) direct),
             0x42 => instr!(_ set1(2) direct),
@@ -624,6 +626,20 @@ impl Spc700 {
         self.psw.set_carry(diff & 0x80 != 0);
     }
 
+    fn tset1(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        let val = am.clone().loadb(self);
+        let a = self.a;
+        am.storeb(self, val | a);
+        self.psw.set_nz(a.wrapping_sub(val));   // FIXME is this correct?
+    }
+    fn tclr1(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        let val = am.clone().loadb(self);
+        let a = self.a;
+        am.storeb(self, val & !a);
+        self.psw.set_nz(a.wrapping_sub(val));   // FIXME is this correct?
+    }
     /// Set bit
     fn set1(&mut self, bit: u8, am: AddressingMode) {
         // Sets no flags
