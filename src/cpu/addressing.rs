@@ -57,8 +57,6 @@ pub enum AddressingMode {
     /// (DBR, <val>)
     Absolute(u16),
 
-    // "Absolute Indexed Indirect-(a,x)"
-
     /// "Absolute Indexed with X-a,x"
     /// (DBR, <val> + X)
     AbsIndexedX(u16),
@@ -67,7 +65,10 @@ pub enum AddressingMode {
     /// (DBR, <val> + Y)
     AbsIndexedY(u16),
 
-    // "Absolute Indirect-(a)" (PC?)
+    /// "Absolute Indexed Indirect-(a,x)"
+    /// addr := load2(0, <val> + X) (FIXME: bank=PBR?)
+    /// (PBR, addr)
+    AbsIndexedIndirect(u16),
 
     /// "Absolute Long Indexed With X-al,x" - Absolute Long + X
     /// (<val0>, <val1> + X)
@@ -162,6 +163,11 @@ impl AddressingMode {
             AbsIndexedY(offset) => {
                 if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
                 (cpu.dbr, offset + cpu.y)
+            }
+            AbsIndexedIndirect(addr_ptr) => {
+                let x = cpu.x;
+                let addr = cpu.loadw(0, addr_ptr + x);
+                (cpu.pbr, addr)
             }
             AbsoluteIndirect(addr_ptr) => {
                 let addr = cpu.loadw(0, addr_ptr);
@@ -269,6 +275,7 @@ impl fmt::Display for AddressingMode {
             AbsLongIndexedX(bank, addr) =>   write!(f, "${:02X}:{:04X},x", bank, addr),
             AbsIndexedX(offset) =>           write!(f, "${:04X},x", offset),
             AbsIndexedY(offset) =>           write!(f, "${:04X},y", offset),
+            AbsIndexedIndirect(addr) =>      write!(f, "(${:04X},x)", addr),
             AbsoluteIndirect(addr) =>        write!(f, "(${:04X})", addr),
             AbsoluteIndirectLong(addr) =>    write!(f, "[${:04X}]", addr),
             Rel(rel) =>                      write!(f, "{:+}", rel),

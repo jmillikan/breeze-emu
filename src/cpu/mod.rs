@@ -488,7 +488,7 @@ impl Cpu {
             0x4c => instr!(jmp absolute),
             0x5c => instr!(jml absolute_long),
             0x6c => instr!(jmp absolute_indirect),
-            //0x7c => instr!(jmp absolute_indexed_indirect),
+            0x7c => instr!(jmp absolute_indexed_indirect),
             0xdc => instr!(jml absolute_indirect_long),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
@@ -1500,6 +1500,9 @@ impl Cpu {
     }
     fn absolute_indexed_y(&mut self) -> AddressingMode {
         AddressingMode::AbsIndexedY(self.fetchw())
+    }
+    fn absolute_indexed_indirect(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedIndirect(self.fetchw())
     }
     fn absolute_long(&mut self) -> AddressingMode {
         let addr = self.fetchw();
