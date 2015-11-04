@@ -297,6 +297,8 @@ impl Cpu {
         match op {
             // Stack operations
             0x4b => instr!(phk),
+            0x0b => instr!(phd),
+            0x2b => instr!(pld),
             0x8b => instr!(phb),
             0xab => instr!(plb),
             0x08 => instr!(php),
@@ -621,6 +623,16 @@ impl Cpu {
     fn phk(&mut self) {
         let pbr = self.pbr;
         self.pushb(pbr);
+    }
+    /// Push Direct Page Register
+    fn phd(&mut self) {
+        let d = self.d;
+        self.pushw(d);
+    }
+    /// Pull Direct Page Register
+    fn pld(&mut self) {
+        let d = self.popw();
+        self.d = d;
     }
     /// Push Data Bank Register
     fn phb(&mut self) {
