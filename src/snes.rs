@@ -9,6 +9,8 @@ use log_util::LogOnPanic;
 use ppu::Ppu;
 use rom::Rom;
 
+use std::env;
+
 const WRAM_SIZE: usize = 128 * 1024;
 byte_array!(Wram[WRAM_SIZE]);
 
@@ -208,8 +210,10 @@ impl Snes {
     }
 
     pub fn run(&mut self) {
-        /// Start tracing at this master cycle (0 to trace everything)
-        const TRACE_START: u64 = !0;
+        // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
+        let trace_start = env::var("SNEEZE_TRACE")
+            .map(|string| string.parse().expect("invalid value for SNEEZE_TRACE"))
+            .unwrap_or(!0);
 
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
@@ -224,7 +228,7 @@ impl Snes {
         let working_cy = LogOnPanic::new(0);
 
         loop {
-            if master_cy >= TRACE_START {
+            if master_cy >= trace_start {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
             }
