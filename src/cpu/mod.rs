@@ -343,6 +343,7 @@ impl Cpu {
             0x3f => instr!(and absolute_long_indexed_x),
             0x03 => instr!(ora stack_rel),
             0x05 => instr!(ora direct),
+            0x15 => instr!(ora direct_indexed_x),
             0x09 => instr!(ora immediate_acc),
             0x12 => instr!(ora direct_indirect),
             0x07 => instr!(ora direct_indirect_long),
@@ -393,6 +394,7 @@ impl Cpu {
             // Register and memory transfers
             0x5b => instr!(tcd),
             0x1b => instr!(tcs),
+            0x3b => instr!(tsc),
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
             0x8a => instr!(txa),
@@ -1470,6 +1472,10 @@ impl Cpu {
         } else {
             self.s = self.a;
         }
+    }
+    /// Transfer Stack Pointer to 16-bit Accumulator
+    fn tsc(&mut self) {
+        self.a = self.s;
     }
 
     fn nop(&mut self) {}
