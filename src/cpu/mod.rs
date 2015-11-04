@@ -456,7 +456,7 @@ impl Cpu {
             0x14 => instr!(trb direct),
             0x1c => instr!(trb absolute),
 
-            // Comparisons and control flow
+            // Comparisons
             0xc9 => instr!(cmp immediate_acc),
             0xc5 => instr!(cmp direct),
             0xd5 => instr!(cmp direct_indexed_x),
@@ -472,9 +472,9 @@ impl Cpu {
             0xc0 => instr!(cpy immediate_index),
             0xc4 => instr!(cpy direct),
             0xcc => instr!(cpy absolute),
+
+            // Branches
             0x80 => instr!(bra rel),
-            0xdc => instr!(jml indirect_long),
-            0x4c => instr!(jmp absolute),
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),
@@ -483,6 +483,13 @@ impl Cpu {
             0x70 => instr!(bvs rel),
             0x90 => instr!(bcc rel),
             0xb0 => instr!(bcs rel),
+            
+            // Jumps, calls and returns
+            0x4c => instr!(jmp absolute),
+            0x5c => instr!(jml absolute_long),
+            //0x6c => instr!(jmp absolute_indirect),
+            //0x7c => instr!(jmp absolute_indexed_indirect),
+            0xdc => instr!(jml indirect_long),  // FIXME WRONG! `absolute_indirect_long` NYI!
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
             0x40 => instr!(rti),

@@ -118,7 +118,7 @@ impl AddressingMode {
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
-    /// immediate.
+    /// immediate. For jumps, the effective address is the jump target.
     pub fn address(&self, cpu: &mut Cpu) -> (u8, u16) {
         use self::AddressingMode::*;
 
