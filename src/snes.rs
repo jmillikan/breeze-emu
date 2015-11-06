@@ -2,7 +2,7 @@
 
 use apu::Apu;
 use cpu::Cpu;
-use dma::{do_dma, do_hdma, DmaChannel};
+use dma::*;
 use frontend::Renderer;
 use input::Input;
 use log_util::LogOnPanic;
@@ -234,8 +234,8 @@ impl Snes {
             }
 
             // Run a CPU instruction and calculate the master cycles elapsed
-            self.cpu.mem.cy = 0;
             let cpu_master_cy = self.cpu.dispatch() as i32 + self.cpu.mem.cy as i32;
+            self.cpu.mem.cy = 0;
             master_cy += cpu_master_cy as u64;
 
             // Now we "owe" the other components a few cycles:
@@ -253,9 +253,16 @@ impl Snes {
                 let (cy, result) = self.cpu.mem.ppu.update();
                 ppu_master_cy_debt -= cy as i32;
 
+                let (v, h) = (self.cpu.mem.ppu.v_counter(), self.cpu.mem.ppu.h_counter());
+                match (v, h) {
+                    (0, 6) => {
+                        self.cpu.mem.cy += init_hdma(&mut self.cpu.mem.dma, self.cpu.mem.hdmaen)
+                    }
+                    _ => {}
+                }
+
                 if result.hblank {
-                    // FIXME Cycles
-                    do_hdma(self.cpu.mem.hdmaen);
+                    self.cpu.mem.cy += do_hdma(self.cpu.mem.hdmaen);
                 }
                 if result.last_pixel {
                     self.renderer.render(&*self.cpu.mem.ppu.framebuf);

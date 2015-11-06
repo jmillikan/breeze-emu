@@ -2,7 +2,7 @@
 //! stops the CPU and performs the transfer. HDMA can be set up to perform one transfer per H-Blank
 //! per channel.
 //!
-//! HDMA needs to be coordinated with the PPU: HDMA needs to be initialized when a new frame starts
+//! HDMA needs to be coordinated with the PPU: It needs to be initialized when a new frame starts
 //! and transfers data after every scanline.
 
 use snes::Peripherals;
@@ -14,7 +14,7 @@ pub struct DmaChannel {
     /// ```
     /// da-ssttt
     /// d: Direction (0: A->B, 1: B->A)
-    /// a: Use indirect HDMA table
+    /// a: Use indirect HDMA table (ignored for DMA)
     /// s: A-bus address increment (00: +1, 01/11: 0, 10: -1)
     /// t: See `TransferMode`
     /// ```
@@ -33,6 +33,14 @@ pub struct DmaChannel {
     dma_size: u16,
     /// $43x7 - HDMA indirect address bank
     hdma_indirect_bank: u8,
+    /// $43x8/$43x9
+    hdma_addr: u16,
+    /// $43xA
+    /// `rlllllll`
+    /// * `r`: Repeat (1: write every scanline, 0: write once)
+    /// * `l`: Line counter
+    hdma_flags: u8,
+    hdma_do_transfer: bool,
 }
 
 impl Default for DmaChannel {
@@ -44,6 +52,9 @@ impl Default for DmaChannel {
             b_addr: 0xff,
             dma_size: 0xffff,
             hdma_indirect_bank: 0xff,
+            hdma_addr: 0,
+            hdma_flags: 0,
+            hdma_do_transfer: false,
         }
     }
 }
@@ -70,7 +81,7 @@ pub enum TransferMode {
 
 impl DmaChannel {
     /// Load from `$43xN`, where `x` is the number of this DMA channel, and `N` is passed as
-    /// `addr`.
+    /// `reg`.
     pub fn load(&self, reg: u8) -> u8 {
         match reg {
             0x0 => self.params,
@@ -126,14 +137,14 @@ impl DmaChannel {
             3|7 => TwoTwice,
             4 => FourOnce,
             5 => TwoTwiceAlternate,
-            _ => panic!("invalid DMA transfer mode: ${:02X}", self.params & 0b111),
+            _ => unreachable!(),
         }
     }
 }
 
-/// Perform a single DMA transaction according to `mode`. Reads and writes up to 4 bytes using the
+/// Perform a single DMA transfer according to `mode`. Reads and writes up to 4 bytes using the
 /// given read/write functions.
-fn dma_transaction<R, W>(p: &mut Peripherals,
+fn dma_transfer<R, W>(p: &mut Peripherals,
                          mode: TransferMode,
                          read_byte: &mut R,
                          write_byte: &mut W)
@@ -144,7 +155,7 @@ fn dma_transaction<R, W>(p: &mut Peripherals,
             let b = read_byte(p);
             write_byte(p, b);
         }
-        /// Read one Byte and writes it twice
+        /// Reads one Byte and writes it twice
         OneTwice => {
             let b = read_byte(p);
             write_byte(p, b);
@@ -169,6 +180,8 @@ fn dma_transaction<R, W>(p: &mut Peripherals,
         }
         /// Reads two Bytes, A and B. Writes A, B, A, B.
         TwoTwiceAlternate => {
+            // FIXME: Is this order correct or is it "Read A, Write A, Read B, Write B, Write A,
+            // Write B"?
             let a = read_byte(p);
             let b = read_byte(p);
             write_byte(p, a);
@@ -190,8 +203,8 @@ fn dma_transaction<R, W>(p: &mut Peripherals,
     }
 }
 
-/// Performs all DMA transactions enabled by the given bitmask. Returns the number of master cycles
-/// spent.
+/// Performs all DMA transactions enabled by the given `channels` bitmask. Returns the number of
+/// master cycles spent.
 pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
     use std::cell::Cell;
 
@@ -251,7 +264,7 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 
             dma_cy += bytes.get() * 8;  // 8 master cycles per byte
             while bytes.get() > 0 {
-                dma_transaction(p, mode, &mut read_byte, &mut write_byte);
+                dma_transfer(p, mode, &mut read_byte, &mut write_byte);
             }
 
             p.dma[i].dma_size = 0;
@@ -263,6 +276,36 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
     dma_cy
 }
 
+/// Refresh HDMA state for a new frame. This is called at V=0, H~6 and will set up some internal
+/// registers for all active channels.
+///
+/// See http://wiki.superfamicom.org/snes/show/DMA+%26+HDMA for more info.
+pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
+    // "Overhead is ~18 master cycles, plus 8 master cycles for each channel set for direct HDMA and
+    // 24 master cycles for each channel set for indirect HDMA."
+    let mut cy = 18;
+
+    for i in 0..8 {
+        if channel_mask & (1 << i) != 0 {
+            let mut chan = channels[i];
+            chan.hdma_addr = chan.a_addr;
+            chan.hdma_do_transfer = true;
+            if chan.params & 0x40 != 0 {
+                // indirect HDMA
+                cy += 24
+            } else {
+                // direct HDMA
+                cy += 8
+            }
+
+            // FIXME Do correct setup (this isn't everything)
+        }
+    }
+
+    cy
+}
+
+/// Performs one H-Blank worth of HDMA transfers (at most 8, if all channels are enabled).
 pub fn do_hdma(channels: u8) -> u32 {
     if channels == 0 { return 0 }
 
