@@ -263,8 +263,6 @@ impl Snes {
                 if result.vblank {
                     self.cpu.mem.input.new_frame();
                     if self.cpu.mem.nmi_enabled() {
-                        //trace!("V-Blank NMI triggered! Trace started!");
-                        //self.cpu.trace = true;
                         self.cpu.mem.nmi = true;
                         self.cpu.trigger_nmi();
                         // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU
