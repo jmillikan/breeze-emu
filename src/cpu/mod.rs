@@ -69,7 +69,6 @@ impl Cpu {
         let pcl = mem.load(0, RESET_VEC8) as u16;
         let pch = mem.load(0, RESET_VEC8 + 1) as u16;
         let pc = (pch << 8) | pcl;
-        debug!("RESET @ {:02X}", pc);
 
         Cpu {
             // Undefined according to datasheet
