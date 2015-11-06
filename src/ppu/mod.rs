@@ -17,22 +17,6 @@ pub const SCREEN_WIDTH: u32 = 256;
 /// (this is the height of a field, or a half-frame)
 pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
 
-/// The result of an `update` call. Either H-Blank or V-Blank might get entered, and IRQs can be
-/// caused.
-#[derive(Default)]
-pub struct UpdateResult {
-    /// `true` if the last `update` rendered the last visible pixel on the current scanline
-    pub hblank: bool,
-    /// `true` if the last (invisible) H-Blank pixel of the last visible scanline was rendered
-    pub vblank: bool,
-    /// `true` if the current V-Blank was just left (but no visible pixels were rendered). The next
-    /// `update` call will render the first (visible) pixel of a new frame.
-    pub new_frame: bool,
-    /// `true` if the last visible pixel in the frame was just rendered. The emulator can now
-    /// present the frame to the user.
-    pub last_pixel: bool,
-}
-
 const OAM_SIZE: usize = 544;
 const CGRAM_SIZE: usize = 512;
 const VRAM_SIZE: usize = 64 * 1024;
@@ -460,7 +444,11 @@ impl Ppu {
                 if value & 0x20 != 0 { self.coldata_r = color; }
             }
             0x2133 => {
-                if value != 0 { panic!("NYI: $2133 != 0") }
+                if value != 0 {
+                    // FIXME When implementing this, we'll need to dynamically adjust the
+                    // framebuffer size and various timings (needs `fn overscan() -> bool`).
+                    panic!("NYI: $2133 != 0")
+                }
                 self.setini = value;
             }
             _ => panic!("invalid or unimplemented PPU store: ${:02X} to ${:04X}", value, addr),
@@ -471,7 +459,7 @@ impl Ppu {
     ///
     /// This will render exactly one pixel (when in H/V-Blank, the pixel counter will be
     /// incremented, but obviously nothing will be drawn).
-    pub fn update(&mut self) -> (u8, UpdateResult) {
+    pub fn update(&mut self) -> u8 {
         // FIXME Does each pixel take *exactly* 4 master clock cycles?
         if !self.in_h_blank() && !self.in_v_blank() {
             // This pixel is visible
@@ -489,40 +477,18 @@ impl Ppu {
         }
 
         self.x += 1;
-        let mut result = UpdateResult::default();
-        match self.x {
-            256 => {
-                // H-Blank starts now!
-                // FIXME: Is this correct when currently in V-Blank?
-                result.hblank = true;
-                if self.scanline as u32 == SCREEN_HEIGHT {
-                    // Last scanline in the frame rendered
-                    result.last_pixel = true;
-                }
+        if self.x == 340 {
+            // End of H-Blank
+            self.x = 0;
+            self.scanline += 1;
+            if self.scanline == 262 {
+                // V-Blank ends now. The next `update` call will render the first visible pixel of
+                // a new frame.
+                self.scanline = 0;
             }
-            340 => {
-                // H-Blank ends now!
-                self.x = 0;
-                self.scanline += 1;
-                match self.scanline as u32 {
-                    SCREEN_HEIGHT => {
-                        // V-Blank starts now!
-                        result.vblank = true;
-                        trace!("PPU entered VBlank");
-                    }
-                    262 => {
-                        // V-Blank ends now! The next `update` call will render the first visible
-                        // pixel of a new frame.
-                        result.new_frame = true;
-                        self.scanline = 0;
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
         }
 
-        (4, result)
+        4
     }
 
     fn in_h_blank(&self) -> bool { self.x >= 256 }

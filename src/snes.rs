@@ -250,35 +250,35 @@ impl Snes {
                 apu_master_cy_debt -= apu_master_cy;
             }
             while ppu_master_cy_debt > 0 {
-                let (cy, result) = self.cpu.mem.ppu.update();
+                let cy = self.cpu.mem.ppu.update();
                 ppu_master_cy_debt -= cy as i32;
 
                 let (v, h) = (self.cpu.mem.ppu.v_counter(), self.cpu.mem.ppu.h_counter());
                 match (v, h) {
+                    (0, 0) => self.cpu.mem.nmi = false,
                     (0, 6) => {
                         self.cpu.mem.cy += init_hdma(&mut self.cpu.mem.dma, self.cpu.mem.hdmaen)
                     }
-                    _ => {}
-                }
-
-                if result.hblank {
-                    self.cpu.mem.cy += do_hdma(self.cpu.mem.hdmaen);
-                }
-                if result.last_pixel {
-                    self.renderer.render(&*self.cpu.mem.ppu.framebuf);
-                }
-                if result.vblank {
-                    self.cpu.mem.input.new_frame();
-                    if self.cpu.mem.nmi_enabled() {
-                        self.cpu.mem.nmi = true;
-                        self.cpu.trigger_nmi();
-                        // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU
-                        // too many cycles.
-                        break;
+                    (0 ... 224, 278) => {
+                        // FIXME: 224 or 239, depending on overscan
+                        self.cpu.mem.cy += do_hdma(self.cpu.mem.hdmaen);
                     }
-                }
-                if result.new_frame {
-                    self.cpu.mem.nmi = false;   // Flag cleared on read or end of VBlank
+                    (224, 256) => {
+                        // Last pixel in the current frame was rendered
+                        self.renderer.render(&*self.cpu.mem.ppu.framebuf);
+                    }
+                    (225, 0) => {
+                        // V-Blank
+                        self.cpu.mem.input.new_frame();
+                        if self.cpu.mem.nmi_enabled() {
+                            self.cpu.mem.nmi = true;
+                            self.cpu.trigger_nmi();
+                            // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU
+                            // too many cycles.
+                            break;
+                        }
+                    }
+                    _ => {}
                 }
 
                 let cpu = &mut self.cpu;
