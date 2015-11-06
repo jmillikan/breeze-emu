@@ -35,6 +35,19 @@ pub struct DmaChannel {
     hdma_indirect_bank: u8,
 }
 
+impl Default for DmaChannel {
+    fn default() -> Self {
+        DmaChannel {
+            params: 0xff,
+            a_addr: 0xffff,
+            a_addr_bank: 0xff,
+            b_addr: 0xff,
+            dma_size: 0xffff,
+            hdma_indirect_bank: 0xff,
+        }
+    }
+}
+
 use self::TransferMode::*;
 
 /// Describes how a single DMA unit (max. 4 Bytes) is transferred
@@ -56,17 +69,6 @@ pub enum TransferMode {
 }
 
 impl DmaChannel {
-    pub fn new() -> DmaChannel {
-        DmaChannel {
-            params: 0xff,
-            a_addr: 0xffff,
-            a_addr_bank: 0xff,
-            b_addr: 0xff,
-            dma_size: 0xffff,
-            hdma_indirect_bank: 0xff,
-        }
-    }
-
     /// Load from `$43xN`, where `x` is the number of this DMA channel, and `N` is passed as
     /// `addr`.
     pub fn load(&self, reg: u8) -> u8 {

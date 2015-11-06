@@ -67,11 +67,11 @@ impl Peripherals {
     pub fn new(rom: Rom) -> Peripherals {
         Peripherals {
             rom: rom,
-            apu: Apu::new(),
-            ppu: Ppu::new(),
+            apu: Apu::default(),
+            ppu: Ppu::default(),
             wram: Wram::default(),
             input: Input::default(),
-            dma: [DmaChannel::new(); 8],
+            dma: [DmaChannel::default(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
             wrmpya: 0,

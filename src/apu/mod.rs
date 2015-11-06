@@ -89,8 +89,6 @@ impl Default for Spc700 {
 
 // Public interface
 impl Spc700 {
-    pub fn new() -> Spc700 { Spc700::default() }
-
     /// Store a byte in an IO port (0-3)
     ///
     /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7

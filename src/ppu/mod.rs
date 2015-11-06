@@ -355,8 +355,6 @@ struct Rgb {
 }
 
 impl Ppu {
-    pub fn new() -> Ppu { Ppu::default() }
-
     /// Load a PPU register (addresses `$2134` to `$213f`)
     pub fn load(&mut self, addr: u16) -> u8 {
         panic!("PPU register load unimplemented (${:04X})", addr)
