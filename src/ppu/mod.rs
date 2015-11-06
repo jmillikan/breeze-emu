@@ -244,6 +244,26 @@ pub struct Ppu {
     /// * `x`: Horizontal mirroring
     /// * `y`: Vertical mirroring
     m7sel: u8,
+    /// Mode 7 Matrix A
+    ///
+    /// The mode 7 matrix transformation works like this (where `SX/SY` are the current screen
+    /// coordinates and `X/Y` the resulting playing field coordinates that will be looked up):
+    /// ```
+    /// [ X ]   [ A B ]   [ SX + M7HOFS - M7X ]   [ M7X ]
+    /// [   ] = [     ] * [                   ] + [     ]
+    /// [ Y ]   [ C D ]   [ SY + M7VOFS - M7Y ]   [ M7Y ]
+    /// ```
+    m7a: u16,
+    /// Mode 7 Matrix B
+    m7b: u16,
+    /// Mode 7 Matrix C
+    m7c: u16,
+    /// Mode 7 Matrix D
+    m7d: u16,
+    /// Mode 7 Center X
+    m7x: u16,
+    /// Mode 7 Center Y
+    m7y: u16,
 
     /// `$2121` CGRAM word address (=color index)
     ///
@@ -393,6 +413,7 @@ impl Ppu {
             0x2118 => self.vram_store_low(value),
             0x2119 => self.vram_store_high(value),
             0x211a => self.m7sel = value,
+            0x211b ... 0x2120 => self.m7_store(addr, value),
             0x2121 => {
                 self.cgadd = value;
                 self.cg_low_buf = None; // < FIXME: Is this correct?
@@ -550,6 +571,12 @@ impl Ppu {
         let reg = match addr {
             0x210d => &mut self.m7hofs,
             0x210e => &mut self.m7vofs,
+            0x211b => &mut self.m7a,
+            0x211c => &mut self.m7b,
+            0x211d => &mut self.m7c,
+            0x211e => &mut self.m7d,
+            0x211f => &mut self.m7x,
+            0x2120 => &mut self.m7y,
             _ => panic!("invalid Mode 7 write-twice register ${:04X}", addr),
         };
 
