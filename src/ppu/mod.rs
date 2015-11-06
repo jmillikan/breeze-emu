@@ -524,10 +524,7 @@ impl Ppu {
 
         (4, result)
     }
-}
 
-/// Private methods
-impl Ppu {
     fn in_h_blank(&self) -> bool { self.x >= 256 }
     fn in_v_blank(&self) -> bool { self.scanline as u32 >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
