@@ -225,7 +225,7 @@ impl Snes {
         // Master clock cycles for the APU not yet accounted for (can be negative)
         let mut apu_master_cy_debt = 0;
         let mut ppu_master_cy_debt = 0;
-        let working_cy = LogOnPanic::new(0);
+        let working_cy = LogOnPanic::new("cycle count", 0);
 
         loop {
             if master_cy >= trace_start {

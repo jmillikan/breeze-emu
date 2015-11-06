@@ -3,7 +3,7 @@
 use std::cell::Cell;
 use std::ops::Deref;
 use std::fmt::Debug;
-use std::thread::panicking;
+use std::thread;
 
 /// Evaluates the given expression once (when first reached).
 ///
@@ -46,21 +46,32 @@ macro_rules! trace_unique {
     };
 }
 
-pub struct LogOnPanic<T: Copy + Debug>(Cell<T>);
+/// Wraps a `Cell<T>` and writes its content to stdout if dropped while panicking.
+pub struct LogOnPanic<T: Copy + Debug> {
+    name: &'static str,
+    data: Cell<T>,
+}
 
 impl<T: Copy + Debug> LogOnPanic<T> {
-    pub fn new(t: T) -> Self { LogOnPanic(Cell::new(t)) }
+    pub fn new(name: &'static str, t: T) -> Self {
+        LogOnPanic {
+            name: name,
+            data: Cell::new(t),
+        }
+    }
 }
 
 impl<T: Copy + Debug> Deref for LogOnPanic<T> {
     type Target = Cell<T>;
-    fn deref(&self) -> &Cell<T> { &self.0 }
+    fn deref(&self) -> &Cell<T> { &self.data }
 }
 
 impl<T: Copy + Debug> Drop for LogOnPanic<T> {
     fn drop(&mut self) {
-        if panicking() {
-            println!("LogOnPanic: {:?}", self.0.get())
+        if thread::panicking() {
+            // NOTE `error!` is probably not safe to be used while the thread panics, but it should
+            // be alright for now
+            error!("[panic log] {}: {:?}", self.name, self.data.get())
         }
     }
 }
