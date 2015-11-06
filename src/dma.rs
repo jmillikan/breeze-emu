@@ -1,9 +1,15 @@
-//! Implements DMA (Direct Memory Access). DMA can be set up by the CPU and either immediately
-//! stops the CPU and performs the transfer. HDMA can be set up to perform one transfer per H-Blank
-//! per channel.
+//! Implements DMA (Direct Memory Access).
 //!
-//! HDMA needs to be coordinated with the PPU: It needs to be initialized when a new frame starts
-//! and transfers data after every scanline.
+//! The SNES provides 2 DMA mechanisms: General purpose DMA can be set up by the CPU by writing to
+//! `$420B - MDMAEN`, which stops the CPU and performs the transfer on all enabled channels. HDMA
+//! can be set up to perform one transfer per H-Blank per channel. There are 8 channels in total,
+//! and some of them may be configured to be used for HDMA, while the other channels can be used for
+//! DMA.
+//!
+//! HDMA needs to be coordinated with the PPU: It needs to be initialized when a new frame starts,
+//! which is done by calling `init_hdma`, and can transfer data every scanline, which is done by
+//! `do_hdma`. DMA is simpler: It is started by calling `do_dma` when the CPU writes to `$420B` and
+//! doesn't need periodic callbacks.
 
 use snes::Peripherals;
 
