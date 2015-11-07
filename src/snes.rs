@@ -48,7 +48,7 @@ pub struct Peripherals {
     htime: u16,
     /// `$4209`/`$420a` - VTIMEL/VTIMEH: V Timer (9-bit value)
     vtime: u16,
-    /// `$4210` NMI flag and 5A22 Version
+    /// `$4210` NMI flag and 5A22 Version (the version is constant)
     /// `n---vvvv`
     /// * `n`: `self.nmi`
     /// * `v`: Version
@@ -107,6 +107,14 @@ impl Peripherals {
                     let val = if self.irq { 0x80 } else { 0 };
                     self.irq = false;
                     val
+                }
+                // HVBJOY - PPU Status
+                0x4212 => {
+                    // `vh-----a`
+                    // V-Blank, H-Blank, Auto-Joypad-Read in progress
+                    // FIXME: Use exact timings and set `a`
+                    (if self.ppu.in_v_blank() { 0x80 } else { 0 }) +
+                    (if self.ppu.in_h_blank() { 0x40 } else { 0 })
                 }
                 // RDDIVL - Unsigned Division Result (Quotient) (lower 8bit)
                 0x4214 => self.rddiv as u8,
