@@ -14,7 +14,7 @@ pub struct RomHeader {
     rom_type: RomType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum RomType {
     LoRom,
     HiRom,
@@ -22,7 +22,10 @@ enum RomType {
 
 impl RomHeader {
     /// Loads the ROM header from the given byte slice (must be exactly 64 bytes large).
-    fn load(bytes: &[u8]) -> Result<RomHeader, ()> {
+    /// `rom_type` is the expected type of the ROM header, based on its location. It will be
+    /// used for the actual type if the type inside the header mismatches. This is apparently
+    /// required for some broken ROMs.
+    fn load(bytes: &[u8], rom_type: RomType) -> Result<RomHeader, ()> {
         // The header size must be correct (the ROM loader won't pass a wrong size)
         assert_eq!(bytes.len(), 64);
 
@@ -55,11 +58,10 @@ impl RomHeader {
         //  * `0101`: ExHiROM
         //  * `1010`: HiROM + SPC7110
         if bytes[21] & 0x10 == 0x10 {
-            error!("FastROM unsupported!");
-            return Err(())
+            warn!("FastROM not yet implemented!");
         }
 
-        let rom_type = match bytes[21] & 0x0f {
+        let header_rom_type = match bytes[21] & 0x0f {
             0 => RomType::LoRom,
             1 => RomType::HiRom,
             t => {
@@ -68,7 +70,12 @@ impl RomHeader {
             }
         };
 
-        info!("type: {:?}", rom_type);
+        if header_rom_type == rom_type {
+            info!("type: {:?}", rom_type);
+        } else {
+            warn!("expected rom type {:?}, got {:?} (assuming {:?})", rom_type, header_rom_type,
+                rom_type);
+        }
 
         // bytes[22] is the chipset info. For now, we don't care about that.
         debug!("chipset: 0x{:02X}", bytes[22]);
@@ -76,7 +83,7 @@ impl RomHeader {
         let rom_size = 0x400 << bytes[23] as u32;
         let ram_size = 0x400 << bytes[24] as u32;
         debug!("ROM/RAM size values: {:02X} {:02X}", bytes[23], bytes[24]);
-        info!("{} bytes of ROM, {} bytes of RAM", rom_size, ram_size);
+        info!("{} KB of ROM, {} KB of RAM", rom_size / 1024, ram_size / 1024);
 
         // bytes[25-26] is a vendor code (doesn't matter)
         debug!("vendor code: 0x{:02X}{:02X}", bytes[25], bytes[26]);
@@ -134,32 +141,32 @@ impl Rom {
         // LoROM header is at 0x7FFF - 63, HiROM is at 0xFFFF - 63 (it is 64 Bytes large)
 
         // Test LoROM first (it's more common)
-        let header = try!(RomHeader::load(&bytes[0x7FFF - 63..0x7FFF + 1])
-            .or_else(|_| RomHeader::load(&bytes[0xFFFF - 63..0xFFFF + 1])));
-
-        // Calculate the ROM's checksum
-        let mut checksum: u16 = 0;
-        for &byte in bytes {
-            checksum = checksum.wrapping_add(byte as u16);
-        }
-
-        debug!("computed checksum: {:04X}", checksum);
-
-        if header.checksum != checksum {
-            warn!("incorrect checksum: computed ${:04X}, expected ${:04X}",
-                checksum, header.checksum);
-        }
+        let header = try!(RomHeader::load(&bytes[0x7FFF - 63..0x7FFF + 1], RomType::LoRom)
+            .or_else(|_| RomHeader::load(&bytes[0xFFFF - 63..0xFFFF + 1], RomType::HiRom)));
 
         if bytes.len() != header.rom_size as usize {
-            warn!("raw ROM is {} bytes, but header specifies {} bytes (we'll fill up with 0)",
-                bytes.len(), header.rom_size);
+            warn!("raw ROM is {} KB, but header specifies {} KB",
+                bytes.len() / 1024, header.rom_size / 1024);
         }
 
         // Create the right amount of RAM...
         let ram = vec![0; header.ram_size as usize];
         // ...and copy the ROM
-        let rom = bytes.iter().cloned().chain(iter::repeat(0))
+        let rom = bytes.iter().cloned().cycle()
             .take(cmp::max(header.rom_size as usize, bytes.len())).collect();
+
+        // Calculate the ROM's checksum
+        let mut checksum: u16 = 0;
+        for &byte in &rom {
+            checksum = checksum.wrapping_add(byte as u16);
+        }
+
+        debug!("computed checksum: ${:04X}", checksum);
+
+        if header.checksum != checksum {
+            warn!("incorrect checksum: computed ${:04X}, expected ${:04X}",
+                checksum, header.checksum);
+        }
 
         Ok(Rom {
             header: header,
@@ -173,7 +180,7 @@ impl Rom {
 
         match addr {
             0x0000 ... 0x7fff => {
-                // Cartridge RAM mapped to the low 8 pages
+                // Cartridge RAM mapped to the low 32 KB
                 // (there's other stuff here, but that's handled much earlier than we are called)
                 match bank {
                     0x70 ... 0x7d => {
@@ -213,10 +220,31 @@ impl Rom {
         }
     }
 
+    fn resolve_hirom(&mut self, bank: u8, addr: u16) -> &mut u8 {
+        let addr = addr as usize;
+        match bank {
+            0x00 ... 0x3f | 0x80 ... 0xbf if addr >= 0x8000 => {
+                &mut self.rom[(bank as usize & 0x3f) << 16 | addr]
+            }
+            0x20 ... 0x3f | 0xa0 ... 0xbf if addr >= 0x6000 && addr <= 0x7fff => {
+                let a = ((bank as usize & 0x3f) - 0x20) * 0x2000 + (addr - 0x6000);
+                &mut self.ram[a]
+            }
+            0x40 ... 0x7d | 0xc0 ... 0xfd => {
+                &mut self.rom[((bank as usize & 0x7f) - 0x40) << 16 | addr]
+            }
+            0x7e ... 0x7f => unreachable!(),    // WRAM banks
+            0xfe ... 0xff => {
+                &mut self.rom[(bank as usize - 0xfe + 0x3e) << 16 | addr]
+            }
+            _ => panic!("attempted to access unmapped address: ${:02}:{:04X}", bank, addr),
+        }
+    }
+
     fn resolve_addr(&mut self, bank: u8, addr: u16) -> &mut u8 {
         match self.header.rom_type {
             RomType::LoRom => self.resolve_lorom(bank, addr),
-            RomType::HiRom => unimplemented!(),
+            RomType::HiRom => self.resolve_hirom(bank, addr),
         }
     }
 }
