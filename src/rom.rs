@@ -1,12 +1,12 @@
 //! ROM image loading code
 
 use std::cmp;
-use std::iter;
 use std::str;
 
 /// The (decoded) SNES header
 pub struct RomHeader {
     /// ASCII title, filled with spaces to 21 Bytes
+    #[allow(dead_code)] // FIXME Use this or drop this
     title: [u8; 21],
     rom_size: u32,
     ram_size: u32,
