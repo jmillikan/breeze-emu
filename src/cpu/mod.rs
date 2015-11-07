@@ -308,6 +308,7 @@ impl Cpu {
             0xfa => instr!(plx),
             0x5a => instr!(phy),
             0x7a => instr!(ply),
+            0xf4 => instr!(pea absolute),
 
             // Processor status
             0x18 => instr!(clc),
@@ -489,7 +490,7 @@ impl Cpu {
             0xb0 => instr!(bcs rel),
 
             // Jumps, calls and returns
-            0x4c => instr!(jmp absolute),
+            0x4c => instr!(jmp absolute),   // DBR is ignored
             0x5c => instr!(jml absolute_long),
             0x6c => instr!(jmp absolute_indirect),
             0x7c => instr!(jmp absolute_indexed_indirect),
@@ -735,6 +736,13 @@ impl Cpu {
             self.y = self.p.set_nz(val);
             self.cy += CPU_CYCLE;
         }
+    }
+    /// Push Effective Absolute Address
+    fn pea(&mut self, am: AddressingMode) {
+        // Pushes the address (16-bit, no bank) onto the stack. This is equivalent of pushing the
+        // 2 bytes following the opcode onto the stack.
+        let (_, addr) = am.address(self);
+        self.pushw(addr);
     }
 
     /// AND Accumulator with Memory (or immediate)
