@@ -45,7 +45,6 @@ impl StatusReg {
     pub fn set_overflow(&mut self, value: bool)    { self.set(OVERFLOW_FLAG, value) }
     pub fn set_small_acc(&mut self, value: bool)   { self.set(SMALL_ACC_FLAG, value) }
     pub fn set_small_index(&mut self, value: bool) { self.set(SMALL_INDEX_FLAG, value) }
-    #[allow(dead_code)] // FIXME Implement or panic on decimal operations
     pub fn set_decimal(&mut self, value: bool)     { self.set(DEC_FLAG, value) }
     pub fn set_irq_disable(&mut self, value: bool) { self.set(IRQ_FLAG, value) }
     pub fn set_zero(&mut self, value: bool)        { self.set(ZERO_FLAG, value) }

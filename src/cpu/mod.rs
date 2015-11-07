@@ -314,6 +314,8 @@ impl Cpu {
             0x38 => instr!(sec),
             0x58 => instr!(cli),
             0x78 => instr!(sei),
+            0xd8 => instr!(cld),
+            0xf8 => instr!(sed),
             0xfb => instr!(xce),
             0xc2 => instr!(rep immediate8),
             0xe2 => instr!(sep immediate8),
@@ -1347,8 +1349,10 @@ impl Cpu {
 
     fn cli(&mut self) { self.p.set_irq_disable(false) }
     fn sei(&mut self) { self.p.set_irq_disable(true) }
-    fn clc(&mut self) { self.p.set_carry(false); }
-    fn sec(&mut self) { self.p.set_carry(true); }
+    fn cld(&mut self) { self.p.set_decimal(false) }
+    fn sed(&mut self) { self.p.set_decimal(true); unimplemented!() } // FIXME safeguard
+    fn clc(&mut self) { self.p.set_carry(false) }
+    fn sec(&mut self) { self.p.set_carry(true) }
 
     /// Store 0 to memory
     fn stz(&mut self, am: AddressingMode) {
