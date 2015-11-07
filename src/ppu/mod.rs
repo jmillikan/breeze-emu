@@ -460,7 +460,6 @@ impl Ppu {
     /// This will render exactly one pixel (when in H/V-Blank, the pixel counter will be
     /// incremented, but obviously nothing will be drawn).
     pub fn update(&mut self) -> u8 {
-        // FIXME Does each pixel take *exactly* 4 master clock cycles?
         if !self.in_h_blank() && !self.in_v_blank() {
             // This pixel is visible
             let pixel;
@@ -488,6 +487,7 @@ impl Ppu {
             }
         }
 
+        // FIXME Not all pixels take 4 master cycles
         4
     }
 
