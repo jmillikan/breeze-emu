@@ -397,6 +397,7 @@ impl Cpu {
             0x5b => instr!(tcd),
             0x1b => instr!(tcs),
             0x3b => instr!(tsc),
+            0xba => instr!(tsx),
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
             0x8a => instr!(txa),
@@ -1498,7 +1499,17 @@ impl Cpu {
     }
     /// Transfer Stack Pointer to 16-bit Accumulator
     fn tsc(&mut self) {
-        self.a = self.s;
+        // Sets N and Z
+        self.a = self.p.set_nz(self.s);
+    }
+    /// Transfer Stack Pointer to X Register
+    fn tsx(&mut self) {
+        // Sets N and Z
+        if self.p.small_index() {
+            self.x = self.p.set_nz_8(self.s as u8) as u16;
+        } else {
+            self.x = self.p.set_nz(self.s);
+        }
     }
 
     fn nop(&mut self) {}
