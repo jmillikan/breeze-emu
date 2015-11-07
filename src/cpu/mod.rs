@@ -399,6 +399,7 @@ impl Cpu {
             0xaa => instr!(tax),
             0xa8 => instr!(tay),
             0x8a => instr!(txa),
+            0x9a => instr!(txs),
             0x9b => instr!(txy),
             0x98 => instr!(tya),
             0xbb => instr!(tyx),
@@ -994,6 +995,17 @@ impl Cpu {
             self.a = (self.a & 0xff00) | self.p.set_nz_8(self.x as u8) as u16;
         } else {
             self.a = self.p.set_nz(self.x);
+        }
+    }
+    /// Transfer X to S
+    fn txs(&mut self) {
+        // High Byte of X is 0 if X is 8-bit, we can just copy the whole X
+        // Changes no flags
+        if self.emulation {
+            // "When in the Emulation mode, a 01 is forced into SH."
+            self.s = 0x0100 | (self.x & 0xff);
+        } else {
+            self.s = self.x;
         }
     }
     /// Transfer X to Y
