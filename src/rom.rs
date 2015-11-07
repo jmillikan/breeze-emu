@@ -250,11 +250,11 @@ impl Rom {
 }
 
 impl Rom {
-    pub fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
+    pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
         *self.resolve_addr(bank, addr)
     }
 
-    pub fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
+    pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
         if addr >= 0x8000 {
             warn!("writing ${:02X} to ROM address ${:02X}:{:04X}", value, bank, addr);
         }

@@ -120,12 +120,12 @@ impl Peripherals {
                 0x4218 ... 0x421f => self.input.load(addr),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
-                0x8000 ... 0xffff => self.rom.loadb(bank, addr),
+                0x8000 ... 0xffff => self.rom.load(bank, addr),
                 _ => panic!("invalid/unimplemented load from ${:02X}:{:04X}", bank, addr)
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize],
-            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.loadb(bank, addr),
+            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.load(bank, addr),
             _ => unreachable!(),    // Rust should know this!
         }
     }
@@ -181,12 +181,12 @@ impl Peripherals {
                 0x4300 ... 0x43ff => {
                     self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value);
                 }
-                0x8000 ... 0xffff => self.rom.storeb(bank, addr, value),
+                0x8000 ... 0xffff => self.rom.store(bank, addr, value),
                 _ => panic!("invalid store: ${:02X} to ${:02X}:{:04X}", value, bank, addr)
             },
             // WRAM main banks
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize] = value,
-            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.storeb(bank, addr, value),
+            0x40 ... 0x7d | 0xc0 ... 0xff => self.rom.store(bank, addr, value),
             _ => unreachable!(),    // Rust should know this!
         }
     }
