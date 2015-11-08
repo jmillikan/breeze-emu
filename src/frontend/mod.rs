@@ -11,7 +11,7 @@ mod dummy;
 #[cfg(feature = "glium")]
 mod glium;
 #[cfg(feature = "sdl2")]
-mod sdl;
+pub mod sdl;    // FIXME Make private after input handling is better
 
 lazy_static! {
     pub static ref RENDERER_MAP: HashMap<&'static str, fn() -> Option<Box<Renderer>>> = {

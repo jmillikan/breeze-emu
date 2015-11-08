@@ -3,7 +3,7 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::*;
-use frontend::Renderer;
+use frontend::{self, Renderer};
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
@@ -64,13 +64,13 @@ pub struct Peripherals {
 }
 
 impl Peripherals {
-    pub fn new(rom: Rom) -> Peripherals {
+    pub fn new(rom: Rom, input: Input) -> Peripherals {
         Peripherals {
             rom: rom,
             apu: Apu::default(),
             ppu: Ppu::default(),
             wram: Wram::default(),
-            input: Input::default(),
+            input: input,
             dma: [DmaChannel::default(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
@@ -215,8 +215,19 @@ pub struct Snes {
 
 impl Snes {
     pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
+        // FIXME Temporary hack to have any input at all working. Replace with autodetection.
+        #[cfg(feature = "sdl2")]
+        fn attach_default_input(input: &mut Input) {
+            input.sources[0] = Some(Box::new(frontend::sdl::KeyboardInput))
+        }
+        #[cfg(not(feature = "sdl2"))]
+        fn attach_default_input(_: &mut Input) {}
+
+        let mut input = Input::default();
+        attach_default_input(&mut input);
+
         Snes {
-            cpu: Cpu::new(Peripherals::new(rom)),
+            cpu: Cpu::new(Peripherals::new(rom, input)),
             renderer: renderer,
         }
     }

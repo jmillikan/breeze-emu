@@ -1,5 +1,6 @@
 //! Render to an SDL window
 
+use input::InputState;
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use sdl2::{EventPump, Sdl};
@@ -80,8 +81,6 @@ pub struct SdlRenderer {
 
 impl Default for SdlRenderer {
     fn default() -> Self {
-        info!("initializing SDL renderer");
-
         // FIXME: Support linear filtering and nearest neighbor
 
         SDL.with(|sdl_cell| {
@@ -158,5 +157,38 @@ impl SdlRenderer {
 
         info!("window ratio is {:.2} (native: {:.2}), viewport {}x{}, border ({},{})",
             ratio, NATIVE_RATIO, view_w, view_h, border_x, border_y);
+    }
+}
+
+#[allow(dead_code)]
+pub struct KeyboardInput;
+
+impl super::InputSource for KeyboardInput {
+    fn poll(&mut self) -> InputState {
+        use sdl2::keyboard::Scancode::*;
+
+        SDL.with(|sdl_cell| {
+            let mut input = InputState::new();
+            let sdl = sdl_cell.borrow();
+            let state = sdl.event_pump.keyboard_state();
+
+            if state.is_scancode_pressed(W) { input.up(true); }
+            if state.is_scancode_pressed(A) { input.left(true); }
+            if state.is_scancode_pressed(S) { input.down(true); }
+            if state.is_scancode_pressed(D) { input.right(true); }
+
+            if state.is_scancode_pressed(G) { input.select(true); }
+            if state.is_scancode_pressed(H) { input.start(true); }
+
+            if state.is_scancode_pressed(L) { input.a(true); }
+            if state.is_scancode_pressed(K) { input.b(true); }
+            if state.is_scancode_pressed(O) { input.x(true); }
+            if state.is_scancode_pressed(I) { input.y(true); }
+
+            if state.is_scancode_pressed(P) { input.r(true); }
+            if state.is_scancode_pressed(Q) { input.l(true); }
+
+            input
+        })
     }
 }

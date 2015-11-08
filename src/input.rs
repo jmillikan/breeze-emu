@@ -1,13 +1,11 @@
 //! Emulates the controller ports `$4016 - $401f`
 
-#![allow(dead_code)]    // FIXME: Implement an input frontend that uses this
-
-use frontend::{InputSource};
+use frontend::InputSource;
 
 /// Controller input management.
 #[derive(Default)]
 pub struct Input {
-    sources: [Option<Box<InputSource>>; 4],
+    pub sources: [Option<Box<InputSource>>; 4],
     states: [InputState; 4],
     /// Reset on frame render, set on lazy input update. Lazy input update is done the first time
     /// the game reads any controller state in the current frame and is supposed to improve input
@@ -82,12 +80,13 @@ impl Input {
     }
 
     /// Store to an input register. Will just latch the serial input.
-    pub fn store(&mut self, reg: u16, _val: u8) {
+    pub fn store(&mut self, reg: u16, val: u8) {
         if reg == 0x4016 {
-            // No idea what this actually does, and no way to test it. Great! Let's just reset so
-            // the MSb is read next time.
-            self.bitpos4016 = 0;
-            self.bitpos4017 = 0;
+            if val & 0x01 != 0 {
+                // Strobe joypads
+                self.bitpos4016 = 0;
+                self.bitpos4017 = 0;
+            }
         } else {
             panic!("invalid input reg store to ${:04X}", reg);
         }
@@ -98,7 +97,7 @@ impl Input {
 /// controller 1).
 ///
 /// Bits:
-/// `B Y Select Start Up Down Left Right - A X L R 0 0 0 0`
+/// `B Y Select Start Up Down Left Right | A X L R 0 0 0 0`
 #[derive(Clone, Copy, Default)]
 pub struct InputState(u16);
 
