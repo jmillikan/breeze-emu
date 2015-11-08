@@ -3,7 +3,7 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::*;
-use frontend::{self, Renderer};
+use frontend::Renderer;
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
@@ -218,7 +218,7 @@ impl Snes {
         // FIXME Temporary hack to have any input at all working. Replace with autodetection.
         #[cfg(feature = "sdl2")]
         fn attach_default_input(input: &mut Input) {
-            input.sources[0] = Some(Box::new(frontend::sdl::KeyboardInput))
+            input.sources[0] = Some(Box::new(::frontend::sdl::KeyboardInput))
         }
         #[cfg(not(feature = "sdl2"))]
         fn attach_default_input(_: &mut Input) {}
