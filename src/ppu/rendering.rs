@@ -261,8 +261,6 @@ impl Ppu {
         // -bbbbbgg gggrrrrr
         let lo = self.cgram[color as u16 * 2] as u16;
         let hi = self.cgram[color as u16 * 2 + 1] as u16;
-        // Unused bit should be 0 (just a sanity check, can be removed if games actually do this)
-        debug_assert_eq!(hi & 0x80, 0);
 
         let val = (hi << 8) | lo;
         let b = (val & 0x7c00) >> 10;

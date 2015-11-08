@@ -82,11 +82,10 @@ impl Input {
     }
 
     /// Store to an input register. Will just latch the serial input.
-    pub fn store(&mut self, reg: u16, val: u8) {
+    pub fn store(&mut self, reg: u16, _val: u8) {
         if reg == 0x4016 {
             // No idea what this actually does, and no way to test it. Great! Let's just reset so
             // the MSb is read next time.
-            assert!(val & 0xfe == val);
             self.bitpos4016 = 0;
             self.bitpos4017 = 0;
         } else {

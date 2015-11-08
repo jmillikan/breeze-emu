@@ -291,6 +291,17 @@ pub struct Ppu {
     /// * `c`: Enable window 1 for OBJ
     /// * `d`: Invert window 1 for OBJ
     wobjsel: u8,
+    /// `$2126` Window 1 Left Position
+    /// (this should really be called W1L)
+    /// * `0`: Leftmost
+    /// * `255`: Rightmost
+    wh0: u8,
+    /// `$2127` Window 1 Right Position
+    wh1: u8,
+    /// `$2128` Window 2 Left Position
+    wh2: u8,
+    /// `$2129` Window 2 Right Position
+    wh3: u8,
     /// `$212a` BG Window mask logic
     /// `44332211`
     ///
@@ -414,6 +425,10 @@ impl Ppu {
             0x2123 => self.w12sel = value,
             0x2124 => self.w34sel = value,
             0x2125 => self.wobjsel = value,
+            0x2126 => self.wh0 = value,
+            0x2127 => self.wh1 = value,
+            0x2128 => self.wh2 = value,
+            0x2129 => self.wh3 = value,
             0x212a => self.wbglog = value,
             0x212b => {
                 if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }
@@ -515,6 +530,8 @@ impl Ppu {
             0x2110 => &mut self.bg2vofs,
             0x2111 => &mut self.bg3hofs,
             0x2112 => &mut self.bg3vofs,
+            0x2113 => &mut self.bg4hofs,
+            0x2114 => &mut self.bg4vofs,
             _ => panic!("invalid BG register ${:04X}", addr),
         };
 
