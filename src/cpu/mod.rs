@@ -1216,7 +1216,7 @@ impl Cpu {
 
     /// Test memory bits against accumulator
     fn bit(&mut self, am: AddressingMode) {
-        if self.p.small_index() {
+        if self.p.small_acc() {
             let val = am.clone().loadb(self);
             self.p.set_zero(val & self.a as u8 == 0);
             match am {
