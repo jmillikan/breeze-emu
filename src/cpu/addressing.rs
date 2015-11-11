@@ -15,6 +15,10 @@ pub enum AddressingMode {
     /// Used for jumps
     /// (PBR, PC + <val>)  [PC+<val> wraps inside the bank]
     Rel(i8),
+    /// "PC Relative Long-r"
+    /// Used for `PER` (Push Effective Relative Address)
+    /// (<unused>, PC + <val>)
+    RelLong(i16),
 
     /// "Direct-d"
     /// <val> + direct page register in bank 0
@@ -181,6 +185,9 @@ impl AddressingMode {
             Rel(rel) => {
                 (cpu.pbr, (cpu.pc as i16).wrapping_add(rel as i16) as u16)
             }
+            RelLong(rel_long) => {
+                (0xff, (cpu.pc as i16).wrapping_add(rel_long) as u16)
+            }
             Direct(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
                 (0, cpu.d.wrapping_add(offset as u16))
@@ -279,6 +286,7 @@ impl fmt::Display for AddressingMode {
             AbsoluteIndirect(addr) =>        write!(f, "(${:04X})", addr),
             AbsoluteIndirectLong(addr) =>    write!(f, "[${:04X}]", addr),
             Rel(rel) =>                      write!(f, "{:+}", rel),
+            RelLong(rel_long) =>             write!(f, "{:+}", rel_long),
             Direct(offset) =>                write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>        write!(f, "${:02X},x", offset),
             DirectIndexedY(offset) =>        write!(f, "${:02X},y", offset),
@@ -288,7 +296,7 @@ impl fmt::Display for AddressingMode {
             DirectIndirectLong(offset) =>    write!(f, "[${:02X}]", offset),
             DirectIndirectLongIdx(offset) => write!(f, "[${:02X}],y", offset),
             StackRel(offset) =>              write!(f, "${:02X},s", offset),
-            BlockMove(dest, src) =>          write!(f, "${:02X}, ${:02X}", src, dest),
+            BlockMove(dest, src) =>          write!(f, "${:02X} -> ${:02X}", src, dest),
         }
     }
 }

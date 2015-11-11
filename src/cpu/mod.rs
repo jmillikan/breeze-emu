@@ -309,6 +309,7 @@ impl Cpu {
             0x5a => instr!(phy),
             0x7a => instr!(ply),
             0xf4 => instr!(pea absolute),
+            0x62 => instr!(per relative_long),
 
             // Processor status
             0x18 => instr!(clc),
@@ -741,12 +742,20 @@ impl Cpu {
             self.cy += CPU_CYCLE;
         }
     }
+
+    fn push_effective(&mut self, am: AddressingMode) {
+        let (_, addr) = am.address(self);
+        self.pushw(addr);
+    }
     /// Push Effective Absolute Address
     fn pea(&mut self, am: AddressingMode) {
         // Pushes the address (16-bit, no bank) onto the stack. This is equivalent of pushing the
         // 2 bytes following the opcode onto the stack.
-        let (_, addr) = am.address(self);
-        self.pushw(addr);
+        self.push_effective(am)
+    }
+    /// Push Effective PC-Relative Address
+    fn per(&mut self, am: AddressingMode) {
+        self.push_effective(am)
     }
 
     /// AND Accumulator with Memory (or immediate)
@@ -1565,6 +1574,9 @@ impl Cpu {
     }
     fn rel(&mut self) -> AddressingMode {
         AddressingMode::Rel(self.fetchb() as i8)
+    }
+    fn relative_long(&mut self) -> AddressingMode {
+        AddressingMode::RelLong(self.fetchw() as i16)
     }
     fn stack_rel(&mut self) -> AddressingMode {
         AddressingMode::StackRel(self.fetchb())
