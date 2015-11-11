@@ -1,5 +1,6 @@
 //! Render to an SDL window
 
+use super::{FrontendAction, FrontendResult};
 use input::InputState;
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
@@ -9,7 +10,6 @@ use sdl2::render::{Renderer, Texture, TextureAccess};
 
 use std::cell::RefCell;
 use std::ops::Deref;
-use std::process;
 
 /// Takes care of SDL (mainly used for event management). Owns an `EventPump`, which makes it
 /// unavailable for other code. Initialized when the emulator uses an SDL frontend.
@@ -22,7 +22,7 @@ struct SdlManager {
 impl SdlManager {
     /// Updates all SDL-related state. Polls events and may terminate the process via
     /// `process::exit`. Should be called at least once per frame.
-    fn update(&mut self) {
+    fn update(&mut self) -> Option<FrontendAction> {
         use sdl2::event::Event::*;
         use sdl2::event::WindowEventId;
         use sdl2::keyboard::Scancode;
@@ -31,11 +31,17 @@ impl SdlManager {
             match event {
                 Quit {..} => {
                     info!("quit event -> exiting");
-                    process::exit(0);
+                    return Some(FrontendAction::Exit);
                 }
                 Window { win_event_id: WindowEventId::Resized, data1: w, data2: h, .. } => {
                     info!("window resized to {}x{}", w, h);
                     self.resized_to = Some((w as u32, h as u32));
+                }
+                KeyDown { scancode: Some(Scancode::F5), .. } => {
+                    return Some(FrontendAction::SaveState);
+                }
+                KeyDown { scancode: Some(Scancode::F9), .. } => {
+                    return Some(FrontendAction::LoadState);
                 }
                 _ => {}
             }
@@ -51,6 +57,8 @@ impl SdlManager {
             }
             info!("<running>");
         }
+
+        None
     }
 
     fn resized(&mut self) -> Option<(u32, u32)> { self.resized_to.take() }
@@ -108,7 +116,7 @@ impl Default for SdlRenderer {
 }
 
 impl super::Renderer for SdlRenderer {
-    fn render(&mut self, frame_data: &[u8]) {
+    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)
         }
@@ -119,7 +127,7 @@ impl super::Renderer for SdlRenderer {
         self.renderer.copy(&self.texture, None, None);
         self.renderer.present();
 
-        SDL.with(|sdl| sdl.borrow_mut().update());
+        SDL.with(|sdl| sdl.borrow_mut().update())
     }
 }
 
@@ -164,31 +172,38 @@ impl SdlRenderer {
 pub struct KeyboardInput;
 
 impl super::InputSource for KeyboardInput {
-    fn poll(&mut self) -> InputState {
+    fn poll(&mut self) -> FrontendResult<InputState> {
         use sdl2::keyboard::Scancode::*;
 
         SDL.with(|sdl_cell| {
             let mut input = InputState::new();
-            let sdl = sdl_cell.borrow();
-            let state = sdl.event_pump.keyboard_state();
+            {
+                // Fetch input state
+                let sdl = sdl_cell.borrow();
+                let state = sdl.event_pump.keyboard_state();
 
-            if state.is_scancode_pressed(W) { input.up(true); }
-            if state.is_scancode_pressed(A) { input.left(true); }
-            if state.is_scancode_pressed(S) { input.down(true); }
-            if state.is_scancode_pressed(D) { input.right(true); }
+                if state.is_scancode_pressed(W) { input.up(true); }
+                if state.is_scancode_pressed(A) { input.left(true); }
+                if state.is_scancode_pressed(S) { input.down(true); }
+                if state.is_scancode_pressed(D) { input.right(true); }
 
-            if state.is_scancode_pressed(G) { input.select(true); }
-            if state.is_scancode_pressed(H) { input.start(true); }
+                if state.is_scancode_pressed(G) { input.select(true); }
+                if state.is_scancode_pressed(H) { input.start(true); }
 
-            if state.is_scancode_pressed(L) { input.a(true); }
-            if state.is_scancode_pressed(K) { input.b(true); }
-            if state.is_scancode_pressed(O) { input.x(true); }
-            if state.is_scancode_pressed(I) { input.y(true); }
+                if state.is_scancode_pressed(L) { input.a(true); }
+                if state.is_scancode_pressed(K) { input.b(true); }
+                if state.is_scancode_pressed(O) { input.x(true); }
+                if state.is_scancode_pressed(I) { input.y(true); }
 
-            if state.is_scancode_pressed(P) { input.r(true); }
-            if state.is_scancode_pressed(Q) { input.l(true); }
+                if state.is_scancode_pressed(P) { input.r(true); }
+                if state.is_scancode_pressed(Q) { input.l(true); }
+            }
 
-            input
+            let action = sdl_cell.borrow_mut().update();
+            FrontendResult {
+                result: input,
+                action: action,
+            }
         })
     }
 }

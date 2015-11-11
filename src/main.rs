@@ -19,6 +19,7 @@ use std::fs::File;
 use std::io::Read;
 
 use rom::Rom;
+use savestate::SaveState;
 use snes::Snes;
 
 #[macro_use] mod byte_array;
@@ -44,6 +45,7 @@ fn main() {
         (about: "SNES emulator")
         (@arg ROM_PATH: +required "The ROM file to execute")
         (@arg renderer: -R --renderer +takes_value "The renderer to use")
+        (@arg savestate: --savestate +takes_value "The save state file to load")
     ).get_matches();
 
     let renderer_name = args.value_of("renderer").unwrap_or(&*frontend::DEFAULT_RENDERER);
@@ -73,5 +75,8 @@ fn main() {
     let rom = Rom::from_bytes(&buf).unwrap();
 
     let mut snes = Snes::new(rom, renderer);
+    if let Some(filename) = args.value_of("savestate") {
+        snes.restore_state(&mut File::open(filename).unwrap()).unwrap()
+    }
     snes.run();
 }

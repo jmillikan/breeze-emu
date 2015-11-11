@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]    // FIXME: Maybe remove sometime
 
-use frontend::InputSource;
+use frontend::{FrontendAction, InputSource};
 
 /// Controller input management.
 #[derive(Default)]
@@ -29,13 +29,20 @@ impl Input {
 
     /// Polls all controllers and stores their state. Called lazily when the game reads from an
     /// input register.
-    fn update(&mut self) {
+    fn update(&mut self) -> Vec<FrontendAction> {
+        let mut actions = Vec::new();
+
         self.updated_this_frame = true;
         for i in 0..4 {
             if let Some(ref mut source) = self.sources[i] {
-                self.states[i] = source.poll();
+                let result = source.poll();
+                self.states[i] = result.result;
+
+                if let Some(action) = result.action { actions.push(action) }
             }
         }
+
+        actions
     }
 
     /// Read from an input register. Updates the controller state if this is the first load in this

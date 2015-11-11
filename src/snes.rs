@@ -3,13 +3,15 @@
 use apu::Apu;
 use cpu::Cpu;
 use dma::*;
-use frontend::Renderer;
+use frontend::{FrontendAction, Renderer};
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
 use rom::Rom;
+use savestate::SaveState;
 
 use std::env;
+use std::fs::File;
 
 const WRAM_SIZE: usize = 128 * 1024;
 byte_array!(Wram[WRAM_SIZE]);
@@ -240,6 +242,23 @@ impl Snes {
         }
     }
 
+    /// Handles a `FrontendAction`. Returns `true` if the emulator should end
+    fn handle_action(&mut self, action: FrontendAction) -> bool {
+        match action {
+            FrontendAction::Exit => return true,
+            FrontendAction::SaveState => {
+                let mut file = File::create("sneeze.sav").unwrap();
+                self.save_state(&mut file).unwrap();
+            }
+            FrontendAction::LoadState => {
+                let mut file = File::open("sneeze.sav").unwrap();
+                self.restore_state(&mut file).unwrap();
+            }
+        }
+
+        false
+    }
+
     pub fn run(&mut self) {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
         let trace_start = env::var("SNEEZE_TRACE")
@@ -296,7 +315,9 @@ impl Snes {
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
-                        self.renderer.render(&*self.cpu.mem.ppu.framebuf);
+                        if let Some(action) = self.renderer.render(&*self.cpu.mem.ppu.framebuf) {
+                            if self.handle_action(action) { return }
+                        }
                     }
                     (225, 0) => {
                         // V-Blank

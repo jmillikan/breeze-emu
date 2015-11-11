@@ -56,6 +56,26 @@ lazy_static! {
     };
 }
 
+/// An action that can be performed by the user, is detected by the frontend and executed by the
+/// emulator core.
+#[allow(dead_code)] // Variants may be dead, depending on which frontends are enabled
+pub enum FrontendAction {
+    /// Exit the emulator
+    Exit,
+    /// Create a save state
+    SaveState,
+    /// Restore the last save state
+    LoadState,
+}
+
+/// Type returned by frontend methods on `Renderer` and `InputSource`.
+#[derive(Default)]
+pub struct FrontendResult<T> {
+    pub result: T,
+    /// An optional action to perform
+    pub action: Option<FrontendAction>,
+}
+
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
 /// PPU and can then render this content in a frontend-specific way.
 pub trait Renderer {
@@ -71,7 +91,7 @@ pub trait Renderer {
     /// method returns, the input devices can be queried by the running program. This allows
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
-    fn render(&mut self, frame_data: &[u8]);
+    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction>;
 }
 
 /// Should be implemented for all input implementations (such as controller, keyboard, perhaps
@@ -80,5 +100,5 @@ pub trait InputSource {
     /// Poll the input state. For synchronization purposes, we guarantee that this method is called
     /// exactly once per frame. However, the exact time within a frame is left unspecified (we might
     /// want to call this function as late as possible to optimize input latency).
-    fn poll(&mut self) -> InputState;
+    fn poll(&mut self) -> FrontendResult<InputState>;
 }
