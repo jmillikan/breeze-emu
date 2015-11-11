@@ -228,7 +228,7 @@ pub struct Ppu {
     /// * `x`: Horizontal mirroring
     /// * `y`: Vertical mirroring
     m7sel: u8,
-    /// Mode 7 Matrix A
+    /// `$211b` Mode 7 Matrix A
     ///
     /// The mode 7 matrix transformation works like this (where `SX/SY` are the current screen
     /// coordinates and `X/Y` the resulting playing field coordinates that will be looked up):
@@ -238,15 +238,17 @@ pub struct Ppu {
     /// [ Y ]   [ C D ]   [ SY + M7VOFS - M7Y ]   [ M7Y ]
     /// ```
     m7a: u16,
-    /// Mode 7 Matrix B
+    /// `$211c` Mode 7 Matrix B
     m7b: u16,
-    /// Mode 7 Matrix C
+    /// Last value written to `m7b` / `$211c`
+    m7b_last: u8,
+    /// `$211d` Mode 7 Matrix C
     m7c: u16,
-    /// Mode 7 Matrix D
+    /// `$211e` Mode 7 Matrix D
     m7d: u16,
-    /// Mode 7 Center X
+    /// `$211f` Mode 7 Center X
     m7x: u16,
-    /// Mode 7 Center Y
+    /// `$2120` Mode 7 Center Y
     m7y: u16,
 
     /// `$2121` CGRAM word address (=color index)
@@ -365,8 +367,8 @@ pub struct Ppu {
 impl_save_state!(Ppu {
     oam, cgram, vram, inidisp, obsel, oamaddl, oamaddh, oamaddr, oam_lsb, bgmode, mosaic, bg1sc,
     bg2sc, bg3sc, bg4sc, bg12nba, bg34nba, bg1hofs, m7hofs, bg1vofs, m7vofs, bg2hofs, bg2vofs,
-    bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7c, m7d,
-    m7x, m7y, cgadd, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog, wobjlog, tm,
+    bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7b_last,
+    m7c, m7d, m7x, m7y, cgadd, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog, wobjlog, tm,
     ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini
 } ignore {
     framebuf, render_state, scanline, x, cg_low_buf /* FIXME: Option<u8> doesn't impl savestate */
@@ -382,7 +384,16 @@ struct Rgb {
 impl Ppu {
     /// Load a PPU register (addresses `$2134` to `$213f`)
     pub fn load(&mut self, addr: u16) -> u8 {
-        panic!("PPU register load unimplemented (${:04X})", addr)
+        match addr {
+            // `$2134` - `$2136`: Multiplication Result of `self.m7a * self.m7b_last`
+            // MPYL - Low Byte
+            0x2134 => (self.m7a as u32 * self.m7b_last as u32) as u8,
+            // MPYM - Middle Byte
+            0x2135 => ((self.m7a as u32 * self.m7b_last as u32) >> 8) as u8,
+            // MPYH - High Byte
+            0x2136 => ((self.m7a as u32 * self.m7b_last as u32) >> 16) as u8,
+            _ => panic!("invalid PPU load from ${:04X}", addr),
+        }
     }
 
     /// Store a byte in a PPU register (addresses `$2100` - `$2133`)
@@ -562,7 +573,10 @@ impl Ppu {
             0x210d => &mut self.m7hofs,
             0x210e => &mut self.m7vofs,
             0x211b => &mut self.m7a,
-            0x211c => &mut self.m7b,
+            0x211c => {
+                self.m7b_last = val;
+                &mut self.m7b
+            },
             0x211d => &mut self.m7c,
             0x211e => &mut self.m7d,
             0x211f => &mut self.m7x,

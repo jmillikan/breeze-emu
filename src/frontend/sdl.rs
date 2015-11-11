@@ -186,8 +186,8 @@ impl super::InputSource for KeyboardInput {
                 // Q W           I O P
                 // A S D   G H   K L
                 // -------------------
-                // L ⏶            Y X R
-                // ⏴ ⏷ ⏵ Sel Sta B A
+                // L ↑           Y X R
+                // < ↓ > Sel Sta B A
 
                 if state.is_scancode_pressed(W) { input.up(true); }
                 if state.is_scancode_pressed(A) { input.left(true); }

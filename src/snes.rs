@@ -101,7 +101,7 @@ impl Peripherals {
                 0x0000 ... 0x1fff => self.wram[addr as usize],
                 // PPU
                 0x2100 ... 0x2133 => panic!("read from write-only PPU register ${:04X}", addr),
-                0x2138 ... 0x213f => self.ppu.load(addr),
+                0x2134 ... 0x213f => self.ppu.load(addr),
                 // APU IO registers
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
                 0x4016 | 0x4017 => self.input.load(addr),
