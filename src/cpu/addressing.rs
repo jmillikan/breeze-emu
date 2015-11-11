@@ -70,7 +70,7 @@ pub enum AddressingMode {
     AbsIndexedY(u16),
 
     /// "Absolute Indexed Indirect-(a,x)"
-    /// addr := load2(0, <val> + X) (FIXME: bank=PBR?)
+    /// addr := load2(PBR, <val> + X)
     /// (PBR, addr)
     AbsIndexedIndirect(u16),
 
@@ -169,9 +169,9 @@ impl AddressingMode {
                 (cpu.dbr, offset + cpu.y)
             }
             AbsIndexedIndirect(addr_ptr) => {
-                let x = cpu.x;
-                let addr = cpu.loadw(0, addr_ptr + x);
-                (cpu.pbr, addr)
+                let (x, pbr) = (cpu.x, cpu.pbr);
+                let addr = cpu.loadw(pbr, addr_ptr + x);
+                (pbr, addr)
             }
             AbsoluteIndirect(addr_ptr) => {
                 let addr = cpu.loadw(0, addr_ptr);
