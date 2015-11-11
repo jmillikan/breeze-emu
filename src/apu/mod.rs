@@ -30,15 +30,18 @@ const RESET_VEC: u16 = 0xFFFE;
 /// "IPL ROM", which contains a small piece of startup code that allows the main CPU to transfer a
 /// program to the APU (we just copy the IPL ROM into the RAM and make it read-write).
 pub struct Spc700 {
-    // 64KB of RAM
-    // (this is not the address space, even though both are 64KB!)
+    /// 64KB of RAM, shared with DSP
     mem: Ram,
 
-    /// $f2 - DSP address selection ($f3 - DSP data)
+    /// The SPC700 starts with the IPL ROM mapped into the highest 64 Bytes of address space. It can
+    /// be unmapped by clearing bit 7 in `$f1` (CONTROL), which allow using this space as normal
+    /// RAM (writes to this area always go to RAM).
+    ipl_rom_mapped: bool,
+    /// `$f2` - DSP address selection (`$f3` - DSP data)
     reg_dsp_addr: u8,
     /// Values written to the IO Registers by the main CPU. The CPU will write values here. These
     /// are read by the SPC, the CPU reads directly from RAM, while the SPC writes to RAM.
-    /// $f4 - $f7
+    /// `$f4 - $f7`
     io_vals: [u8; 4],
     timers: [Timer; 3],
 
@@ -56,24 +59,18 @@ pub struct Spc700 {
     pub trace: bool,
 }
 
-impl_save_state!(Spc700 { mem, reg_dsp_addr, io_vals, timers, dsp, a, x, y, sp, pc, psw, trace }
-    ignore { cy });
+impl_save_state!(Spc700 { mem, ipl_rom_mapped, reg_dsp_addr, io_vals, timers, dsp, a, x, y, sp, pc,
+    psw, trace } ignore { cy });
 
 impl Default for Spc700 {
     fn default() -> Self {
-        const IPL_START: usize = RAM_SIZE - 64;
-
-        let mut mem = Ram::default();
-        for i in 0..64 {
-            mem[IPL_START as u16 + i] = IPL_ROM[i as usize];
-        }
-
-        let pcl = mem[RESET_VEC] as u16;
-        let pch = mem[RESET_VEC + 1] as u16;
+        let pcl = IPL_ROM[RESET_VEC as usize - 0xffc0] as u16;
+        let pch = IPL_ROM[RESET_VEC as usize - 0xffc0 + 1] as u16;
         let pc = (pch << 8) | pcl;
 
         Spc700 {
-            mem: mem,
+            mem: Ram::default(),
+            ipl_rom_mapped: true,
             reg_dsp_addr: 0,
             io_vals: [0; 4],
             timers: [Timer::new(); 3],
@@ -175,6 +172,7 @@ impl Spc700 {
                 val
             }
             // NB: $f8 and $f9 work like regular RAM
+            0xffc0 ... 0xffff if self.ipl_rom_mapped => { IPL_ROM[addr as usize - 0xffc0] },
             _ => self.mem[addr],
         }
     }
@@ -595,7 +593,7 @@ impl Spc700 {
         (hi << 8) | lo
     }
 
-    /// Performs a call: Pushed PCh and PCl onto the stack and sets PC to `addr`.
+    /// Performs a call: Pushes PCh and PCl onto the stack and sets PC to `addr`.
     fn call_addr(&mut self, addr: u16) {
         let pc = self.pc;
         self.pushw(pc);
