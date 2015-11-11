@@ -182,6 +182,13 @@ impl super::InputSource for KeyboardInput {
                 let sdl = sdl_cell.borrow();
                 let state = sdl.event_pump.keyboard_state();
 
+                // These bindings somewhat resemble an actual SNES controller:
+                // Q W           I O P
+                // A S D   G H   K L
+                // -------------------
+                // L ⏶            Y X R
+                // ⏴ ⏷ ⏵ Sel Sta B A
+
                 if state.is_scancode_pressed(W) { input.up(true); }
                 if state.is_scancode_pressed(A) { input.left(true); }
                 if state.is_scancode_pressed(S) { input.down(true); }

@@ -2,6 +2,7 @@
 
 // FIXME: Support resizing the window, like the SDL renderer does
 
+use super::FrontendAction;
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use glium::{DisplayBuild, Surface, Rect};
@@ -13,7 +14,6 @@ use glium::texture::{ClientFormat, RawImage2d, Texture2d};
 use glium::uniforms::MagnifySamplerFilter;
 use glium::vertex::VertexBuffer;
 
-use std::process;
 use std::borrow::Cow;
 
 #[derive(Copy, Clone)]
@@ -84,23 +84,24 @@ impl Default for GliumRenderer {
 }
 
 impl GliumRenderer {
-    fn handle_events(&mut self) {
+    fn handle_events(&mut self) -> Option<FrontendAction> {
         use glium::glutin::Event::*;
 
         for ev in self.display.poll_events() {
             match ev {
                 Closed => {
                     info!("quit event -> exiting");
-                    process::exit(0);
+                    return Some(FrontendAction::Exit)
                 }
-                _ => ()
+                _ => {}
             }
         }
+        None
     }
 }
 
 impl super::Renderer for GliumRenderer {
-    fn render(&mut self, frame_data: &[u8]) {
+    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         // upload new texture data
         self.texture.write(Rect {
             left: 0,
@@ -126,6 +127,6 @@ impl super::Renderer for GliumRenderer {
             &Default::default()).unwrap();
         target.finish().unwrap();
 
-        self.handle_events();
+        self.handle_events()
     }
 }

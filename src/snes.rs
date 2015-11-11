@@ -242,7 +242,7 @@ impl Snes {
         }
     }
 
-    /// Handles a `FrontendAction`. Returns `true` if the emulator should end
+    /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
     fn handle_action(&mut self, action: FrontendAction) -> bool {
         match action {
             FrontendAction::Exit => return true,
