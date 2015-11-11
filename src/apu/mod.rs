@@ -367,6 +367,7 @@ impl Spc700 {
             0x3d => instr!(_ inc x),
             0xfc => instr!(_ inc y),
             0xab => instr!(_ inc direct),
+            0xbb => instr!(_ inc direct_indexed_x),
             0xac => instr!(_ inc abs),
             0x3a => instr!(_ incw direct),
             0x28 => instr!(_ and immediate a),
@@ -478,6 +479,14 @@ impl Spc700 {
             0xb3 => instr!(_ bbc(5) direct rel),
             0xd3 => instr!(_ bbc(6) direct rel),
             0xf3 => instr!(_ bbc(7) direct rel),
+            0x03 => instr!(_ bbs(0) direct rel),
+            0x23 => instr!(_ bbs(1) direct rel),
+            0x43 => instr!(_ bbs(2) direct rel),
+            0x63 => instr!(_ bbs(3) direct rel),
+            0x83 => instr!(_ bbs(4) direct rel),
+            0xa3 => instr!(_ bbs(5) direct rel),
+            0xc3 => instr!(_ bbs(6) direct rel),
+            0xe3 => instr!(_ bbs(7) direct rel),
 
             0x5f => instr!("jmp {}" bra abs),                       // reuse `bra` fn
             0x1f => instr!("jmp {}" bra abs_indexed_indirect),      // reuse `bra` fn
@@ -527,6 +536,7 @@ impl Spc700 {
             0xf8 => instr!(_ mov direct x),
             0xeb => instr!(_ mov direct y),
             0xf4 => instr!(_ mov direct_indexed_x a),
+            0xfb => instr!(_ mov direct_indexed_x y),
             0xe6 => instr!(_ mov indirect_x a),
             0xe7 => instr!(_ mov indexed_indirect a),
             0xf7 => instr!(_ mov indirect_indexed a),
@@ -661,6 +671,15 @@ impl Spc700 {
     fn bbc(&mut self, bit: u8, val: AddressingMode, addr: AddressingMode) {
         let val = val.loadb(self);
         let addr = addr.address(self);
+        if val & (1 << bit) == 0 {
+            self.pc = addr;
+            self.cy += 2;
+        }
+    }
+    /// Branch if bit set
+    fn bbs(&mut self, bit: u8, val: AddressingMode, addr: AddressingMode) {
+        let val = val.loadb(self);
+        let addr = addr.address(self);
         if val & (1 << bit) != 0 {
             self.pc = addr;
             self.cy += 2;
@@ -754,10 +773,20 @@ impl Spc700 {
     /// A=YA/X, Y=mod(YA,X)
     fn div(&mut self) {
         // Sets N, Z, V, H
-        // FIXME Set V and H
-        let ya = ((self.y as u16) << 8) | self.a as u16;
-        self.a = self.psw.set_nz((ya / self.x as u16) as u8);
-        self.y = (ya % self.x as u16) as u8;
+        // FIXME Set H and check if this is correct
+        let mut yva = ((self.y as u32) << 8) | self.a as u32;
+        let x = (self.x as u32) << 9;
+        for _ in 0..9 {
+            yva <<= 1;
+            if yva & 0x20000 != 0 {
+                yva = (yva & 0x1ffff) | 1;
+            }
+            if yva >= x { yva ^= 1; }
+            if yva & 1 != 0 { yva = (yva - x) & 0x1ffff; }
+        }
+        self.psw.set_overflow(yva & 0x100 != 0);
+        self.y = (yva >> 9) as u8;
+        self.a = self.psw.set_nz(yva as u8);
     }
     fn adc(&mut self, src: AddressingMode, dest: AddressingMode) {
         // Sets N, V, H, Z and C
