@@ -50,6 +50,7 @@ unsafe trait TransmuteByteSafe {}
 unsafe impl TransmuteByteSafe for u8 {}
 unsafe impl TransmuteByteSafe for u16 {}
 unsafe impl TransmuteByteSafe for u32 {}
+unsafe impl TransmuteByteSafe for u64 {}
 unsafe impl TransmuteByteSafe for usize {}
 unsafe impl TransmuteByteSafe for i8 {}
 unsafe impl TransmuteByteSafe for i16 {}

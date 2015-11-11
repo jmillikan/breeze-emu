@@ -219,9 +219,15 @@ impl Peripherals {
 pub struct Snes {
     cpu: Cpu,
     renderer: Box<Renderer>,
+    master_cy: u64,
+    /// Master clock cycles for the APU not yet accounted for (can be negative)
+    apu_master_cy_debt: i32,
+    /// Master clock cycles for the PPU not yet accounted for (can be negative)
+    ppu_master_cy_debt: i32,
 }
 
-impl_save_state!(Snes { cpu } ignore { renderer });
+impl_save_state!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
+    ignore { renderer });
 
 impl Snes {
     pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
@@ -239,6 +245,9 @@ impl Snes {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, input)),
             renderer: renderer,
+            master_cy: 0,
+            apu_master_cy_debt: 0,
+            ppu_master_cy_debt: 0,
         }
     }
 
@@ -270,15 +279,10 @@ impl Snes {
         /// might not be critical, but better safe than sorry).
         const APU_DIVIDER: i32 = 21;
 
-        // Master cycle counter, used only for debugging atm
-        let mut master_cy: u64 = 0;
-        // Master clock cycles for the APU not yet accounted for (can be negative)
-        let mut apu_master_cy_debt = 0;
-        let mut ppu_master_cy_debt = 0;
         let working_cy = LogOnPanic::new("cycle count", 0);
 
         loop {
-            if master_cy >= trace_start {
+            if self.master_cy >= trace_start {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
             }
@@ -286,22 +290,22 @@ impl Snes {
             // Run a CPU instruction and calculate the master cycles elapsed
             let cpu_master_cy = self.cpu.dispatch() as i32 + self.cpu.mem.cy as i32;
             self.cpu.mem.cy = 0;
-            master_cy += cpu_master_cy as u64;
+            self.master_cy += cpu_master_cy as u64;
 
             // Now we "owe" the other components a few cycles:
-            apu_master_cy_debt += cpu_master_cy;
-            ppu_master_cy_debt += cpu_master_cy;
+            self.apu_master_cy_debt += cpu_master_cy;
+            self.ppu_master_cy_debt += cpu_master_cy;
 
             // Run all components until we no longer owe them:
-            while apu_master_cy_debt > APU_DIVIDER {
+            while self.apu_master_cy_debt > APU_DIVIDER {
                 // (Since the APU uses lots of cycles to do stuff - lower clock rate and such - we
                 // only run it if we owe it `APU_DIVIDER` master cycles - or one SPC700 cycle)
                 let apu_master_cy = self.cpu.mem.apu.dispatch() as i32 * APU_DIVIDER;
-                apu_master_cy_debt -= apu_master_cy;
+                self.apu_master_cy_debt -= apu_master_cy;
             }
-            while ppu_master_cy_debt > 0 {
+            while self.ppu_master_cy_debt > 0 {
                 let cy = self.cpu.mem.ppu.update();
-                ppu_master_cy_debt -= cy as i32;
+                self.ppu_master_cy_debt -= cy as i32;
 
                 let (v, h) = (self.cpu.mem.ppu.v_counter(), self.cpu.mem.ppu.h_counter());
                 match (v, h) {
@@ -346,7 +350,7 @@ impl Snes {
                 }
             }
 
-            working_cy.set(master_cy);
+            working_cy.set(self.master_cy);
         }
     }
 }

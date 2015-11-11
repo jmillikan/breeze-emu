@@ -403,6 +403,10 @@ impl Spc700 {
             0x4b => instr!(_ lsr direct),
             0x5b => instr!(_ lsr direct_indexed_x),
             0x4c => instr!(_ lsr abs),
+            0x3c => instr!(_ rol a),
+            0x2b => instr!(_ rol direct),
+            0x3b => instr!(_ rol direct_indexed_x),
+            0x2c => instr!(_ rol abs),
             0x7c => instr!(_ ror a),
             0x6b => instr!(_ ror direct),
             0x7b => instr!(_ ror direct_indexed_x),
@@ -549,6 +553,8 @@ impl Spc700 {
             0xda => instr!("movw {}, ya" movw_s direct),
             0xbd => instr!("mov sp, x" mov_sp_x),
             0xaf => instr!("mov (x++), a" mov_xinc),
+
+            0x00 => instr!(_ nop),
             _ => {
                 instr!(_ ill);
                 panic!("illegal APU opcode: ${:02X}", op);
@@ -782,7 +788,7 @@ impl Spc700 {
                 yva = (yva & 0x1ffff) | 1;
             }
             if yva >= x { yva ^= 1; }
-            if yva & 1 != 0 { yva = (yva - x) & 0x1ffff; }
+            if yva & 1 != 0 { yva = yva.wrapping_sub(x) & 0x1ffff; }
         }
         self.psw.set_overflow(yva & 0x100 != 0);
         self.y = (yva >> 9) as u8;
@@ -880,12 +886,20 @@ impl Spc700 {
         let res = self.psw.set_nz(val >> 1);
         op.storeb(self, res);
     }
+    /// Rotate left
+    fn rol(&mut self, op: AddressingMode) {
+        let val = op.clone().loadb(self);
+        let c = if self.psw.carry() { 0x80 } else { 0 };
+        self.psw.set_carry(val & 0x01 != 0);
+        let res = self.psw.set_nz((val << 1) | c);
+        op.storeb(self, res);
+    }
     /// Rotate right
     fn ror(&mut self, op: AddressingMode) {
         let val = op.clone().loadb(self);
         let c = if self.psw.carry() { 0x80 } else { 0 };
         self.psw.set_carry(val & 0x01 != 0);
-        let res = self.psw.set_nz((val >> 1) | c);
+        let res = self.psw.set_nz((val >> 1) | (c << 7));
         op.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
@@ -945,6 +959,7 @@ impl Spc700 {
         // No flags modified
         self.sp = self.x;
     }
+    fn nop(&mut self) {}
     fn ill(&mut self) {}
 }
 
