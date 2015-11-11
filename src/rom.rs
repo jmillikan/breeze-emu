@@ -83,7 +83,7 @@ impl RomHeader {
         let rom_size = 0x400 << bytes[23] as u32;
         let ram_size = 0x400 << bytes[24] as u32;
         debug!("ROM/RAM size values: {:02X} {:02X}", bytes[23], bytes[24]);
-        info!("{} KB of ROM, {} KB of RAM", rom_size / 1024, ram_size / 1024);
+        info!("{} KB of ROM, {} KB of cartridge RAM", rom_size / 1024, ram_size / 1024);
 
         // bytes[25-26] is a vendor code (doesn't matter)
         debug!("vendor code: 0x{:02X}{:02X}", bytes[25], bytes[26]);

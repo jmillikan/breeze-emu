@@ -3,6 +3,7 @@ name = "sneeze"
 version = "0.1.0"
 dependencies = [
  "arrayvec 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 1.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "glium 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -90,6 +91,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "gleam 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "clap"
+version = "1.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bitflags 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

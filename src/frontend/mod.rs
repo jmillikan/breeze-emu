@@ -14,27 +14,27 @@ mod glium;
 pub mod sdl;    // FIXME Make private after input handling is better
 
 lazy_static! {
-    pub static ref RENDERER_MAP: HashMap<&'static str, fn() -> Option<Box<Renderer>>> = {
+    pub static ref RENDERER_MAP: HashMap<&'static str, Option<fn() -> Box<Renderer>>> = {
         macro_rules! make_fn {
             ( #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
                 #[cfg($m)]
-                fn $name() -> Option<Box<Renderer>> {
-                    Some(Box::new($name::$tyname::default()))
+                fn $name() -> Box<Renderer> {
+                    Box::new($name::$tyname::default())
                 }
 
                 #[cfg(not($m))]
-                fn $name() -> Option<Box<Renderer>> {
-                    None
+                fn $name() -> Box<Renderer> {
+                    unreachable!()
                 }
 
-                $name as fn() -> Option<Box<Renderer>>
+                if cfg!($m) { Some($name as fn() -> Box<Renderer>) } else { None }
             }};
             ( $name:ident :: $tyname:ident ) => {{
-                fn $name() -> Option<Box<Renderer>> {
-                    Some(Box::new($name::$tyname::default()))
+                fn $name() -> Box<Renderer> {
+                    Box::new($name::$tyname::default())
                 }
 
-                $name as fn() -> Option<Box<Renderer>>
+                Some($name as fn() -> Box<Renderer>)
             }};
         }
 

@@ -4,6 +4,7 @@
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate arrayvec;
+#[macro_use] extern crate clap;
 
 #[cfg(feature = "sdl2")]
 extern crate sdl2;
@@ -36,19 +37,39 @@ fn main() {
     }
     env_logger::init().unwrap();
 
-    let filename = std::env::args().skip(1).next().expect("no rom file specified");
+    let args = clap_app!(sneeze =>
+        (version: option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown version>"))
+        (about: "SNES emulator")
+        (@arg ROM_PATH: +required "The ROM file to execute")
+        (@arg renderer: -R --renderer +takes_value "The renderer to use")
+    ).get_matches();
+
+    let renderer_name = args.value_of("renderer").unwrap_or(&*frontend::DEFAULT_RENDERER);
+
+    let renderer = match frontend::RENDERER_MAP.get(renderer_name) {
+        None => {
+            println!("error: unknown renderer: {}", renderer_name);
+            return
+        }
+        Some(&None) => {
+            println!("error: renderer '{}' not compiled in", renderer_name);
+            println!("(compile with `cargo build --features {}` to enable)", renderer_name);
+            // NOTE: Make sure that renderer name always matches feature name!
+            return
+        }
+        Some(&Some(renderer_fn)) => {
+            renderer_fn()
+        }
+    };
+    info!("using {} renderer", renderer_name);
+
+    let filename = args.value_of("ROM_PATH").unwrap();
     let mut file = File::open(&filename).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
 
     let rom = Rom::from_bytes(&buf).unwrap();
 
-    let renderer_name = &*frontend::DEFAULT_RENDERER;
-    info!("using {} renderer", renderer_name);
-
-    let renderer = frontend::RENDERER_MAP.get(renderer_name)
-        .expect("default renderer has no entry in renderer map")()
-        .expect("default renderer not compiled in");
     let mut snes = Snes::new(rom, renderer);
     snes.run();
 }
