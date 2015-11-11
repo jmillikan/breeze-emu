@@ -508,7 +508,7 @@ impl Ppu {
             // which are used to store the data of other sprites.
 
             // Start address of the row of tiles on the scanline
-            let y_row_start_addr = tile_start_addr + 512 * y_tile;
+            let y_row_start_addr = tile_start_addr.wrapping_add(512 * y_tile);
 
             // FIXME "Only those tiles with -8 < X < 256 are counted."
             // Add all tiles in this row to our tile list (left to right)
