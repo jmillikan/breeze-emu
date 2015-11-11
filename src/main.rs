@@ -1,10 +1,11 @@
 #![deny(warnings)]
+#![deny(unused_import_braces, unused_qualifications)]
 
+#[macro_use] extern crate clap;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate arrayvec;
-#[macro_use] extern crate clap;
 
 #[cfg(feature = "sdl2")]
 extern crate sdl2;
@@ -22,6 +23,7 @@ use snes::Snes;
 
 #[macro_use] mod byte_array;
 #[macro_use] mod log_util;
+#[macro_use] mod savestate;
 mod apu;
 mod cpu;
 mod dma;

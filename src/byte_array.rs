@@ -12,6 +12,14 @@ macro_rules! impl_byte_array {
         impl ::std::ops::DerefMut for $name {
             fn deref_mut(&mut self) -> &mut [u8; $size] { &mut self.0 }
         }
+        /*impl ::savestate::SaveState for $name {
+            fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
+                w.write_all(&self.0)
+            }
+            fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
+                ::savestate::read_exact(r, &mut self.0)
+            }
+        }*/
     };
 }
 

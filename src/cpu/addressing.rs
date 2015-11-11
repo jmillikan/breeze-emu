@@ -204,7 +204,7 @@ impl AddressingMode {
             }
             DirectIndexedIndirect(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
-                let addr_ptr = cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x as u16);
+                let addr_ptr = cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
                 (cpu.dbr, (hi << 8) | lo)

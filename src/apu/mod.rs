@@ -56,6 +56,9 @@ pub struct Spc700 {
     pub trace: bool,
 }
 
+impl_save_state!(Spc700 { mem, reg_dsp_addr, io_vals, timers, dsp, a, x, y, sp, pc, psw, trace }
+    ignore { cy });
+
 impl Default for Spc700 {
     fn default() -> Self {
         const IPL_START: usize = RAM_SIZE - 64;
@@ -114,6 +117,8 @@ const DIRECT_PAGE_FLAG: u8 = 0x20;
 const HALF_CARRY_FLAG: u8  = 0x08;
 const ZERO_FLAG: u8        = 0x02;
 const CARRY_FLAG: u8       = 0x01;
+
+impl_save_state_for_newtype!(StatusReg);
 
 impl StatusReg {
     fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }

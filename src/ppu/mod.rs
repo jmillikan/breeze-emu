@@ -37,7 +37,7 @@ pub struct Ppu {
     /// FIXME How would this work in high resolution modes?
     pub framebuf: FrameBuf,
 
-    /// Opaque state object used by the render code
+    /// Opaque state object used by the render code. This value may change between frames.
     render_state: RenderState,
 
     /// Object Attribute Memory
@@ -361,6 +361,16 @@ pub struct Ppu {
     /// * `i`: Screen interlace. Doubles the effective screen height.
     setini: u8,
 }
+
+impl_save_state!(Ppu {
+    oam, cgram, vram, inidisp, obsel, oamaddl, oamaddh, oamaddr, oam_lsb, bgmode, mosaic, bg1sc,
+    bg2sc, bg3sc, bg4sc, bg12nba, bg34nba, bg1hofs, m7hofs, bg1vofs, m7vofs, bg2hofs, bg2vofs,
+    bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7c, m7d,
+    m7x, m7y, cgadd, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog, wobjlog, tm,
+    ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini
+} ignore {
+    framebuf, render_state, scanline, x, cg_low_buf /* FIXME: Option<u8> doesn't impl savestate */
+});
 
 #[derive(Debug)]
 struct Rgb {

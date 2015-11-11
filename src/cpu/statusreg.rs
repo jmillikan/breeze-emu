@@ -19,6 +19,8 @@ const CARRY_FLAG: u8 = 0x01;
 
 pub struct StatusReg(pub u8);
 
+impl_save_state_for_newtype!(StatusReg);
+
 impl StatusReg {
     pub fn new() -> StatusReg {
         // Acc and index regs start in 8-bit mode, IRQs disabled

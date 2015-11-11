@@ -15,6 +15,8 @@ pub struct Timer {
     stage2: u16,
 }
 
+impl_save_state!(Timer { div, val, enabled, stage1, stage2 } ignore {});
+
 impl Timer {
     pub fn new() -> Timer { Timer::default() }
 

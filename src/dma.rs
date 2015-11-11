@@ -49,6 +49,9 @@ pub struct DmaChannel {
     hdma_do_transfer: bool,
 }
 
+impl_save_state!(DmaChannel { params, a_addr, a_addr_bank, b_addr, dma_size, hdma_indirect_bank,
+    hdma_addr, hdma_flags, hdma_do_transfer } ignore {});
+
 impl Default for DmaChannel {
     fn default() -> Self {
         DmaChannel {

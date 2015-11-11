@@ -63,6 +63,12 @@ pub struct Peripherals {
     cy: u32,
 }
 
+impl_save_state!(Peripherals {
+    apu, ppu, rom, wram, dma, hdmaen, nmien, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi, irq, cy
+} ignore {
+    input
+});
+
 impl Peripherals {
     pub fn new(rom: Rom, input: Input) -> Peripherals {
         Peripherals {
@@ -212,6 +218,8 @@ pub struct Snes {
     cpu: Cpu,
     renderer: Box<Renderer>,
 }
+
+impl_save_state!(Snes { cpu } ignore { renderer });
 
 impl Snes {
     pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {

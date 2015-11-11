@@ -119,6 +119,8 @@ pub struct Rom {
     rom: Vec<u8>,
 }
 
+impl_save_state!(Rom { ram } ignore { header, rom });
+
 impl Rom {
     /// Loads a ROM from raw data.
     pub fn from_bytes(mut bytes: &[u8]) -> Result<Rom, ()> {

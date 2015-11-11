@@ -28,6 +28,8 @@ struct Voice {
     fir: u8,
 }
 
+impl_save_state!(Voice { lvol, rvol, pitch, source, adsr1, adsr2, gain, env, out, fir } ignore {});
+
 pub struct Dsp {
     voices: [Voice; 8],
     /// $0c - Left main volume
@@ -72,6 +74,9 @@ pub struct Dsp {
     /// $7d - EDL: Echo delay (ring buffer size) (4 bits only!)
     echo_delay: u8,
 }
+
+impl_save_state!(Dsp { voices, lmvol, rmvol, levol, revol, keyon, keyoff, flags, endx, efb, pmod,
+    noise, echo, srcdir, echo_buf, echo_delay } ignore {});
 
 impl Dsp {
     pub fn new() -> Dsp {

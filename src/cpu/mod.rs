@@ -62,6 +62,10 @@ pub struct Cpu {
     pub mem: Peripherals,
 }
 
+impl_save_state!(Cpu {
+    a, x, y, s, dbr, pbr, d, pc, p, emulation, trace, mem
+} ignore { cy });
+
 impl Cpu {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
     /// put the CPU in emulation mode.
