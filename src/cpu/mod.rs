@@ -847,13 +847,13 @@ impl Cpu {
             let a = self.a as u8;
             let v = am.loadb(self);
             let res = a as i16 - v as i16 - c;
-            self.p.set_carry(res < 0);
+            self.p.set_carry(res >= 0);
 
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
         } else {
             let v = am.loadw(self);
             let res = self.a as i32 - v as i32 - c as i32;
-            self.p.set_carry(res < 0);
+            self.p.set_carry(res >= 0);
 
             self.a = self.p.set_nz(res as u16);
             self.cy += CPU_CYCLE;

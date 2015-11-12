@@ -139,6 +139,9 @@ impl Spc700 {
     }
 
     fn store(&mut self, addr: u16, val: u8) {
+        // All writes are also passed to RAM
+        self.mem[addr] = val;
+
         match addr {
             0xf0 => {
                 if val != 0x0a {
@@ -172,7 +175,7 @@ impl Spc700 {
             0xfc => self.timers[2].div = val,
             0xfd ... 0xff => panic!("APU attempted to write to read-only register ${:04X}", addr),
             // NB: Stores to 0xf4 - 0xf9 are just sent to RAM
-            _ => self.mem[addr] = val,
+            _ => {}
         }
     }
 
@@ -519,7 +522,8 @@ impl Spc700 {
             0xbd => instr!("mov sp, x" mov_sp_x),
             0xaf => instr!("mov (x++), a" mov_xinc),
 
-            0x00 => instr!(_ nop),
+            // `nop` is usually not used and can be a sign of something going very wrong!
+            //0x00 => instr!(_ nop),
             _ => {
                 instr!(_ ill);
                 panic!("illegal APU opcode: ${:02X}", op);
@@ -603,12 +607,12 @@ impl Spc700 {
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
         // FIXME check if the order is correct
-        let b = b.loadb(self);
-        let a = a.loadb(self);
+        let b = b.loadb(self) as i16;
+        let a = a.loadb(self) as i16;
 
-        let diff = b.wrapping_sub(a);
-        self.psw.set_nz(diff);
-        self.psw.set_carry(diff & 0x80 != 0);
+        let diff = b - a;
+        self.psw.set_nz(diff as u8);
+        self.psw.set_carry(diff >= 0);  // FIXME Not <0 right?
     }
 
     fn tset1(&mut self, am: AddressingMode) {
@@ -767,7 +771,7 @@ impl Spc700 {
         let c = if self.psw.carry() { 1 } else { 0 };
         let a = dest.clone().loadb(self);
         let b = src.loadb(self);
-        let res = (a as u16).wrapping_add(b as u16).wrapping_add(c as u16);
+        let res = a as u16 + b as u16 + c as u16;
         self.psw.set_carry(res > 255);
         self.psw.set_half_carry(((a & 0x0f) + (b & 0x0f) + c) & 0xf0 != 0);
         let res = res as u8;
@@ -793,12 +797,11 @@ impl Spc700 {
     fn sbc(&mut self, src: AddressingMode, dest: AddressingMode) {
         // Sets N, V, H, Z and C
         // FIXME Set H and V
-        let c = if self.psw.carry() { 0 } else { 1 };
-        let a = dest.clone().loadb(self) as u16;
-        let b = src.loadb(self) as u16;
-        // a-b = a+!b+1
-        let res = a.wrapping_add(!b).wrapping_add(c);
-        self.psw.set_carry(res > 255);
+        let c = if self.psw.carry() { 0 } else { 1 };   // Borrow flag
+        let a = dest.clone().loadb(self) as i16;
+        let b = src.loadb(self) as i16;
+        let res = a - b - c;
+        self.psw.set_carry(res >= 0);   // `>= 0` because borrow
         self.psw.set_nz(res as u8);
         dest.storeb(self, res as u8);
     }
@@ -806,10 +809,10 @@ impl Spc700 {
     fn subw(&mut self, am: AddressingMode) {
         // Sets N, V, H (on high byte), Z, C
         // FIXME Set V and H
-        let ya = ((self.y as u32) << 8) | self.a as u32;
-        let sub = am.loadb(self) as u32;
-        let res = ya.wrapping_add(!sub);
-        self.psw.set_carry(res & 0xffff0000 != 0);
+        let ya = ((self.y as i32) << 8) | self.a as i32;
+        let sub = am.loadb(self) as i32;
+        let res = ya - sub;
+        self.psw.set_carry(res >= 0);
         self.psw.set_negative(res & 0x8000 != 0);
         self.psw.set_zero(res == 0);
         self.y = (ya >> 8) as u8;
@@ -858,7 +861,7 @@ impl Spc700 {
     fn rol(&mut self, op: AddressingMode) {
         let val = op.clone().loadb(self);
         let c = if self.psw.carry() { 1 } else { 0 };
-        self.psw.set_carry(val & 0x01 != 0);
+        self.psw.set_carry(val & 0x80 != 0);
         let res = self.psw.set_nz((val << 1) | c);
         op.storeb(self, res);
     }
@@ -927,6 +930,8 @@ impl Spc700 {
         // No flags modified
         self.sp = self.x;
     }
+
+    #[allow(dead_code)]
     fn nop(&mut self) {}
     fn ill(&mut self) {}
 }
