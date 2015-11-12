@@ -10,6 +10,7 @@ use std::fmt;
 /// to make multiple uses explicit.
 #[derive(Clone)]
 pub enum AddressingMode {
+    /// Immediate 8 bit value following the instruction byte. No address, cannot be written to.
     Immediate(u8),
     /// Direct Page, uses the Direct Page status bit to determine if page 0 or 1 should be accessed
     /// Address = `D + $ab`
@@ -37,6 +38,7 @@ pub enum AddressingMode {
     /// Address = `!abcd+Y`
     AbsIndexedY(u16),
     /// Used for branch instructions
+    /// Branch Target Address = `PC + $ab`
     Rel(i8),
     A,
     X,

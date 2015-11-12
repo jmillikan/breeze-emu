@@ -10,11 +10,13 @@
 mod addressing;
 mod dsp;
 mod ipl;
+mod statusreg;
 mod timer;
 
 use self::addressing::AddressingMode;
 use self::dsp::Dsp;
 use self::ipl::IPL_ROM;
+use self::statusreg::StatusReg;
 use self::timer::Timer;
 
 pub type Apu = Spc700;
@@ -107,47 +109,6 @@ impl Spc700 {
     }
 }
 
-struct StatusReg(u8);
-const NEG_FLAG: u8         = 0x80;
-const OVERFLOW_FLAG: u8    = 0x40;
-const DIRECT_PAGE_FLAG: u8 = 0x20;
-const HALF_CARRY_FLAG: u8  = 0x08;
-const ZERO_FLAG: u8        = 0x02;
-const CARRY_FLAG: u8       = 0x01;
-
-impl_save_state_for_newtype!(StatusReg);
-
-impl StatusReg {
-    fn negative(&self) -> bool    { self.0 & NEG_FLAG != 0 }
-    fn zero(&self) -> bool        { self.0 & ZERO_FLAG != 0 }
-    fn direct_page(&self) -> bool { self.0 & DIRECT_PAGE_FLAG != 0 }
-    fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
-    #[allow(dead_code)] // FIXME
-    fn half_carry(&self) -> bool  { self.0 & HALF_CARRY_FLAG != 0 }
-    #[allow(dead_code)] // FIXME Nothing uses this?
-    fn overflow(&self) -> bool    { self.0 & OVERFLOW_FLAG != 0 }
-
-    fn set(&mut self, flag: u8, v: bool) {
-        match v {
-            true => self.0 |= flag,
-            false => self.0 &= !flag,
-        }
-    }
-
-    fn set_negative(&mut self, v: bool)    { self.set(NEG_FLAG, v) }
-    fn set_zero(&mut self, v: bool)        { self.set(ZERO_FLAG, v) }
-    fn set_direct_page(&mut self, v: bool) { self.set(DIRECT_PAGE_FLAG, v) }
-    fn set_carry(&mut self, v: bool)       { self.set(CARRY_FLAG, v) }
-    fn set_half_carry(&mut self, v: bool)  { self.set(HALF_CARRY_FLAG, v) }
-    fn set_overflow(&mut self, v: bool)    { self.set(OVERFLOW_FLAG, v) }
-
-    fn set_nz(&mut self, val: u8) -> u8 {
-        self.set_negative(val & 0x80 != 0);
-        self.set_zero(val == 0);
-        val
-    }
-}
-
 impl Spc700 {
     fn load(&mut self, addr: u16) -> u8 {
         match addr {
@@ -197,7 +158,7 @@ impl Spc700 {
                     self.io_vals[2] = 0;
                     self.io_vals[3] = 0;
                 }
-                // FIXME bit 7 can toggle IPL ROM and RAM
+                self.ipl_rom_mapped = val & 0x80 != 0;
             },
             0xf2 => self.reg_dsp_addr = val,
             0xf3 => self.dsp.store(self.reg_dsp_addr, val),
@@ -230,7 +191,7 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, opstr: &str) {
-        trace!("${:04X}    {:02X}  {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{:08b}",
+        trace!("${:04X}    {:02X}  {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{}",
             pc,
             self.mem[pc],
             opstr,
@@ -238,7 +199,7 @@ impl Spc700 {
             self.x,
             self.y,
             self.sp,
-            self.psw.0,
+            self.psw,
         );
     }
 
