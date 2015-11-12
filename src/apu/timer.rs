@@ -1,6 +1,6 @@
 //! APU timer implementation.
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Timer {
     /// Divider of this timer
     pub div: u8,
@@ -16,6 +16,18 @@ pub struct Timer {
 }
 
 impl_save_state!(Timer { div, val, enabled, stage1, stage2 } ignore {});
+
+impl Default for Timer {
+    fn default() -> Self {
+        Timer {
+            div: 0,
+            val: 0x0f,
+            enabled: false,
+            stage1: 0,
+            stage2: 0,
+        }
+    }
+}
 
 impl Timer {
     pub fn new() -> Timer { Timer::default() }

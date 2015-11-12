@@ -141,9 +141,14 @@ impl Spc700 {
     fn store(&mut self, addr: u16, val: u8) {
         match addr {
             0xf0 => {
-                assert!(val == 0x0a,
-                    "SPC wrote ${:02X} to testing register (as a safety measure, \
-                     only $0a is allowed)", 0);
+                if val != 0x0a {
+                    once!({
+                        warn!("SPC700 wrote ${:02X} to testing register ($f0)", 0);
+                        warn!("As a safety measure, only $0a is allowed. This write will be \
+                            ignored! (This warning will only be printed for the first illegal \
+                            write)");
+                    });
+                 }
             }
             0xf1 => {
                 trace!("APU control write: ${:02X}", val);
@@ -262,7 +267,8 @@ impl Spc700 {
                 let am = self.$am();
                 let am2 = self.$am2();
                 if log_enabled!(Trace) && self.trace {
-                    self.trace_op(pc, &format!(concat!(stringify!($name), " {}.", $arg, ", {}"), am, am2));
+                    self.trace_op(pc,
+                        &format!(concat!(stringify!($name), " {}.", $arg, ", {}"), am, am2));
                 }
                 self.$name(e!($arg), am, am2)
             }};
@@ -742,10 +748,12 @@ impl Spc700 {
         let mut yva = ((self.y as u32) << 8) | self.a as u32;
         let x = (self.x as u32) << 9;
         for _ in 0..9 {
+            // 7-bit left rotation:
             yva <<= 1;
             if yva & 0x20000 != 0 {
                 yva = (yva & 0x1ffff) | 1;
             }
+
             if yva >= x { yva ^= 1; }
             if yva & 1 != 0 { yva = yva.wrapping_sub(x) & 0x1ffff; }
         }

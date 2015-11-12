@@ -115,8 +115,8 @@ impl AddressingMode {
     pub fn address(&self, spc: &mut Spc700) -> u16 {
         use self::AddressingMode::*;
 
-        fn direct(offset: u16, dp: bool) -> u16 {
-            offset + match dp {
+        fn direct(offset: u8, dp: bool) -> u16 {
+            offset as u16 + match dp {
                 true => 0x100,
                 false => 0,
             }
@@ -126,18 +126,18 @@ impl AddressingMode {
         match *self {
             Immediate(_) => panic!("attempted to get address of immediate"),
             A | X | Y => panic!("attempted to get address of register"),
-            Direct(offset) => direct(offset as u16, spc.psw.direct_page()),
-            DirectIndexedX(offset) => direct(offset as u16, spc.psw.direct_page()) + spc.x as u16,
+            Direct(offset) => direct(offset, spc.psw.direct_page()),
+            DirectIndexedX(offset) => direct(offset, spc.psw.direct_page()) + spc.x as u16,
             IndirectX => spc.x as u16,  // FIXME add direct page?
             IndirectIndexed(offset) => {
                 // [d]+Y
-                let addr_ptr = direct(offset as u16, spc.psw.direct_page());
+                let addr_ptr = direct(offset, spc.psw.direct_page());
                 let addr = spc.loadw(addr_ptr) + spc.y as u16;
                 addr
             }
             IndexedIndirect(offset) => {
                 // [d+Y]
-                let addr_ptr = direct(offset as u16, spc.psw.direct_page()) + spc.x as u16;
+                let addr_ptr = direct(offset, spc.psw.direct_page()) + spc.x as u16;
                 let addr = spc.loadw(addr_ptr);
                 addr
             }
