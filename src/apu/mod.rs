@@ -196,7 +196,7 @@ impl Spc700 {
     }
 
     fn trace_op(&self, pc: u16, opstr: &str) {
-        trace!("${:04X}    {:02X}  {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} psw:{}",
+        trace!("${:04X}    {:02X}  {:16} a:{:02X} x:{:02X} y:{:02X} sp:{:02X} {}",
             pc,
             self.mem[pc],
             opstr,
@@ -599,13 +599,14 @@ impl Spc700 {
         self.psw.set_carry(!c);
     }
 
+    /// `cmp b, a` - Set N, Z, C according to `b - a`
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
         // FIXME check if the order is correct
-        let a = a.loadb(self);
         let b = b.loadb(self);
+        let a = a.loadb(self);
 
-        let diff = a.wrapping_sub(b);
+        let diff = b.wrapping_sub(a);
         self.psw.set_nz(diff);
         self.psw.set_carry(diff & 0x80 != 0);
     }
@@ -856,7 +857,7 @@ impl Spc700 {
     /// Rotate left
     fn rol(&mut self, op: AddressingMode) {
         let val = op.clone().loadb(self);
-        let c = if self.psw.carry() { 0x80 } else { 0 };
+        let c = if self.psw.carry() { 1 } else { 0 };
         self.psw.set_carry(val & 0x01 != 0);
         let res = self.psw.set_nz((val << 1) | c);
         op.storeb(self, res);
@@ -866,7 +867,7 @@ impl Spc700 {
         let val = op.clone().loadb(self);
         let c = if self.psw.carry() { 0x80 } else { 0 };
         self.psw.set_carry(val & 0x01 != 0);
-        let res = self.psw.set_nz((val >> 1) | (c << 7));
+        let res = self.psw.set_nz((val >> 1) | c);
         op.storeb(self, res);
     }
     fn dec(&mut self, am: AddressingMode) {
@@ -906,7 +907,7 @@ impl Spc700 {
         self.y = self.psw.set_nz(hi);
         self.a = lo;
     }
-    /// movw-store. Stores Y (high) and A (low) at the given word address.
+    /// movw-store. Stores Y (high) and A (low) at the given address.
     /// (`movw {X}, ya`)
     fn movw_s(&mut self, am: AddressingMode) {
         // No flags modified, Reads the low byte first
