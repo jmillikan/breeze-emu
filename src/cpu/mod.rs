@@ -331,6 +331,7 @@ impl Cpu {
             0x06 => instr!(asl direct),
             0x16 => instr!(asl direct_indexed_x),
             0x0e => instr!(asl absolute),
+            0x1e => instr!(asl absolute_indexed_x),
             0x2a => instr!(rol_a),
             0x26 => instr!(rol direct),
             0x2e => instr!(rol absolute),
