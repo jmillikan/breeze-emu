@@ -68,7 +68,7 @@ impl StatusReg {
 impl fmt::Display for StatusReg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(f.write_str(if self.negative() { "N" } else { "-" }));
-        try!(f.write_str(if self.overflow() { "O" } else { "-" }));
+        try!(f.write_str(if self.overflow() { "V" } else { "-" }));
         try!(f.write_str(if self.small_acc() { "M" } else { "-" }));
         try!(f.write_str(if self.small_index() { "X" } else { "-" }));
         try!(f.write_str(if self.decimal() { "D" } else { "-" }));

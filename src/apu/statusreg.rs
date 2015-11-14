@@ -42,7 +42,7 @@ impl StatusReg {
 impl fmt::Display for StatusReg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(f.write_str(if self.negative() { "N" } else { "-" }));
-        try!(f.write_str(if self.overflow() { "O" } else { "-" }));
+        try!(f.write_str(if self.overflow() { "V" } else { "-" }));
         try!(f.write_str(if self.direct_page() { "D" } else { "-" }));
         try!(f.write_str("x"));
         try!(f.write_str(if self.half_carry() { "H" } else { "-" }));
