@@ -1,6 +1,6 @@
-sneeze.sav
 target
 trace.txt
+*.sav
 *.sfc
 *.smc
 *.dll
