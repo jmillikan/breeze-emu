@@ -525,7 +525,7 @@ impl Cpu {
         self.cy
     }
 
-    /// Immediately executes an IRQ sequence and jumps to the NMI handler.
+    /// Invokes the NMI handler.
     pub fn trigger_nmi(&mut self) {
         if self.emulation {
             self.interrupt(NMI_VEC8);
@@ -534,11 +534,18 @@ impl Cpu {
         }
     }
 
-    pub fn trigger_irq(&mut self) {
-        if self.emulation {
-            self.interrupt(IRQ_VEC8);
+    /// Invokes the IRQ handler if interrupts are enabled. Returns whether the interrupt was
+    /// generated.
+    pub fn trigger_irq(&mut self) -> bool {
+        if !self.p.irq_disable() {
+            false
         } else {
-            self.interrupt(IRQ_VEC16);
+            if self.emulation {
+                self.interrupt(IRQ_VEC8);
+            } else {
+                self.interrupt(IRQ_VEC16);
+            }
+            true
         }
     }
 
