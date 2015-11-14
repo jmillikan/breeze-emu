@@ -90,6 +90,35 @@ impl SaveState for bool {
     }
 }
 
+impl<T: SaveState + Default> SaveState for Option<T> {
+    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+        match *self {
+            None => try!(false.save_state(w)),
+            Some(ref t) => {
+                try!(true.save_state(w));
+                try!(t.save_state(w));
+            }
+        }
+        Ok(())
+    }
+
+    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+        let mut val = [0xff];
+        try!(read_exact(r, &mut val));
+
+        match val[0] {
+            0 => *self = None,
+            1 => {
+                let mut t = T::default();
+                try!(t.restore_state(r));
+                *self = Some(t);
+            }
+            _ => return Err(io::Error::new(io::ErrorKind::Other, "invalid byte value for option")),
+        }
+        Ok(())
+    }
+}
+
 impl<T: SaveState> SaveState for [T] {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         for t in self {

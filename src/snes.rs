@@ -282,6 +282,10 @@ impl Snes {
         let working_cy = LogOnPanic::new("cycle count", 0);
 
         loop {
+            // Store an action we should perform. We might need to load a save state, so we have to
+            // make sure no important local variable is left in its old state.
+            let mut action = None;
+
             if self.master_cy >= trace_start {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
@@ -319,8 +323,8 @@ impl Snes {
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
-                        if let Some(action) = self.renderer.render(&*self.cpu.mem.ppu.framebuf) {
-                            if self.handle_action(action) { return }
+                        if let Some(a) = self.renderer.render(&*self.cpu.mem.ppu.framebuf) {
+                            if action.is_none() { action = Some(a); }
                         }
                     }
                     (225, 0) => {
@@ -337,17 +341,25 @@ impl Snes {
                     _ => {}
                 }
 
-                let cpu = &mut self.cpu;
-                if cpu.mem.ppu.v_counter() == cpu.mem.vtime && cpu.mem.v_irq_enabled() {
-                    cpu.mem.irq = true;
-                    cpu.trigger_irq();
-                    break;
+                {
+                    let cpu = &mut self.cpu;
+                    if cpu.mem.ppu.v_counter() == cpu.mem.vtime && cpu.mem.v_irq_enabled() {
+                        //trace!("V-IRQ at V={}", cpu.mem.ppu.v_counter());
+                        cpu.mem.irq = true;
+                        cpu.trigger_irq();
+                        break;
+                    }
+                    if cpu.mem.ppu.h_counter() == cpu.mem.htime && cpu.mem.h_irq_enabled() {
+                        //trace!("H-IRQ at H={}", cpu.mem.ppu.h_counter());
+                        cpu.mem.irq = true;
+                        cpu.trigger_irq();
+                        break;
+                    }
                 }
-                if cpu.mem.ppu.h_counter() == cpu.mem.htime && cpu.mem.h_irq_enabled() {
-                    cpu.mem.irq = true;
-                    cpu.trigger_irq();
-                    break;
-                }
+            }
+
+            if let Some(a) = action {
+                if self.handle_action(a) { return }
             }
 
             working_cy.set(self.master_cy);

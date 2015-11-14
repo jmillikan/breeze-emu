@@ -62,7 +62,7 @@ pub struct Spc700 {
 }
 
 impl_save_state!(Spc700 { mem, ipl_rom_mapped, reg_dsp_addr, io_vals, timers, dsp, a, x, y, sp, pc,
-    psw, trace } ignore { cy });
+    psw } ignore { cy, trace });
 
 impl Default for Spc700 {
     fn default() -> Self {
