@@ -49,8 +49,8 @@ pub struct Cpu {
     pbr: u8,
     /// Direct (page) register. Address offset for all instruction using "direct addressing" mode.
     d: u16,
-    /// Program counter. Note that PBR is not changed by the CPU, so code can not span multiple
-    /// banks (without manual bank switching).
+    /// Program counter. Note that PBR is not changed on pc overflow, so code can not span multiple
+    /// banks (without `jml` or `jsr`).
     pc: u16,
     p: StatusReg,
     emulation: bool,
@@ -63,8 +63,8 @@ pub struct Cpu {
 }
 
 impl_save_state!(Cpu {
-    a, x, y, s, dbr, pbr, d, pc, p, emulation, trace, mem
-} ignore { cy });
+    a, x, y, s, dbr, pbr, d, pc, p, emulation, mem
+} ignore { cy, trace });
 
 impl Cpu {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
