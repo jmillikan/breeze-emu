@@ -16,7 +16,7 @@ extern crate glium;
 
 use std::env;
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufReader, Read};
 
 use rom::Rom;
 use savestate::SaveState;
@@ -46,7 +46,14 @@ fn main() {
         (@arg ROM_PATH: +required "The ROM file to execute")
         (@arg renderer: -R --renderer +takes_value "The renderer to use")
         (@arg savestate: --savestate +takes_value "The save state file to load")
+        (@arg record: --record +takes_value "Record input to a text file")
+        (@arg replay: --replay +takes_value "Replay a recording from a text file")
     ).get_matches();
+
+    if args.value_of("record").is_some() && args.value_of("replay").is_some() {
+        println!("`record` and `replay` may not be specified together!");
+        return;
+    }
 
     let renderer_name = args.value_of("renderer").unwrap_or(&*frontend::DEFAULT_RENDERER);
 
@@ -75,6 +82,12 @@ fn main() {
     let rom = Rom::from_bytes(&buf).unwrap();
 
     let mut snes = Snes::new(rom, renderer);
+    if let Some(record_file) = args.value_of("record") {
+        snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));
+    }
+    if let Some(replay_file) = args.value_of("replay") {
+        snes.input_mut().start_replay(Box::new(BufReader::new(File::open(replay_file).unwrap())));
+    }
     if let Some(filename) = args.value_of("savestate") {
         snes.restore_state(&mut File::open(filename).unwrap()).unwrap()
     }

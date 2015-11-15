@@ -250,6 +250,8 @@ impl Snes {
         }
     }
 
+    pub fn input_mut(&mut self) -> &mut Input { &mut self.cpu.mem.input }
+
     /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
     fn handle_action(&mut self, action: FrontendAction) -> bool {
         match action {
