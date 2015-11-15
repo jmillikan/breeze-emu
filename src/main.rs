@@ -62,10 +62,10 @@ fn main() {
             return
         }
         Some(&Some(renderer_fn)) => {
+            info!("using {} renderer", renderer_name);
             renderer_fn()
         }
     };
-    info!("using {} renderer", renderer_name);
 
     let filename = args.value_of("ROM_PATH").unwrap();
     let mut file = File::open(&filename).unwrap();

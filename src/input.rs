@@ -19,6 +19,8 @@ pub struct Input {
     bitpos4017: u8,
 }
 
+impl_save_state!(Input { states, updated_this_frame, bitpos4016, bitpos4017 } ignore { sources });
+
 impl Input {
     /// Called on V-Blank. Ensures that `update` was called this frame, and enables lazy input
     /// update for the following frame.
@@ -105,10 +107,12 @@ impl Input {
 /// State of a SNES joypad. The low byte can be read from `$4218`, the high byte from `$4219` (for
 /// controller 1).
 ///
-/// Bits:
+/// Bits (`HIGH | LOW`):
 /// `B Y Select Start Up Down Left Right | A X L R 0 0 0 0`
 #[derive(Clone, Copy, Default)]
 pub struct InputState(u16);
+
+impl_save_state_for_newtype!(InputState);
 
 impl InputState {
     pub fn new() -> Self { Self::default() }

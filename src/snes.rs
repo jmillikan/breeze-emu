@@ -66,10 +66,9 @@ pub struct Peripherals {
 }
 
 impl_save_state!(Peripherals {
-    apu, ppu, rom, wram, dma, hdmaen, nmien, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi, irq, cy
-} ignore {
-    input
-});
+    apu, ppu, rom, wram, dma, hdmaen, nmien, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi, irq,
+    cy, input
+} ignore {});
 
 impl Peripherals {
     pub fn new(rom: Rom, input: Input) -> Peripherals {
