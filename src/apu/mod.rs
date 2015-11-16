@@ -320,6 +320,7 @@ impl Spc700 {
         match op {
             // Processor status
             0x20 => instr!(_ clrp),
+            0x40 => instr!(_ setp),
             0x60 => instr!(_ clrc),
             0x80 => instr!(_ setc),
             0xed => instr!(_ notc),
@@ -410,6 +411,7 @@ impl Spc700 {
             0x64 => instr!(_ cmp direct a),
             0x3e => instr!(_ cmp direct x),
             0x7e => instr!(_ cmp direct y),
+            0x74 => instr!(_ cmp direct_indexed_x a),
             0x69 => instr!(_ cmp direct direct),
             0x68 => instr!(_ cmp immediate a),
             0xc8 => instr!(_ cmp immediate x),
@@ -523,7 +525,7 @@ impl Spc700 {
             0xaf => instr!("mov (x++), a" mov_xinc),
 
             // `nop` is usually not used and can be a sign of something going very wrong!
-            //0x00 => instr!(_ nop),
+            0x00 => instr!(_ nop),
             _ => {
                 instr!(_ ill);
                 panic!("illegal APU opcode: ${:02X}", op);
@@ -594,6 +596,8 @@ impl Spc700 {
 
     /// Clear direct page bit
     fn clrp(&mut self) { self.psw.set_direct_page(false) }
+    /// Set direct page bit
+    fn setp(&mut self) { self.psw.set_direct_page(true) }
     /// Clear carry
     fn clrc(&mut self) { self.psw.set_carry(false) }
     /// Set carry

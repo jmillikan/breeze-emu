@@ -209,6 +209,8 @@ impl Ppu {
     /// Returns the OAM entry of the given sprite. Always returns a valid entry if `index` is valid
     /// (0...127), panics otherwise.
     fn get_oam_entry(&self, index: u8) -> OamEntry {
+        debug_assert!(index <= 127, "attempted to access sprite #{}", index);
+
         // FIXME Is this correct?
         let start = index as u16 * 4;
         let mut x = self.oam[start] as u16;
@@ -437,19 +439,19 @@ impl Ppu {
             0
         } else {
             // Priority rotation enabled
-            ((self.oamaddr & 0xfe) >> 1) as u8
+            (self.oamaddl as u16 & 0xfe) >> 1
         };
 
         // Find the first 32 sprites on the current scanline
         // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
         let mut visible_sprites = ArrayVec::<[_; 32]>::new();
         for i in first_sprite..first_sprite+128 {
-            let entry = self.get_oam_entry(i);
+            let entry = self.get_oam_entry((i & 0x7f) as u8);   // limit to 127
             if self.sprite_on_scanline(&entry) {
                 trace_unique!(
-                    "sprite {} on scanline {}: pos = ({}, {}), size = {:?} palette = {}, \
+                    "sprite {} ({}) on scanline {}: pos = ({}, {}), size = {:?} palette = {}, \
                     prio = {}, tile0 = {}, nametable = {}",
-                    i, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
+                    i, i & 0x3f, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
                     entry.palette, entry.priority, entry.tile, entry.name_table);
 
                 if let Some(_) = visible_sprites.push(entry) {
@@ -610,10 +612,10 @@ impl Ppu {
         let bg = self.bg_settings(bg_num);
         let tile_size = bg.tile_size;
         let (xscroll, yscroll) = (bg.hscroll, bg.vscroll);
-        let tile_x = (x + xscroll) / tile_size as u16;
-        let tile_y = (y + yscroll) / tile_size as u16;
-        let off_x = ((x + xscroll) % tile_size as u16) as u8;
-        let off_y = ((y + yscroll) % tile_size as u16) as u8;
+        let tile_x = x.wrapping_add(xscroll) / tile_size as u16;
+        let tile_y = y.wrapping_add(yscroll) / tile_size as u16;
+        let off_x = (x.wrapping_add(xscroll) % tile_size as u16) as u8;
+        let off_y = (y.wrapping_add(yscroll) % tile_size as u16) as u8;
         let (sx, sy) = (!bg.tilemap_mirror_h, !bg.tilemap_mirror_v);
 
         // Calculate the VRAM word address, where the tilemap entry for our tile is stored
