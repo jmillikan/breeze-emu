@@ -37,13 +37,18 @@ impl Input {
     /// `Box<Write>`.
     pub fn start_recording(&mut self, w: Box<Write>) {
         assert!(self.recorder.is_none(), "already recording input");
+        assert!(self.replayer.is_none(), "cannot record input while already replaying");
         self.recorder = Some(Recorder::new(w));
     }
 
     pub fn start_replay(&mut self, r: Box<BufRead>) {
         assert!(self.replayer.is_none(), "already replaying input");
+        assert!(self.recorder.is_none(), "cannot start a replay while recording input");
         self.replayer = Some(Replayer::new(r));
     }
+
+    pub fn is_recording(&self) -> bool { self.recorder.is_some() }
+    pub fn is_replaying(&self) -> bool { self.replayer.is_some() }
 
     /// Called on V-Blank. Ensures that `update` was called this frame, and enables lazy input
     /// update for the following frame.
@@ -296,13 +301,6 @@ impl Replayer {
             if entry == "\n" { break }    // last one is empty
             let polarity = entry.chars().next().unwrap();
 
-            let polarity = match polarity {
-                '+' => true,
-                '-' => false,
-                _ => return Err(Box::new(io::Error::new(io::ErrorKind::Other,
-                    "invalid button polarity"))),
-            };
-
             let mut split = entry[1..].split('/');
 
             let controller: u8 = split.next().unwrap().parse().unwrap();
@@ -327,8 +325,10 @@ impl Replayer {
             // Build `next_state`
             let state = &mut self.next_state[controller as usize];
             match polarity {
-                true => *state &= !(1 << bit),
-                false => *state |= 1 << bit,
+                '+' => *state |= 1 << bit,
+                '-' => *state &= !(1 << bit),
+                _ => return Err(Box::new(io::Error::new(io::ErrorKind::Other,
+                    "invalid button polarity"))),
             }
         }
 

@@ -261,8 +261,12 @@ impl Snes {
                 self.save_state(&mut file).unwrap();
             }
             FrontendAction::LoadState => {
-                let mut file = File::open("sneeze.sav").unwrap();
-                self.restore_state(&mut file).unwrap();
+                if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {
+                    error!("cannot load a save state while recording or replaying input!");
+                } else {
+                    let mut file = File::open("sneeze.sav").unwrap();
+                    self.restore_state(&mut file).unwrap();
+                }
             }
         }
 
