@@ -494,6 +494,7 @@ impl Cpu {
 
             // Branches
             0x80 => instr!(bra rel),
+            0x82 => instr!(bra relative_long),  // BRL
             0xf0 => instr!(beq rel),
             0xd0 => instr!(bne rel),
             0x10 => instr!(bpl rel),

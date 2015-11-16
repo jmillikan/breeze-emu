@@ -186,7 +186,7 @@ impl AddressingMode {
                 (cpu.pbr, (cpu.pc as i16).wrapping_add(rel as i16) as u16)
             }
             RelLong(rel_long) => {
-                (0xff, (cpu.pc as i16).wrapping_add(rel_long) as u16)
+                (cpu.pbr, (cpu.pc as i16).wrapping_add(rel_long) as u16)
             }
             Direct(offset) => {
                 if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
