@@ -550,6 +550,9 @@ impl Ppu {
                                                         (x_offset as u8, tile.y_off));
                     debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
 
+                    // color index 0 is always transparent
+                    if rel_color == 0 { return None }
+
                     let abs_color = 128 + tile.palette * 16 + rel_color;
                     // FIXME Color math
                     let rgb = self.lookup_color(abs_color);
@@ -632,7 +635,7 @@ impl Ppu {
         // Calculate the number of bitplanes needed to store a color in this BG
         let color_count = self.color_count_for_bg(bg_num);
         let bitplane_count = (color_count - 1).count_ones() as u16;
-        debug_assert_eq!(color_count.count_ones(), 1);  // should be power of two
+        debug_assert!(color_count.is_power_of_two());  // should be power of two
 
         // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
         let bitplane_start_addr =
