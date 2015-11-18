@@ -352,8 +352,8 @@ impl Spc700 {
             //0x19 => instr!(_ or indirect_y indirect_x),   TODO
             0x08 => instr!(_ or immediate a),
             0x06 => instr!(_ or indirect_x a),
-            //0x17 => instr!(_ or direct_indexed_y a),  TODO
-            0x07 => instr!(_ or direct_indexed_x a),
+            0x17 => instr!(_ or indirect_indexed_y a),
+            0x07 => instr!(_ or indexed_x_indirect a),
             0x04 => instr!(_ or direct a),
             0x14 => instr!(_ or direct_indexed_x a),
             0x05 => instr!(_ or abs a),
@@ -609,7 +609,6 @@ impl Spc700 {
     /// `cmp b, a` - Set N, Z, C according to `b - a`
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
-        // FIXME check if the order is correct
         let b = b.loadb(self) as i16;
         let a = a.loadb(self) as i16;
 
