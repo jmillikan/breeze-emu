@@ -340,8 +340,8 @@ impl Spc700 {
             0x3a => instr!(_ incw direct),
             0x28 => instr!(_ and immediate a),
             0x26 => instr!(_ and indirect_x a),
-            0x37 => instr!(_ and indirect_indexed a),
-            0x27 => instr!(_ and indexed_indirect a),
+            0x37 => instr!(_ and indirect_indexed_y a),
+            0x27 => instr!(_ and indexed_x_indirect a),
             0x24 => instr!(_ and direct a),
             0x34 => instr!(_ and direct_indexed_x a),
             0x25 => instr!(_ and abs a),
@@ -382,8 +382,8 @@ impl Spc700 {
             //0x99 => instr!(_ adc indirect_y indirect_x),  TODO
             0x88 => instr!(_ adc immediate a),
             0x86 => instr!(_ adc indirect_x a),
-            0x97 => instr!(_ adc indirect_indexed a),
-            0x87 => instr!(_ adc indexed_indirect a),
+            0x97 => instr!(_ adc indirect_indexed_y a),
+            0x87 => instr!(_ adc indexed_x_indirect a),
             0x84 => instr!(_ adc direct a),
             0x94 => instr!(_ adc direct_indexed_x a),
             0x85 => instr!(_ adc abs a),
@@ -462,7 +462,7 @@ impl Spc700 {
             0xe3 => instr!(_ bbs(7) direct rel),
 
             0x5f => instr!("jmp {}" bra abs),                       // reuse `bra` fn
-            0x1f => instr!("jmp {}" bra abs_indexed_indirect),      // reuse `bra` fn
+            0x1f => instr!("jmp {}" bra abs_indexed_x_indirect),      // reuse `bra` fn
             0x2f => instr!(_ bra rel),
             0xf0 => instr!(_ beq rel),
             0xd0 => instr!(_ bne rel),
@@ -496,7 +496,7 @@ impl Spc700 {
             0xd5 => instr!(_ mov a abs_indexed_x),
             0xd6 => instr!(_ mov a abs_indexed_y),
             0xc6 => instr!(_ mov a indirect_x),
-            0xd7 => instr!(_ mov a indirect_indexed),
+            0xd7 => instr!(_ mov a indirect_indexed_y),
             0x7d => instr!(_ mov x a),
             0xd8 => instr!(_ mov x direct),
             0xd9 => instr!(_ mov x direct_indexed_x),
@@ -511,8 +511,8 @@ impl Spc700 {
             0xf4 => instr!(_ mov direct_indexed_x a),
             0xfb => instr!(_ mov direct_indexed_x y),
             0xe6 => instr!(_ mov indirect_x a),
-            0xe7 => instr!(_ mov indexed_indirect a),
-            0xf7 => instr!(_ mov indirect_indexed a),
+            0xe7 => instr!(_ mov indexed_x_indirect a),
+            0xf7 => instr!(_ mov indirect_indexed_y a),
             0xe5 => instr!(_ mov abs a),
             0xe9 => instr!(_ mov abs x),
             0xec => instr!(_ mov abs y),
@@ -664,13 +664,13 @@ impl Spc700 {
             self.cy += 2;
         }
     }
-    /// Decrement and branch if zero
+    /// Decrement and branch if not zero
     fn dbnz(&mut self, val: AddressingMode, addr: AddressingMode) {
         let v = val.clone().loadb(self);
         let a = addr.address(self);
         let res = v.wrapping_sub(1);
         val.storeb(self, res);
-        if res == 0 {
+        if res != 0 {
             self.pc = a;
             self.cy += 2;
         }
@@ -744,7 +744,7 @@ impl Spc700 {
     }
     /// `mul ya`: ya = y * a
     fn mul(&mut self) {
-        // Sets N and Z. Y = High, A = Low.
+        // Sets N and Z (on Y only). Y = High, A = Low.
         let res = (self.y as u16).wrapping_mul(self.a as u16);
         self.y = self.psw.set_nz((res >> 8) as u8);
         self.a = res as u8;
@@ -787,8 +787,8 @@ impl Spc700 {
         // FIXME: Set H and check if this is correct
         // YA := YA + <byte> (Y = High, A = Low)
         let ya = ((self.y as u16) << 8) | self.a as u16;
-        let val = am.loadb(self) as u16;
-        let res = (ya as u32).wrapping_add(val as u32);
+        let val = am.loadw(self);
+        let res = ya as u32 + val as u32;
         self.psw.set_carry(res & 0xffff0000 != 0);
         let res = res as u16;
         self.psw.set_overflow((ya ^ val) & 0x8000 == 0 && (ya ^ res) & 0x8000 == 0x8000);
@@ -813,7 +813,7 @@ impl Spc700 {
         // Sets N, V, H (on high byte), Z, C
         // FIXME Set V and H
         let ya = ((self.y as i32) << 8) | self.a as i32;
-        let sub = am.loadb(self) as i32;
+        let sub = am.loadw(self) as i32;
         let res = ya - sub;
         self.psw.set_carry(res >= 0);
         self.psw.set_negative(res & 0x8000 != 0);
@@ -890,9 +890,11 @@ impl Spc700 {
     }
     fn incw(&mut self, am: AddressingMode) {
         // Sets N and Z
-        let (lo, hi) = am.clone().loadw(self);
-        let val = ((hi as u16) << 8) | lo as u16;
+        let val = am.clone().loadw(self);
         let res = val.wrapping_add(1);
+        // FIXME Are the flags set right?
+        self.psw.set_negative(res & 0x8000 != 0);
+        self.psw.set_zero(res == 0);
         am.storew(self, ((res >> 8) as u8, res as u8));
     }
 
@@ -911,9 +913,9 @@ impl Spc700 {
     /// (`movw ya, {X}`)
     fn movw_l(&mut self, am: AddressingMode) {
         // FIXME Are the flags set right?
-        let (lo, hi) = am.loadw(self);
-        self.y = self.psw.set_nz(hi);
-        self.a = lo;
+        let val = am.loadw(self);
+        self.y = self.psw.set_nz((val >> 8) as u8);
+        self.a = val as u8;
     }
     /// movw-store. Stores Y (high) and A (low) at the given address.
     /// (`movw {X}, ya`)
@@ -952,14 +954,14 @@ impl Spc700 {
     fn indirect_x(&mut self) -> AddressingMode {
         AddressingMode::IndirectX
     }
-    fn indirect_indexed(&mut self) -> AddressingMode {
-        AddressingMode::IndirectIndexed(self.fetchb())
+    fn indirect_indexed_y(&mut self) -> AddressingMode {
+        AddressingMode::IndirectIndexedY(self.fetchb())
     }
-    fn indexed_indirect(&mut self) -> AddressingMode {
-        AddressingMode::IndexedIndirect(self.fetchb())
+    fn indexed_x_indirect(&mut self) -> AddressingMode {
+        AddressingMode::IndexedXIndirect(self.fetchb())
     }
-    fn abs_indexed_indirect(&mut self) -> AddressingMode {
-        AddressingMode::AbsIndexedIndirect(self.fetchw())
+    fn abs_indexed_x_indirect(&mut self) -> AddressingMode {
+        AddressingMode::AbsIndexedXIndirect(self.fetchw())
     }
     fn abs(&mut self) -> AddressingMode {
         AddressingMode::Abs(self.fetchw())

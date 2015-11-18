@@ -23,13 +23,13 @@ pub enum AddressingMode {
     /// Fetch the word address at a direct address (this is the "indirect" part), then index the
     /// fetched address with Y.
     /// Address = `[D + $ab] + Y`
-    IndirectIndexed(u8),
+    IndirectIndexedY(u8),
     /// Index direct address with X, then "indirect" by fetching the word address stored there.
     /// Address = `[D + $ab + X]`
-    IndexedIndirect(u8),
+    IndexedXIndirect(u8),
     /// Fetch the target word address from an absolute address + X (`[$abcd+X]`)
     /// (only used for `JMP`)
-    AbsIndexedIndirect(u16),
+    AbsIndexedXIndirect(u16),
     /// Absolute address
     /// Address = `!abcd`
     Abs(u16),
@@ -61,8 +61,8 @@ impl AddressingMode {
         }
     }
 
-    /// Loads a word. Returns low and high byte.
-    pub fn loadw(self, spc: &mut Spc700) -> (u8, u8) {
+    /// Loads a word
+    pub fn loadw(self, spc: &mut Spc700) -> u16 {
         use self::AddressingMode::*;
 
         let addr = self.address(spc);
@@ -75,9 +75,9 @@ impl AddressingMode {
             addr2 = addr + 1;
         }
 
-        let lo = spc.load(addr);
-        let hi = spc.load(addr2);
-        (lo, hi)
+        let lo = spc.load(addr) as u16;
+        let hi = spc.load(addr2) as u16;
+        (hi << 8 | lo)
     }
 
     pub fn storeb(self, spc: &mut Spc700, value: u8) {
@@ -127,19 +127,19 @@ impl AddressingMode {
             Direct(offset) => direct_page + offset as u16,
             DirectIndexedX(offset) => direct_page + offset as u16 + spc.x as u16,
             IndirectX => direct_page + spc.x as u16,
-            IndirectIndexed(offset) => {
+            IndirectIndexedY(offset) => {
                 // [d]+Y
                 let addr_ptr = direct_page + offset as u16;
                 let addr = spc.loadw(addr_ptr) + spc.y as u16;
                 addr
             }
-            IndexedIndirect(offset) => {
+            IndexedXIndirect(offset) => {
                 // [d+X]
                 let addr_ptr = direct_page + offset as u16 + spc.x as u16;
                 let addr = spc.loadw(addr_ptr);
                 addr
             }
-            AbsIndexedIndirect(abs) => {
+            AbsIndexedXIndirect(abs) => {
                 let addr_ptr = abs + spc.x as u16;
                 let addr = spc.loadw(addr_ptr);
                 addr
@@ -164,9 +164,9 @@ impl fmt::Display for AddressingMode {
             Direct(offset) =>          write!(f, "${:02X}", offset),
             DirectIndexedX(offset) =>  write!(f, "${:02X}+X", offset),
             IndirectX =>               write!(f, "(X)"),
-            IndirectIndexed(offset) => write!(f, "[${:02X}]+Y", offset),
-            IndexedIndirect(offset) => write!(f, "[${:02X}+X]", offset),
-            AbsIndexedIndirect(abs) => write!(f, "[!{:04X}+X]", abs),
+            IndirectIndexedY(offset) => write!(f, "[${:02X}]+Y", offset),
+            IndexedXIndirect(offset) => write!(f, "[${:02X}+X]", offset),
+            AbsIndexedXIndirect(abs) => write!(f, "[!{:04X}+X]", abs),
             Abs(addr) =>               write!(f, "!{:04X}", addr),
             AbsIndexedX(addr) =>       write!(f, "!{:04X}+X", addr),
             AbsIndexedY(addr) =>       write!(f, "!{:04X}+Y", addr),
