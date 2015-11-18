@@ -17,8 +17,8 @@ pub enum AddressingMode {
     Direct(u8),
     /// Address = `D + $ab + X`
     DirectIndexedX(u8),
-    /// Where X points to (in page 0, $00 - $ff)
-    /// Address = `X`
+    /// Where X points to (in direct page)
+    /// Address = `D + X`
     IndirectX,
     /// Fetch the word address at a direct address (this is the "indirect" part), then index the
     /// fetched address with Y.
@@ -102,7 +102,7 @@ impl AddressingMode {
         let addr2;  // address of second (high) byte
         if let Direct(_) = self {
             // Direct Page access will wrap in the page
-            addr2 = (addr & 0xff00) | (addr as u8).wrapping_add(1) as u16;   // low byte wraps
+            addr2 = (addr & 0xff00) | (addr + 1);
         } else {
             // FIXME wrapping
             addr2 = addr + 1;
@@ -115,29 +115,27 @@ impl AddressingMode {
     pub fn address(&self, spc: &mut Spc700) -> u16 {
         use self::AddressingMode::*;
 
-        fn direct(offset: u8, dp: bool) -> u16 {
-            offset as u16 + match dp {
-                true => 0x100,
-                false => 0,
-            }
-        }
+        let direct_page = match spc.psw.direct_page() {
+            true => 0x0100,
+            false => 0x0000,
+        };
 
         // FIXME wrapping is (intentionally) wrong here!
         match *self {
             Immediate(_) => panic!("attempted to get address of immediate"),
             A | X | Y => panic!("attempted to get address of register"),
-            Direct(offset) => direct(offset, spc.psw.direct_page()),
-            DirectIndexedX(offset) => direct(offset, spc.psw.direct_page()) + spc.x as u16,
-            IndirectX => spc.x as u16,  // FIXME add direct page?
+            Direct(offset) => direct_page + offset as u16,
+            DirectIndexedX(offset) => direct_page + offset as u16 + spc.x as u16,
+            IndirectX => direct_page + spc.x as u16,
             IndirectIndexed(offset) => {
                 // [d]+Y
-                let addr_ptr = direct(offset, spc.psw.direct_page());
+                let addr_ptr = direct_page + offset as u16;
                 let addr = spc.loadw(addr_ptr) + spc.y as u16;
                 addr
             }
             IndexedIndirect(offset) => {
-                // [d+Y]
-                let addr_ptr = direct(offset, spc.psw.direct_page()) + spc.x as u16;
+                // [d+X]
+                let addr_ptr = direct_page + offset as u16 + spc.x as u16;
                 let addr = spc.loadw(addr_ptr);
                 addr
             }

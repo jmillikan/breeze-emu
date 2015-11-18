@@ -154,7 +154,6 @@ impl Spc700 {
                  }
             }
             0xf1 => {
-                trace!("APU control write: ${:02X}", val);
                 self.timers[0].set_enable(val & 0x01 != 0);
                 self.timers[1].set_enable(val & 0x02 != 0);
                 self.timers[2].set_enable(val & 0x04 != 0);
@@ -900,8 +899,10 @@ impl Spc700 {
     /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
     fn mov_xinc(&mut self) {
         // No flags changed
-        // FIXME Does this work with direct page?
-        let addr = self.x as u16;
+        let addr = self.x as u16 + match self.psw.direct_page() {
+            true => 0x0100,
+            false => 0x0000,
+        };
         let a = self.a;
         self.store(addr, a);
         self.x = self.x.wrapping_add(1);
