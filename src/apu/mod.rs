@@ -251,6 +251,12 @@ impl Spc700 {
                 }
                 self.$name()
             }};
+            ( _ $name:ident ($arg:tt) ) => {{
+                if log_enabled!(Trace) && self.trace {
+                    self.trace_op(pc, concat!(stringify!($name), " ", $arg));
+                }
+                self.$name(e!($arg))
+            }};
             ( _ $name:ident ($arg:tt) $am:ident ) => {{
                 let am = self.$am();
                 if log_enabled!(Trace) && self.trace {
@@ -473,6 +479,22 @@ impl Spc700 {
 
             0x3f => instr!(_ call abs),
             0x6f => instr!(_ ret),
+            0x01 => instr!(_ tcall(0)),
+            0x11 => instr!(_ tcall(1)),
+            0x21 => instr!(_ tcall(2)),
+            0x31 => instr!(_ tcall(3)),
+            0x41 => instr!(_ tcall(4)),
+            0x51 => instr!(_ tcall(5)),
+            0x61 => instr!(_ tcall(6)),
+            0x71 => instr!(_ tcall(7)),
+            0x81 => instr!(_ tcall(8)),
+            0x91 => instr!(_ tcall(9)),
+            0xa1 => instr!(_ tcall(10)),
+            0xb1 => instr!(_ tcall(11)),
+            0xc1 => instr!(_ tcall(12)),
+            0xd1 => instr!(_ tcall(13)),
+            0xe1 => instr!(_ tcall(14)),
+            0xf1 => instr!(_ tcall(15)),
 
             0x2d => instr!(_ push a),
             0x4d => instr!(_ push x),
@@ -590,6 +612,17 @@ impl Spc700 {
     }
     fn call(&mut self, am: AddressingMode) {
         let addr = am.address(self);
+        self.call_addr(addr);
+    }
+    /// `call [$ffc0 + (15 - p) * 2]`
+    fn tcall(&mut self, p: u8) {
+        // Since all possible addresses are stored in IPL ROM area, it makes no sense to have it
+        // mapped.
+        if self.ipl_rom_mapped {
+            once!(warn!("`tcall {}` while IPL ROM is mapped!", p));
+        }
+
+        let addr = self.loadw(0xffc0 + (15 - p as u16) * 2);
         self.call_addr(addr);
     }
 
