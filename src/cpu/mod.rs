@@ -281,9 +281,7 @@ impl Cpu {
         let pc = self.pc;
         self.cy = 0;
         let op = self.fetchb();
-        self.cy += CYCLE_TABLE[op as usize] as u16 * CPU_CYCLE + 4;
-        // FIXME: The +4 is a timing correction. I'm not sure what causes the inaccuracy, but I
-        // suspect the addressing mode / memory access timing is a bit off.
+        self.cy += CYCLE_TABLE[op as usize] as u16 * CPU_CYCLE;
 
         macro_rules! instr {
             ( $name:ident ) => {{
@@ -850,19 +848,20 @@ impl Cpu {
     /// Subtract with Borrow from Accumulator
     fn sbc(&mut self, am: AddressingMode) {
         // Changes N, Z, C and V
-        // FIXME Set V flag!
         let c = if self.p.carry() { 0 } else { 1 };
         if self.p.small_acc() {
             let a = self.a as u8;
             let v = am.loadb(self);
             let res = a as i16 - v as i16 - c;
             self.p.set_carry(res >= 0);
+            self.p.set_overflow((a ^ res as u8) & 0x80 != 0 && (a ^ v) & 0x80 == 0x80);
 
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
         } else {
             let v = am.loadw(self);
             let res = self.a as i32 - v as i32 - c as i32;
             self.p.set_carry(res >= 0);
+            self.p.set_overflow((self.a ^ res as u16) & 0x80 != 0 && (self.a ^ v) & 0x80 == 0x80);
 
             self.a = self.p.set_nz(res as u16);
             self.cy += CPU_CYCLE;

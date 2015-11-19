@@ -133,7 +133,7 @@ impl Spc700 {
                 val
             }
             // NB: $f8 and $f9 work like regular RAM
-            0xffc0 ... 0xffff if self.ipl_rom_mapped => { IPL_ROM[addr as usize - 0xffc0] },
+            0xffc0 ... 0xffff if self.ipl_rom_mapped => IPL_ROM[addr as usize - 0xffc0],
             _ => self.mem[addr],
         }
     }
@@ -146,7 +146,7 @@ impl Spc700 {
             0xf0 => {
                 if val != 0x0a {
                     once!({
-                        warn!("SPC700 wrote ${:02X} to testing register ($f0)", 0);
+                        warn!("SPC700 wrote ${:02X} to testing register ($f0)", val);
                         warn!("As a safety measure, only $0a is allowed. This write will be \
                             ignored! (This warning will only be printed for the first illegal \
                             write)");

@@ -318,7 +318,7 @@ pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
 pub fn do_hdma(channels: u8) -> u32 {
     if channels == 0 { return 0 }
 
-    once!(warn!("NYI: HDMA (attempted with channel mask ${:08b})", channels));
+    once!(warn!("NYI: HDMA (attempted with channel mask b{:08b})", channels));
 
     0
 }
