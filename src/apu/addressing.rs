@@ -103,7 +103,7 @@ impl AddressingMode {
         }
     }
 
-    pub fn storew(self, spc: &mut Spc700, (lo, hi): (u8, u8)) {
+    pub fn storew(self, spc: &mut Spc700, word: u16) {
         use self::AddressingMode::*;
 
         let addr = self.address(spc);
@@ -116,8 +116,8 @@ impl AddressingMode {
             addr2 = addr + 1;
         }
 
-        spc.store(addr, lo);
-        spc.store(addr2, hi);
+        spc.store(addr, word as u8);            // lo
+        spc.store(addr2, (word >> 8) as u8);    // high
     }
 
     pub fn address(&self, spc: &mut Spc700) -> u16 {

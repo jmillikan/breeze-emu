@@ -927,7 +927,7 @@ impl Spc700 {
         // FIXME Are the flags set right?
         self.psw.set_negative(res & 0x8000 != 0);
         self.psw.set_zero(res == 0);
-        am.storew(self, ((res >> 8) as u8, res as u8));
+        am.storew(self, res);
     }
 
     /// `mov (X++), A` - Move A to the address pointed to by X, then increment X
@@ -953,10 +953,10 @@ impl Spc700 {
     /// (`movw {X}, ya`)
     fn movw_s(&mut self, am: AddressingMode) {
         // No flags modified, Reads the low byte first
-        let y = self.y;
-        let a = self.a;
+        let y = self.y as u16;
+        let a = self.a as u16;
         am.clone().loadb(self);
-        am.storew(self, (a, y));
+        am.storew(self, (y << 8) | a);
     }
     /// Copy a byte
     fn mov(&mut self, src: AddressingMode, dest: AddressingMode) {
