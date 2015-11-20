@@ -718,50 +718,50 @@ impl Spc700 {
     }
 
     fn bra(&mut self, am: AddressingMode) {
-        let a = am.address(self);
-        self.pc = a;
+        let addr = am.address(self);
+        self.pc = addr;
     }
     fn beq(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if self.psw.zero() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
     fn bne(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if !self.psw.zero() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
     /// Branch if carry set
     fn bcs(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if self.psw.carry() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
     /// Branch if carry clear
     fn bcc(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if !self.psw.carry() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
     fn bmi(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if self.psw.negative() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
     fn bpl(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+        let addr = am.address(self);
         if !self.psw.negative() {
-            self.pc = a;
+            self.pc = addr;
             self.cy += 2;
         }
     }
@@ -960,9 +960,11 @@ impl Spc700 {
     }
     /// Copy a byte
     fn mov(&mut self, src: AddressingMode, dest: AddressingMode) {
-        // No flags modified. If a register is written, the corresponding `AddressingMode` will set
-        // the flags.
+        // No flags modified, except when the destination is a register
         let val = src.loadb(self);
+        if dest.is_register() {
+            self.psw.set_nz(val);
+        }
         dest.storeb(self, val);
     }
     fn mov_sp_x(&mut self) {

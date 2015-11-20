@@ -46,6 +46,15 @@ pub enum AddressingMode {
 }
 
 impl AddressingMode {
+    pub fn is_register(&self) -> bool {
+        use self::AddressingMode::*;
+
+        match *self {
+            A | X | Y => true,
+            _ => false,
+        }
+    }
+
     pub fn loadb(self, spc: &mut Spc700) -> u8 {
         use self::AddressingMode::*;
 
@@ -84,10 +93,9 @@ impl AddressingMode {
         use self::AddressingMode::*;
 
         match self {
-            // NB: Register stores always set NZ, make sure this is okay before using it!
-            A => spc.a = spc.psw.set_nz(value),
-            X => spc.x = spc.psw.set_nz(value),
-            Y => spc.y = spc.psw.set_nz(value),
+            A => spc.a = value,
+            X => spc.x = value,
+            Y => spc.y = value,
             _ => {
                 let a = self.address(spc);
                 spc.store(a, value);
