@@ -178,8 +178,6 @@ impl Rom {
     }
 
     fn resolve_lorom(&mut self, bank: u8, addr: u16) -> &mut u8 {
-        // XXX I fear that this can cause the worst bugs, so make sure this is 100% correct!!!
-
         match addr {
             0x0000 ... 0x7fff => {
                 // Cartridge RAM mapped to the low 32 KB
@@ -270,6 +268,6 @@ fn out_of_ram_bounds(bank: u8, addr: u16, abs: u32) -> ! {
 }
 
 fn out_of_rom_bounds(bank: u8, addr: u16, abs: u32) -> ! {
-    panic!("LoROM access out of bounds at {:02X}:{:04X} -> {:06X}",
+    panic!("ROM access out of bounds at {:02X}:{:04X} -> {:06X}",
         bank, addr, abs)
 }

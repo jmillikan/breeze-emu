@@ -16,13 +16,14 @@ use std::slice;
 ///
 /// When implementing this trait, use an exhaustive let-binding for all fields on the `Self` type.
 /// This way, any change that could potentially require a change in the `SaveState` implementation
-/// to the type will cause a compilation error.
+/// to the type will cause a compilation error. By using the `impl_save_state` macro defined below,
+/// this will be done automatically.
 pub trait SaveState {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()>;
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()>;
 }
 
-// FIXME Remove once `read_exact` is stable
+/// FIXME Temporary copy of `std`s `Read::read_exact`. Remove once `read_exact` is stable.
 pub fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
     while !buf.is_empty() {
         match r.read(buf) {
@@ -56,6 +57,9 @@ unsafe impl TransmuteByteSafe for i8 {}
 unsafe impl TransmuteByteSafe for i16 {}
 unsafe impl TransmuteByteSafe for i32 {}
 
+/// Everything that can be transmuted to/from fixed-size byte slices can trivially implement
+/// `SaveState`. This includes a large portion of the emulator state, since much of it consist of
+/// primitive integer values.
 impl<T: TransmuteByteSafe> SaveState for T {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         let bytes = unsafe {
@@ -71,7 +75,7 @@ impl<T: TransmuteByteSafe> SaveState for T {
     }
 }
 
-
+/// `bool` will always be saved as a `1` or `0` byte.
 impl SaveState for bool {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         w.write_all(&[if *self {1} else {0}])
@@ -90,6 +94,7 @@ impl SaveState for bool {
     }
 }
 
+/// `Option<T>` will either save/restore `true` followed by its contents, or `false` if it's `None`.
 impl<T: SaveState + Default> SaveState for Option<T> {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         match *self {
@@ -113,12 +118,15 @@ impl<T: SaveState + Default> SaveState for Option<T> {
                 try!(t.restore_state(r));
                 *self = Some(t);
             }
+            // XXX Ugly, but works
             _ => return Err(io::Error::new(io::ErrorKind::Other, "invalid byte value for option")),
         }
         Ok(())
     }
 }
 
+/// **FIXME** The `SaveState` impl for slices of `T` assumes that it is only used for fixed-size
+/// arrays, which can easily lead to bugs!
 impl<T: SaveState> SaveState for [T] {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         for t in self {
@@ -128,8 +136,7 @@ impl<T: SaveState> SaveState for [T] {
     }
 
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
-        // Assume `self` already has the correct size (ie. no empty `Vec`)
-        // FIXME How easily does this behaviour lead to bugs?
+        // Assume `self` always has the same size
         for t in self {
             try!(t.restore_state(r));
         }
@@ -137,6 +144,7 @@ impl<T: SaveState> SaveState for [T] {
     }
 }
 
+/// `Vec<T>`s `SaveState` impl will read/write the `Vec`s length first, followed by its contents.
 impl<T: SaveState + Default> SaveState for Vec<T> {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         // Write the len first:
@@ -191,6 +199,8 @@ macro_rules! impl_save_state {
     };
 }
 
+/// Generates a `SaveState` impl for a newtype wrapper. The type must be declared as
+/// `SomeType(InnerType)` and `InnerType` must implement `SaveState`.
 macro_rules! impl_save_state_for_newtype {
     ( $t:ident ) => {
         impl ::savestate::SaveState for $t {

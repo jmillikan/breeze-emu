@@ -8,11 +8,15 @@ log = "0.3"
 env_logger = "0.3"
 arrayvec = "0.3"
 lazy_static = "0.1"
+# clap comes with a few optional features we don't really need (colored output
+# and command correction)
 clap = { version = "1.4", default-features = false }
 
 [dependencies.glium]
 version = "0.10"
 optional = true
+# glium comes with some default features we don't need or want (`cgmath`,
+# `nalgebra`, `image`). We only need glutin.
 features = ["glutin"]
 default-features = false
 

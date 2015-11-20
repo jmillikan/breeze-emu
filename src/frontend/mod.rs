@@ -1,4 +1,7 @@
 //! Contains the emulator frontend implementations.
+//!
+//! The "Frontend" is everything that sits between the emulator core and the user: Video output
+//! (Window management), Input handling, Audio output.
 
 // TODO We could easily do render tests with a custom `Renderer`, and even supply scripted input
 // with an `InputSource`

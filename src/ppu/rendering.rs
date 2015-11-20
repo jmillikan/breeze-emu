@@ -660,7 +660,7 @@ impl Ppu {
     /// * `bitplane_count`: Number of bitplanes (must be even)
     /// * `start_addr`: Address of the first bitplane (or the first 2)
     /// * `tile_size`: 8 or 16
-    /// * `(x, y)`: Offset inside the tile
+    /// * `(x, y)`: Offset inside the tile (`0-7` or `0-15`)
     fn read_chr_entry(&self,
                       bitplane_count: u8,
                       start_addr: u16,
@@ -671,7 +671,6 @@ impl Ppu {
         debug_assert!(tile_size == 8, "non-8x8 tiles unsupported"); // FIXME support 16x16 tiles
         let bitplane_pairs = bitplane_count >> 1;
 
-        // FIXME: I'm assuming all pairs of bitplanes are stored sequentially?
         let mut palette_index = 0u8;
         for i in 0..bitplane_pairs {
             let bitplane_bits = self.read_2_bitplanes(
@@ -685,6 +684,10 @@ impl Ppu {
 
     /// Reads 2 bits of the given coordinate within the bitplane's tile from 2 interleaved
     /// bitplanes.
+    ///
+    /// # Parameters
+    /// * `bitplanes_start`: Start address of the bitplanes
+    /// * `(x_off, y_off)`: Offset into the tile (`0-7`)
     fn read_2_bitplanes(&self, bitplanes_start: u16, (x_off, y_off): (u8, u8)) -> u8 {
         // FIXME Handle flipped tiles somewhere in here (or not in here)
         // Bit 0 in low bytes, bit 1 in high bytes
