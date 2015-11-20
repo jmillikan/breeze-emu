@@ -603,14 +603,10 @@ impl Ppu {
                 // Address points to the MSB (=`val`) of the word we want to update
                 self.oam[self.oamaddr - 1] = self.oam_lsb;
                 self.oam[self.oamaddr] = val;
-
-                trace!("OAM STORE: ${:02X} to ${:04X}", self.oam_lsb, self.oamaddr-1);
-                trace!("OAM STORE: ${:02X} to ${:04X}", val, self.oamaddr);
             }
         } else {
             // Write to 512-544
             self.oam[self.oamaddr] = val;
-            trace!("OAM STORE: ${:02X} to ${:04X}", val, self.oamaddr);
         }
         if self.oamaddr == 544 { panic!() }
         self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits

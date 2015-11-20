@@ -546,7 +546,7 @@ impl Spc700 {
             0xaf => instr!("mov (x++), a" mov_xinc),
 
             // `nop` is usually not used and can be a sign of something going very wrong!
-            0x00 => instr!(_ nop),
+            //0x00 => instr!(_ nop),
             _ => {
                 instr!(_ ill);
                 panic!("illegal APU opcode: ${:02X}", op);

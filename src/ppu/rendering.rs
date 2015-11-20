@@ -157,7 +157,7 @@ impl Ppu {
             4 => self.bg4sc,
             _ => unreachable!(),
         };
-        // Chr start address >> 12
+        // Chr (Tileset, not Tilemap) start address >> 12
         let chr = match bg {
             1 => self.bg12nba & 0x0f,
             2 => (self.bg12nba & 0xf0) >> 4,
@@ -165,7 +165,7 @@ impl Ppu {
             4 => (self.bg34nba & 0xf0) >> 4,
             _ => unreachable!(),
         };
-        let (hscroll, vscroll) = match bg {
+        let (hofs, vofs) = match bg {
             1 => (self.bg1hofs, self.bg1vofs),
             2 => (self.bg2hofs, self.bg2vofs),
             3 => (self.bg3hofs, self.bg3vofs),
@@ -179,6 +179,7 @@ impl Ppu {
             } else {
                 ((self.mosaic & 0xf0) >> 4) + 1
             },
+            // FIXME: This looks more like the byte address to me!
             tilemap_word_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
             tilemap_mirror_h: bgsc & 0b01 == 0, // inverted bit value
             tilemap_mirror_v: bgsc & 0b10 == 0, // inverted bit value
@@ -198,8 +199,8 @@ impl Ppu {
                 }
             },
             chr_addr: (chr as u16) << 12,
-            hscroll: hscroll,
-            vscroll: vscroll,
+            hscroll: hofs,
+            vscroll: vofs,
         }
     }
 
@@ -272,18 +273,18 @@ impl Ppu {
     }
 
     /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
-    /// 256).
+    /// 256). `X` denotes a BG for offset-per-tile data.
     ///
     ///     Mode    # Colors for BG
-    ///     1   2   3   4
+    ///              1   2   3   4
     ///     ======---=---=---=---=
     ///     0        4   4   4   4
     ///     1       16  16   4   -
-    ///     2       16  16   -   -
+    ///     2       16  16   X   -
     ///     3      256  16   -   -
-    ///     4      256   4   -   -
+    ///     4      256   4   X   -
     ///     5       16   4   -   -
-    ///     6       16   -   -   -
+    ///     6       16   -   X   -
     ///     7      256   -   -   -
     ///     7EXTBG 256 128   -   -
     fn color_count_for_bg(&self, bg: u8) -> u16 {
@@ -448,12 +449,6 @@ impl Ppu {
         for i in first_sprite..first_sprite+128 {
             let entry = self.get_oam_entry((i & 0x7f) as u8);   // limit to 127
             if self.sprite_on_scanline(&entry) {
-                trace_unique!(
-                    "sprite {} ({}) on scanline {}: pos = ({}, {}), size = {:?} palette = {}, \
-                    prio = {}, tile0 = {}, nametable = {}",
-                    i, i & 0x3f, self.scanline, entry.x, entry.y, self.obj_size(entry.size_toggle),
-                    entry.palette, entry.priority, entry.tile, entry.name_table);
-
                 if let Some(_) = visible_sprites.push(entry) {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
                     break
@@ -542,8 +537,6 @@ impl Ppu {
                 if tile.x <= self.x as i16 && tile.x + 8 > self.x as i16 {
                     let x_offset = self.x as i16 - tile.x;
                     debug_assert!(0 <= x_offset && x_offset <= 7, "x_offset = {}", x_offset);
-                    trace_unique!("rendering tile with CHR data at ${:04X}, palette {}",
-                        tile.chr_addr, tile.palette);
                     let rel_color = self.read_chr_entry(4,  // 16 colors
                                                         tile.chr_addr,
                                                         8,  // 8x8 tiles
@@ -632,10 +625,14 @@ impl Ppu {
         let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
         if tilemap_entry.priority != prio { return None }
 
-        // Calculate the number of bitplanes needed to store a color in this BG
         let color_count = self.color_count_for_bg(bg_num);
-        let bitplane_count = (color_count - 1).count_ones() as u16;
         debug_assert!(color_count.is_power_of_two());  // should be power of two
+        if color_count == 256 {
+            debug_assert!(self.cgwsel & 0x01 == 0, "NYI: direct color mode");
+        }
+
+        // Calculate the number of bitplanes needed to store a color in this BG
+        let bitplane_count = (color_count - 1).count_ones() as u16;
 
         // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
         let bitplane_start_addr =
