@@ -394,6 +394,8 @@ impl Ppu {
             0x2135 => ((self.m7a as u32 * self.m7b_last as u32) >> 8) as u8,
             // MPYH - High Byte
             0x2136 => ((self.m7a as u32 * self.m7b_last as u32) >> 16) as u8,
+            // RDOAM
+            0x2138 => self.oam_load(),
             _ => panic!("invalid PPU load from ${:04X}", addr),
         }
     }
@@ -500,13 +502,12 @@ impl Ppu {
     pub fn update(&mut self) -> u8 {
         if !self.in_h_blank() && !self.in_v_blank() {
             // This pixel is visible
-            let pixel;
-            if self.forced_blank() {
-                pixel = Rgb {r: 0, g: 0, b: 0};
+            let pixel = if self.forced_blank() {
+                Rgb {r: 0, g: 0, b: 0}
             } else {
                 // "Normal" pixel
-                pixel = self.render_pixel();
-            }
+                self.render_pixel()
+            };
 
             let x = self.x;
             let y = self.scanline;
@@ -612,6 +613,11 @@ impl Ppu {
         }
         if self.oamaddr == 544 { panic!() }
         self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
+    }
+    fn oam_load(&mut self) -> u8 {
+        let byte = self.oam[self.oamaddr];
+        self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
+        byte
     }
 
     /// Get the value to increment the VRAM word address by
