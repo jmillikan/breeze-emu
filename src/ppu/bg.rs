@@ -40,6 +40,9 @@ struct TilemapEntry {
 }
 
 impl Ppu {
+    /// Determines whether the given BG layer (1-4) is enabled
+    fn bg_enabled(&self, bg: u8) -> bool { self.tm & (1 << (bg - 1)) != 0 }
+
     /// Reads the tilemap entry at the given VRAM word address.
     ///     vhopppcc cccccccc (high, low)
     ///     v/h        = Vertical/Horizontal flip this tile.
@@ -47,8 +50,9 @@ impl Ppu {
     ///     ppp        = Tile palette base.
     ///     cccccccccc = Tile number.
     fn tilemap_entry(&self, word_address: u16) -> TilemapEntry {
-        let lo = self.vram[word_address * 2];
-        let hi = self.vram[word_address * 2 + 1];
+        let byte_address = word_address << 1;
+        let lo = self.vram[byte_address];
+        let hi = self.vram[byte_address + 1];
 
         TilemapEntry {
             vflip: hi & 0x80 != 0,
@@ -69,7 +73,7 @@ impl Ppu {
             4 => self.bg4sc,
             _ => unreachable!(),
         };
-        // Chr (Tileset, not Tilemap) start address >> 12
+        // Chr (Tileset, not Tilemap) start (word?) address >> 12
         let chr = match bg {
             1 => self.bg12nba & 0x0f,
             2 => (self.bg12nba & 0xf0) >> 4,
@@ -115,9 +119,6 @@ impl Ppu {
             vscroll: vofs,
         }
     }
-
-    /// Determines whether the given BG layer (1-4) is enabled
-    fn bg_enabled(&self, bg: u8) -> bool { self.tm & (1 << (bg-1)) != 0 }
 
     /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
     /// 256). `X` denotes a BG for offset-per-tile data.
@@ -239,7 +240,7 @@ impl Ppu {
         // Calculate the number of bitplanes needed to store a color in this BG
         let bitplane_count = (color_count - 1).count_ones() as u16;
 
-        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_base<<1`?
+        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_addr<<1`?
         let bitplane_start_addr =
             (bg.chr_addr << 1) +
             (tilemap_entry.tile_number * 8 * bitplane_count);   // 8 bytes per bitplane

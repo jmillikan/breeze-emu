@@ -47,12 +47,6 @@ impl Ppu {
     /// Returns the active BG mode (0-7).
     pub fn bg_mode(&self) -> u8 { self.bgmode & 0b111 }
 
-    /// Returns the backdrop color used as a default color (with color math applied, if enabled).
-    fn backdrop_color(&self) -> Rgb {
-        // TODO: Color math
-        self.lookup_color(0)
-    }
-
     /// Looks up a color index in the CGRAM
     pub fn lookup_color(&self, color: u8) -> Rgb {
         // FIXME Is this correct?
@@ -66,6 +60,12 @@ impl Ppu {
         let g = (val & 0x03e0) >> 5;
         let r = val & 0x001f;
         Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 }
+    }
+
+    /// Returns the backdrop color used as a default color (with color math applied, if enabled).
+    fn backdrop_color(&self) -> Rgb {
+        // TODO: Color math
+        self.lookup_color(0)
     }
 
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
@@ -168,14 +168,16 @@ impl Ppu {
     /// * `bitplane_count`: Number of bitplanes (must be even)
     /// * `start_addr`: Address of the first bitplane (or the first 2)
     /// * `tile_size`: 8 or 16
-    /// * `(x, y)`: Offset inside the tile (`0-7` or `0-15`)
+    /// * `(x, y)`: Offset inside the tile (`0-7` or `0-15`, depending on the tile size)
     pub fn read_chr_entry(&self,
                       bitplane_count: u8,
                       start_addr: u16,
                       tile_size: u8,
                       (x, y): (u8, u8)) -> u8 {
-        // 2 bitplanes are stored interleaved with each other.
+        // 2 bitplanes are stored interleaved with each other, so there can only be an even number
         debug_assert!(bitplane_count & 1 == 0, "odd bitplane count");
+        debug_assert!(x <= 7 || (x <= 15 && tile_size == 16), "invalid x value: {}", x);
+        debug_assert!(y <= 7 || (y <= 15 && tile_size == 16), "invalid y value: {}", y);
         debug_assert!(tile_size == 8, "non-8x8 tiles unsupported"); // FIXME support 16x16 tiles
         let bitplane_pairs = bitplane_count >> 1;
 
