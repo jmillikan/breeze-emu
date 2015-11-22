@@ -31,7 +31,6 @@ impl RomHeader {
 
         debug!("raw rom header: {:?}", bytes);
 
-        // First check: Is the title valid ASCII?
         let mut title = [0; 21];
         for (i, c) in bytes[0..21].iter().enumerate() {
             match *c {
@@ -39,8 +38,8 @@ impl RomHeader {
                     title[i] = *c;
                 }
                 _ => {
-                    debug!("title contains non-ascii bytes");
-                    return Err(())
+                    warn!("title contains non-ascii byte: ${:02X}", *c);
+                    title[i] = b' ';
                 }
             }
         }
