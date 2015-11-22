@@ -596,12 +596,13 @@ impl Ppu {
         self.oamaddr = (((self.oamaddh as u16 & 0x01) << 8) | self.oamaddl as u16) << 1;
     }
     fn oam_store(&mut self, val: u8) {
+        if self.oamaddr & 0x01 == 0 {
+            // Even address
+            self.oam_lsb = val;
+        }
         if self.oamaddr < 0x200 {
             // Write to the first 512 Bytes
-            if self.oamaddr & 0x01 == 0 {
-                // Even address
-                self.oam_lsb = val;
-            } else {
+            if self.oamaddr & 0x01 != 0 {
                 // Odd address
                 // Address points to the MSB (=`val`) of the word we want to update
                 self.oam[self.oamaddr - 1] = self.oam_lsb;
