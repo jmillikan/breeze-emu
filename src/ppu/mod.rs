@@ -608,10 +608,9 @@ impl Ppu {
                 self.oam[self.oamaddr] = val;
             }
         } else {
-            // Write to 512-544
-            self.oam[self.oamaddr] = val;
+            // Write to 512-544 (>544 is a mirror of 512-544)
+            self.oam[0x200 + (self.oamaddr & 0x1f)] = val;
         }
-        if self.oamaddr == 544 { panic!() }
         self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
     }
     fn oam_load(&mut self) -> u8 {

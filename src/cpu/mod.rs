@@ -482,6 +482,8 @@ impl Cpu {
             0xd9 => instr!(cmp absolute_indexed_y),
             0xcf => instr!(cmp absolute_long),
             0xdf => instr!(cmp absolute_long_indexed_x),
+            0xd2 => instr!(cmp direct_indirect),
+            0xd1 => instr!(cmp direct_indirect_indexed),
             0xd7 => instr!(cmp direct_indirect_long_idx),
             0xe0 => instr!(cpx immediate_index),
             0xe4 => instr!(cpx direct),
