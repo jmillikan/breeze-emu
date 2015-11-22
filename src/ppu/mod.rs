@@ -615,7 +615,10 @@ impl Ppu {
         self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
     }
     fn oam_load(&mut self) -> u8 {
-        let byte = self.oam[self.oamaddr];
+        let mut addr = self.oamaddr;
+        if addr >= 0x200 { addr = 0x200 + (addr & 0x1f); }
+
+        let byte = self.oam[addr];
         self.oamaddr = (self.oamaddr + 1) & 0x3ff;   // reduce to 10 bits
         byte
     }
