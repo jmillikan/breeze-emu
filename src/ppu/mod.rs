@@ -6,9 +6,11 @@
 //! Documentation mostly taken from http://emu-docs.org/Super%20NES/General/snesdoc.html and
 //! http://wiki.superfamicom.org/
 
+mod bg;
 mod rendering;
+mod sprites;
 
-use self::rendering::RenderState;
+use self::sprites::RenderState;
 
 /// Physical screen width
 /// (this is the width of a field, or a half-frame)
