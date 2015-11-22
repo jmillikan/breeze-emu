@@ -1,6 +1,7 @@
 target
-trace.txt
-*.sav
 *.sfc
 *.smc
 *.dll
+
+*.sav
+*.rec
