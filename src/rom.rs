@@ -31,14 +31,30 @@ impl RomHeader {
 
         debug!("raw rom header: {:?}", bytes);
 
+        // Byte 28/29 is the checksum's complement followed by the checksum itself in Byte 30/31.
+        // The checksum is the sum of all bytes in the ROM (truncated to 16 bits). It can be
+        // validated by the loader.
+        // 16 bit, little-endian.
+        let check_inv = (bytes[29] as u16) << 8 | bytes[28] as u16;
+        let checksum = (bytes[31] as u16) << 8 | bytes[30] as u16;
+        if check_inv != !checksum {
+            debug!("checksum invalid: stored complement is ${:04X}, stored checksum is ${:04X}",
+                check_inv, checksum);
+            return Err(());
+        }
+
         let mut title = [0; 21];
+        let mut warned = false;
         for (i, c) in bytes[0..21].iter().enumerate() {
             match *c {
                 0x20 ... 0x7E => {
                     title[i] = *c;
                 }
                 _ => {
-                    warn!("title contains non-ascii byte: ${:02X}", *c);
+                    if !warned {
+                        warn!("title contains non-ascii byte: ${:02X}", *c);
+                        warned = true;
+                    }
                     title[i] = b' ';
                 }
             }
@@ -88,18 +104,6 @@ impl RomHeader {
         debug!("vendor code: 0x{:02X}{:02X}", bytes[25], bytes[26]);
         // 27 = version (also doesn't matter for us)
         debug!("version: 0x{:02X}", bytes[27]);
-
-        // Now it's getting a bit more interesting: The next byte is the checksum's complement
-        // followed by the checksum itself. The checksum is the sum of all bytes in the ROM
-        // (truncated to 16 bits). It can be validated by the loader.
-        // 16 bit, little-endian.
-        let check_inv = (bytes[29] as u16) << 8 | bytes[28] as u16;
-        let checksum = (bytes[31] as u16) << 8 | bytes[30] as u16;
-        if check_inv != !checksum {
-            error!("checksum invalid: stored complement is {:04X}, stored checksum is {:04X}",
-                check_inv, checksum);
-            return Err(())
-        }
 
         Ok(RomHeader {
             title: title,

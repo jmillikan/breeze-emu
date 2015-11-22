@@ -151,14 +151,12 @@ impl Peripherals {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
                 // PPU registers. Let it deal with the access.
                 0x2100 ... 0x2133 => self.ppu.store(addr, value),
-                0x2134 ... 0x2137 => warn!("invalid store: ${:02X} to ${:02X}:{:04X}", value, bank,
-                    addr),
-                0x2138 ... 0x213f => warn!("store to read-only PPU register ${:04X}", addr),
+                0x2134 ... 0x213f => once!(warn!("store to read-only PPU register ${:04X}", addr)),
                 // APU IO registers.
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
                 0x2180 ... 0x2183 => once!(warn!("NYI: WRAM registers")),
-                0x2184 ... 0x21ff => warn!("invalid store: ${:02X} to ${:02X}:{:04X}", value, bank,
-                    addr),
+                0x2184 ... 0x21ff => once!(warn!("invalid store: ${:02X} to ${:02X}:{:04X}", value,
+                    bank, addr)),
                 0x4016 => self.input.store(addr, value),
                 0x4200 => {
                     // NMITIMEN - NMI/IRQ enable

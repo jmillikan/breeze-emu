@@ -821,6 +821,8 @@ impl Cpu {
 
     /// Add With Carry
     fn adc(&mut self, am: AddressingMode) {
+        assert!(!self.p.decimal(), "NYI: decimal adc");
+
         // Sets N, V, C and Z
         // FIXME is this correct? double-check this!
         let c = if self.p.carry() { 1 } else { 0 };
@@ -847,6 +849,8 @@ impl Cpu {
 
     /// Subtract with Borrow from Accumulator
     fn sbc(&mut self, am: AddressingMode) {
+        assert!(!self.p.decimal(), "NYI: decimal sbc");
+
         // Changes N, Z, C and V
         let c = if self.p.carry() { 0 } else { 1 };
         if self.p.small_acc() {
