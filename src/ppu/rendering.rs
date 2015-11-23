@@ -47,19 +47,30 @@ impl Ppu {
     /// Returns the active BG mode (0-7).
     pub fn bg_mode(&self) -> u8 { self.bgmode & 0b111 }
 
-    /// Looks up a color index in the CGRAM
+    /// Looks up a color index in the CGRAM and converts the stored 15-bit BGR color to 24-bit RGB
+    /// (the 15-bit range is stretched to 24 bits).
     pub fn lookup_color(&self, color: u8) -> Rgb {
         // FIXME Is this correct?
         // 16-bit big endian value! (high byte, high address first)
         // -bbbbbgg gggrrrrr
         let lo = self.cgram[color as u16 * 2] as u16;
         let hi = self.cgram[color as u16 * 2 + 1] as u16;
-
         let val = (hi << 8) | lo;
+
+        // Extract components
         let b = (val & 0x7c00) >> 10;
         let g = (val & 0x03e0) >> 5;
         let r = val & 0x001f;
-        Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 }
+
+        // Convert to RGB
+        let mut rgb = Rgb { r: (r as u8) << 3, g: (g as u8) << 3, b: (b as u8) << 3 };
+
+        // Adjust color range
+        rgb.r += rgb.r / 32;
+        rgb.g += rgb.g / 32;
+        rgb.b += rgb.b / 32;
+
+        rgb
     }
 
     /// Returns the backdrop color used as a default color (with color math applied, if enabled).
