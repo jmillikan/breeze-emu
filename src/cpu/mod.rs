@@ -943,7 +943,6 @@ impl Cpu {
     /// Logical Shift Accumulator Right
     fn lsr_a(&mut self) {
         // Sets N (always cleared), Z and C. The leftmost bit is filled with 0.
-        // FIXME New code, needs small review
         if self.p.small_acc() {
             let a = self.a as u8;
             self.p.set_carry(self.a & 0x01 != 0);
@@ -970,36 +969,35 @@ impl Cpu {
     }
     /// Rotate accumulator right
     fn ror_a(&mut self) {
-        // Sets N, Z, and C. Memory width can be changed. C is used to fill the leftmost bit.
+        // Sets N, Z, and C. C is used to fill the leftmost bit.
         let c: u8 = if self.p.carry() { 1 } else { 0 };
         if self.p.small_acc() {
             let val = self.a as u8;
-            self.p.set_carry(val & 0x80 != 0);
+            self.p.set_carry(val & 0x01 != 0);
             let res = self.p.set_nz_8((val >> 1) | (c << 7));
             self.a = (self.a & 0xff00) | res as u16;
         } else {
             let val = self.a;
-            self.p.set_carry(val & 0x8000 != 0);
-            let res = self.p.set_nz((val >> 1) | ((c as u16) << 15));
-            self.a = res;
+            self.p.set_carry(val & 0x0001 != 0);
+            self.a = self.p.set_nz((val >> 1) | ((c as u16) << 15));
             self.cy += 2 * CPU_CYCLE;
         }
     }
     /// Rotate Memory Right
     fn ror(&mut self, am: AddressingMode) {
-        // Sets N, Z, and C. Memory width can be changed. C is used to fill the leftmost bit.
+        // Sets N, Z, and C. C is used to fill the leftmost bit.
         // The `AddressingMode` is used for both loading and storing the value (Read-Modify-Write
         // instruction)
         let c: u8 = if self.p.carry() { 1 } else { 0 };
         let (bank, addr) = am.address(self);
         if self.p.small_acc() {
             let val = self.loadb(bank, addr);
-            self.p.set_carry(val & 0x80 != 0);
+            self.p.set_carry(val & 0x01 != 0);
             let res = self.p.set_nz_8((val >> 1) | (c << 7));
             self.storeb(bank, addr, res);
         } else {
             let val = self.loadw(bank, addr);
-            self.p.set_carry(val & 0x8000 != 0);
+            self.p.set_carry(val & 0x0001 != 0);
             let res = self.p.set_nz((val >> 1) | ((c as u16) << 15));
             self.storew(bank, addr, res);
             self.cy += 2 * CPU_CYCLE;
