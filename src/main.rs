@@ -57,7 +57,7 @@ fn main() {
 
     let renderer_name = args.value_of("renderer").unwrap_or(&*frontend::DEFAULT_RENDERER);
 
-    let renderer = match frontend::RENDERER_MAP.get(renderer_name) {
+    let renderer_fn = match frontend::RENDERER_MAP.get(renderer_name) {
         None => {
             println!("error: unknown renderer: {}", renderer_name);
             return
@@ -70,7 +70,7 @@ fn main() {
         }
         Some(&Some(renderer_fn)) => {
             info!("using {} renderer", renderer_name);
-            renderer_fn()
+            renderer_fn
         }
     };
 
@@ -81,7 +81,7 @@ fn main() {
 
     let rom = Rom::from_bytes(&buf).unwrap();
 
-    let mut snes = Snes::new(rom, renderer);
+    let mut snes = Snes::new(rom, renderer_fn());
     if let Some(record_file) = args.value_of("record") {
         snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));
     }

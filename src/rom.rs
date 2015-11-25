@@ -129,7 +129,7 @@ impl Rom {
     pub fn from_bytes(mut bytes: &[u8]) -> Result<Rom, ()> {
         // FIXME Return a proper error!
 
-        debug!("raw size: {} bytes ({:#X})", bytes.len(), bytes.len());
+        debug!("raw size: {} bytes (${:X})", bytes.len(), bytes.len());
 
         // ROMs may begin with a 512 Bytes SMC header. It needs to go.
         match bytes.len() % 1024 {

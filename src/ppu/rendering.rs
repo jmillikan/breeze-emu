@@ -50,7 +50,6 @@ impl Ppu {
     /// Looks up a color index in the CGRAM and converts the stored 15-bit BGR color to 24-bit RGB
     /// (the 15-bit range is stretched to 24 bits).
     pub fn lookup_color(&self, color: u8) -> Rgb {
-        // FIXME Is this correct?
         // 16-bit big endian value! (high byte, high address first)
         // -bbbbbgg gggrrrrr
         let lo = self.cgram[color as u16 * 2] as u16;

@@ -1406,7 +1406,7 @@ impl Cpu {
     fn cli(&mut self) { self.p.set_irq_disable(false) }
     fn sei(&mut self) { self.p.set_irq_disable(true) }
     fn cld(&mut self) { self.p.set_decimal(false) }
-    fn sed(&mut self) { self.p.set_decimal(true); unimplemented!() } // FIXME safeguard
+    fn sed(&mut self) { self.p.set_decimal(true) }
     fn clc(&mut self) { self.p.set_carry(false) }
     fn sec(&mut self) { self.p.set_carry(true) }
 
