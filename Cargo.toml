@@ -13,7 +13,7 @@ lazy_static = "0.1"
 clap = { version = "1.4", default-features = false }
 
 [dependencies.glium]
-version = "0.10"
+version = "0.12"
 optional = true
 # glium comes with some default features we don't need or want (`cgmath`,
 # `nalgebra`, `image`). We only need glutin.
@@ -21,7 +21,7 @@ features = ["glutin"]
 default-features = false
 
 [dependencies.sdl2]
-version = "0.9"
+version = "0.11"
 optional = true
 
 [features]
