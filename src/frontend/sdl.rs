@@ -5,8 +5,11 @@ use input::InputState;
 use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use sdl2::{EventPump, Sdl};
+use sdl2::event::WindowEventId;
+use sdl2::keyboard::Scancode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{Renderer, Texture, TextureAccess};
+use sdl2::rect::Rect;
 
 use std::cell::RefCell;
 use std::ops::Deref;
@@ -24,12 +27,10 @@ impl SdlManager {
     /// `process::exit`. Should be called at least once per frame.
     fn update(&mut self) -> Option<FrontendAction> {
         use sdl2::event::Event::*;
-        use sdl2::event::WindowEventId;
-        use sdl2::keyboard::Scancode;
 
         for event in self.event_pump.poll_iter() {
             match event {
-                Quit {..} => {
+                Quit { .. } => {
                     info!("quit event -> exiting");
                     return Some(FrontendAction::Exit);
                 }
@@ -134,8 +135,6 @@ impl super::Renderer for SdlRenderer {
 impl SdlRenderer {
     /// Handle a window resize to `w, h`
     fn resize_to(&mut self, w: u32, h: u32) {
-        use sdl2::rect::Rect;
-
         let w = w as f32;
         let h = h as f32;
 

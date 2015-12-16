@@ -515,6 +515,7 @@ impl Cpu {
             0xdc => instr!(jml absolute_indirect_long),
             0x20 => instr!(jsr absolute),
             0x22 => instr!(jsl absolute_long),
+            0xfc => instr!(jsr absolute_indexed_indirect),
             0x40 => instr!(rti),
             0x60 => instr!(rts),
             0x6b => instr!(rtl),

@@ -11,8 +11,7 @@ extern crate arrayvec;
 extern crate sdl2;
 
 #[cfg(feature = "glium")]
-#[macro_use]
-extern crate glium;
+#[macro_use] extern crate glium;
 
 use std::env;
 use std::fs::File;
