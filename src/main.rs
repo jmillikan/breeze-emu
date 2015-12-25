@@ -13,6 +13,8 @@ extern crate sdl2;
 #[cfg(feature = "glium")]
 #[macro_use] extern crate glium;
 
+#[macro_use] extern crate libsavestate as savestate;
+
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -23,7 +25,6 @@ use snes::Snes;
 
 #[macro_use] mod byte_array;
 #[macro_use] mod log_util;
-#[macro_use] mod savestate;
 mod apu;
 mod cpu;
 mod dma;

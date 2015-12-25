@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 
 [dependencies]
+libsavestate = { path = "libsavestate" }
 log = "0.3"
 env_logger = "0.3"
 arrayvec = "0.3"
