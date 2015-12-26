@@ -13,6 +13,8 @@
 
 use snes::Peripherals;
 
+use cpu::Mem;
+
 /// The configuration of a DMA channel
 #[derive(Clone, Copy)]
 pub struct DmaChannel {

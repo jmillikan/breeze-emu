@@ -1,12 +1,21 @@
 //! 65816 emulator
 
+#[macro_use] extern crate log;
+#[macro_use] extern crate libsavestate;
+
+use libsavestate::SaveState;
+
 mod addressing;
 mod statusreg;
 
 use self::addressing::AddressingMode;
 use self::statusreg::StatusReg;
 
-use snes::Peripherals;
+/// Trait for devices attached to the 65816's address/data bus
+pub trait Mem {
+    fn load(&mut self, bank: u8, addr: u16) -> u8;
+    fn store(&mut self, bank: u8, addr: u16, value: u8);
+}
 
 /// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
 /// read access.
@@ -35,9 +44,10 @@ const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
 /// One CPU cycle = 6 master clock cycles
+// FIXME Move out of this crate
 pub const CPU_CYCLE: u16 = 6;
 
-pub struct Cpu {
+pub struct Cpu<M: Mem + SaveState> {
     a: u16,
     x: u16,
     y: u16,
@@ -49,8 +59,8 @@ pub struct Cpu {
     pbr: u8,
     /// Direct (page) register. Address offset for all instruction using "direct addressing" mode.
     d: u16,
-    /// Program counter. Note that PBR is not changed on pc overflow, so code can not span multiple
-    /// banks (without `jml` or `jsr`).
+    /// Program counter. Note that PBR is not changed on pc overflow, so code can not span
+    /// multiple banks (without `jml` or `jsr`).
     pc: u16,
     p: StatusReg,
     emulation: bool,
@@ -59,17 +69,19 @@ pub struct Cpu {
     cy: u16,
 
     pub trace: bool,
-    pub mem: Peripherals,
+    pub mem: M,
 }
 
-impl_save_state!(Cpu {
-    a, x, y, s, dbr, pbr, d, pc, p, emulation, mem
-} ignore { cy, trace });
+impl<M: Mem + SaveState> SaveState for Cpu<M> {
+    impl_save_state_fns!(Cpu {
+        a, x, y, s, dbr, pbr, d, pc, p, emulation, mem
+    } ignore { cy, trace });
+}
 
-impl Cpu {
+impl<M: Mem + SaveState> Cpu<M> {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
     /// put the CPU in emulation mode.
-    pub fn new(mut mem: Peripherals) -> Cpu {
+    pub fn new(mut mem: M) -> Cpu<M> {
         let pcl = mem.load(0, RESET_VEC8) as u16;
         let pch = mem.load(0, RESET_VEC8 + 1) as u16;
         let pc = (pch << 8) | pcl;
@@ -98,6 +110,7 @@ impl Cpu {
 
     /// Adds the time needed to access the given memory location to the cycle counter.
     fn do_io_cycle(&mut self, bank: u8, addr: u16) {
+        // FIXME Move out of this crate
         const FAST: u16 = 0;
         const SLOW: u16 = 2;
         const XSLOW: u16 = 6;
@@ -622,7 +635,7 @@ impl Cpu {
 }
 
 /// Opcode implementations
-impl Cpu {
+impl<M: Mem + SaveState> Cpu<M> {
     /// Move Next (incrementing address). Copies C+1 (16-bit A) bytes from the address in X to the
     /// address in Y.
     fn mvn(&mut self, am: AddressingMode) {
@@ -1553,7 +1566,7 @@ impl Cpu {
 }
 
 /// Addressing mode construction
-impl Cpu {
+impl<M: Mem + SaveState> Cpu<M> {
     fn block_move(&mut self) -> AddressingMode {
         let dest = self.fetchb();
         let src = self.fetchb();

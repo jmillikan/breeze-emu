@@ -1,0 +1,11 @@
+[package]
+name = "wdc65816"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+libsavestate = { path = "../libsavestate" }
+log = "0.3"

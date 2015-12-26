@@ -13,6 +13,8 @@ use savestate::SaveState;
 use std::env;
 use std::fs::File;
 
+use cpu::Mem;
+
 const WRAM_SIZE: usize = 128 * 1024;
 byte_array!(Wram[WRAM_SIZE]);
 
@@ -93,7 +95,13 @@ impl Peripherals {
         }
     }
 
-    pub fn load(&mut self, bank: u8, addr: u16) -> u8 {
+    fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
+    fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
+    fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
+}
+
+impl Mem for Peripherals {
+    fn load(&mut self, bank: u8, addr: u16) -> u8 {
         match bank {
             0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 // Mirror of first 8k of WRAM
@@ -145,7 +153,7 @@ impl Peripherals {
         }
     }
 
-    pub fn store(&mut self, bank: u8, addr: u16, value: u8) {
+    fn store(&mut self, bank: u8, addr: u16, value: u8) {
         match bank {
             0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
@@ -207,14 +215,10 @@ impl Peripherals {
             _ => unreachable!(),    // Rust should know this!
         }
     }
-
-    fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
-    fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
-    fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
 }
 
 pub struct Snes {
-    cpu: Cpu,
+    cpu: Cpu<Peripherals>,
     renderer: Box<Renderer>,
     master_cy: u64,
     /// Master clock cycles for the APU not yet accounted for (can be negative)

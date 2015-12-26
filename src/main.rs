@@ -7,13 +7,14 @@
 extern crate env_logger;
 extern crate arrayvec;
 
+#[macro_use] extern crate libsavestate as savestate;
+extern crate wdc65816 as cpu;
+
 #[cfg(feature = "sdl2")]
 extern crate sdl2;
 
 #[cfg(feature = "glium")]
 #[macro_use] extern crate glium;
-
-#[macro_use] extern crate libsavestate as savestate;
 
 use std::env;
 use std::fs::File;
@@ -26,7 +27,6 @@ use snes::Snes;
 #[macro_use] mod byte_array;
 #[macro_use] mod log_util;
 mod apu;
-mod cpu;
 mod dma;
 mod frontend;
 mod input;

@@ -158,6 +158,33 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
     }
 }
 
+/// Generates the functions of the `SaveState` trait
+#[macro_export]
+macro_rules! impl_save_state_fns {
+    ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {
+        fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
+            let $t { $(ref $field),*, $(ref $ignore,)* } = *self;
+            $(
+                try!($field.save_state(w));
+            );*
+            $(
+                let _ = $ignore;
+            )*
+            Ok(())
+        }
+
+        fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
+            let $t { $(ref mut $field),*, $(ref mut $ignore,)* } = *self;
+            $(
+                try!($field.restore_state(r));
+            );*
+            $(
+                let _ = $ignore;
+            )*
+            Ok(())
+        }
+    };
+}
 
 /// Generates an impl of `SaveState` for a given type, saving/restoring a list of fields, and
 /// ignoring a second list of fields.
@@ -168,28 +195,8 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
 #[macro_export]
 macro_rules! impl_save_state {
     ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {
-        impl ::savestate::SaveState for $t {
-            fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
-                let $t { $(ref $field),*, $(ref $ignore,)* } = *self;
-                $(
-                    try!($field.save_state(w));
-                );*
-                $(
-                    let _ = $ignore;
-                )*
-                Ok(())
-            }
-
-            fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
-                let $t { $(ref mut $field),*, $(ref mut $ignore,)* } = *self;
-                $(
-                    try!($field.restore_state(r));
-                );*
-                $(
-                    let _ = $ignore;
-                )*
-                Ok(())
-            }
+        impl $crate::SaveState for $t {
+            impl_save_state_fns!($t { $( $field ),* } ignore { $( $ignore ),* });
         }
     };
 }
@@ -200,7 +207,7 @@ macro_rules! impl_save_state {
 #[macro_export]
 macro_rules! impl_save_state_for_newtype {
     ( $t:ident ) => {
-        impl ::savestate::SaveState for $t {
+        impl $crate::SaveState for $t {
             fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
                 self.0.save_state(w)
             }
