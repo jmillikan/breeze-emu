@@ -7,6 +7,11 @@
 //! data into the shared RAM and then execute it. The program can manipulate DSP registers and
 //! specify samples to play.
 
+#[macro_use] extern crate log;
+#[macro_use] extern crate byte_array;
+#[macro_use] extern crate libsavestate;
+
+#[macro_use] mod once;
 mod addressing;
 mod dsp;
 mod ipl;
@@ -18,8 +23,6 @@ use self::dsp::Dsp;
 use self::ipl::IPL_ROM;
 use self::statusreg::StatusReg;
 use self::timer::Timer;
-
-pub type Apu = Spc700;
 
 
 const RAM_SIZE: usize = 65536;

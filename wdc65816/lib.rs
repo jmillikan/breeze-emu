@@ -1,4 +1,4 @@
-//! 65816 emulator
+//! 65816 emulator (work in progress)
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate libsavestate;

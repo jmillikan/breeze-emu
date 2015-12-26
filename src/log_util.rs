@@ -46,7 +46,7 @@ macro_rules! trace_unique {
     };
 }
 
-/// Wraps a `Cell<T>` and writes its content to stdout if dropped while panicking.
+/// Wraps a `Cell<T>` and writes its contents to stdout if dropped while panicking.
 pub struct LogOnPanic<T: Copy + Debug> {
     name: &'static str,
     data: Cell<T>,

@@ -1,14 +1,16 @@
 #![deny(warnings)]
-#![deny(unused_import_braces, unused_qualifications)]
+#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
 
 #[macro_use] extern crate clap;
-#[macro_use] extern crate lazy_static;
+#[macro_use] #[no_link] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate arrayvec;
 
+#[macro_use] #[no_link] extern crate byte_array;
 #[macro_use] extern crate libsavestate as savestate;
 extern crate wdc65816 as cpu;
+extern crate spc700 as apu;
 
 #[cfg(feature = "sdl2")]
 extern crate sdl2;
@@ -24,9 +26,7 @@ use rom::Rom;
 use savestate::SaveState;
 use snes::Snes;
 
-#[macro_use] mod byte_array;
 #[macro_use] mod log_util;
-mod apu;
 mod dma;
 mod frontend;
 mod input;

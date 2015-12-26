@@ -1,6 +1,6 @@
 //! Contains the `Snes` struct, which wields the combined power of this project.
 
-use apu::Apu;
+use apu::Spc700;
 use cpu::Cpu;
 use dma::*;
 use frontend::{FrontendAction, Renderer};
@@ -23,7 +23,7 @@ byte_array!(Wram[WRAM_SIZE]);
 /// Contains everything connected to the CPU via one of the two address buses. All memory accesses
 /// will be directed through this (the CPU already takes access time into account).
 pub struct Peripherals {
-    apu: Apu,
+    apu: Spc700,
     ppu: Ppu,
     rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
@@ -78,7 +78,7 @@ impl Peripherals {
     pub fn new(rom: Rom, input: Input) -> Peripherals {
         Peripherals {
             rom: rom,
-            apu: Apu::default(),
+            apu: Spc700::default(),
             ppu: Ppu::default(),
             wram: Wram::default(),
             input: input,

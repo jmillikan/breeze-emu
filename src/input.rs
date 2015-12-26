@@ -33,7 +33,7 @@ impl_save_state!(Input {
 impl Input {
     /// Start recording input to a `Write` implementor, often a file.
     ///
-    /// Every time input is updated (once a frame), the recorder will write to the given
+    /// Every time input is updated (up to once per frame), the recorder will write to the given
     /// `Box<Write>`.
     pub fn start_recording(&mut self, w: Box<Write>) {
         assert!(self.recorder.is_none(), "already recording input");
@@ -41,6 +41,8 @@ impl Input {
         self.recorder = Some(Recorder::new(w));
     }
 
+    /// Start replaying input from a recording made with `start_recording`. While replaying, user
+    /// input is ignored (but input sources are still updated).
     pub fn start_replay(&mut self, r: Box<BufRead>) {
         assert!(self.replayer.is_none(), "already replaying input");
         assert!(self.recorder.is_none(), "cannot start a replay while recording input");

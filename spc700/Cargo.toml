@@ -1,0 +1,12 @@
+[package]
+name = "spc700"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+byte_array = { path = "../byte_array" }
+libsavestate = { path = "../libsavestate" }
+log = "0.3"

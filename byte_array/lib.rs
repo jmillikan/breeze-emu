@@ -1,5 +1,7 @@
-//! Utility for fixed-size `u8` arrays used as memory
+//! Utility macro for creating convenient fixed-size `u8` arrays.
 
+#[macro_export]
+#[doc = "hidden"]
 macro_rules! impl_byte_array {
     ( $name:ident [$size:expr] ) => {
         impl ::std::default::Default for $name {
@@ -27,6 +29,7 @@ macro_rules! impl_byte_array {
 ///
 /// Just to make my life a little bit easier, `Index<u16>` and `IndexMut<u16>` can optionally be
 /// implemented if you say please (this can save a few mildly annoying `usize` casts).
+#[macro_export]
 macro_rules! byte_array {
     ( $name:ident [$size:expr] ) => {
         struct $name([u8; $size]);
