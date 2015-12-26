@@ -15,6 +15,8 @@ use std::fs::File;
 
 use cpu::Mem;
 
+const CPU_CYCLE: i32 = 6;
+
 const WRAM_SIZE: usize = 128 * 1024;
 byte_array!(Wram[WRAM_SIZE]);
 
@@ -98,10 +100,37 @@ impl Peripherals {
     fn nmi_enabled(&self) -> bool { self.nmien & 0x80 != 0 }
     fn v_irq_enabled(&self) -> bool { self.nmien & 0x10 != 0 }
     fn h_irq_enabled(&self) -> bool { self.nmien & 0x20 != 0 }
+
+    /// Adds the time needed to access the given memory location to the cycle counter.
+    fn do_io_cycle(&mut self, bank: u8, addr: u16) {
+        const FAST: u32 = 0;
+        const SLOW: u32 = 2;
+        const XSLOW: u32 = 6;
+
+        self.cy += match bank {
+            0x00 ... 0x3f => match addr {
+                0x0000 ... 0x1fff | 0x6000 ... 0xffff => SLOW,
+                0x4000 ... 0x41ff => XSLOW,
+                _ => FAST,
+            },
+            0x40 ... 0x7f => SLOW,
+            0x80 ... 0xbf => match addr {
+                0x0000 ... 0x1fff | 0x6000 ... 0x7fff => SLOW,
+                0x4000 ... 0x41ff => XSLOW,
+                // FIXME Depends on bit 1 in $420d. Assume slow for now.
+                0x8000 ... 0xffff => SLOW,
+                _ => FAST
+            },
+            // FIXME Depends on bit 1 in $420d. Assume slow for now.
+            0xc0 ... 0xff => SLOW,
+            _ => FAST,
+        }
+    }
 }
 
 impl Mem for Peripherals {
     fn load(&mut self, bank: u8, addr: u16) -> u8 {
+        self.do_io_cycle(bank, addr);
         match bank {
             0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 // Mirror of first 8k of WRAM
@@ -154,6 +183,7 @@ impl Mem for Peripherals {
     }
 
     fn store(&mut self, bank: u8, addr: u16, value: u8) {
+        self.do_io_cycle(bank, addr);
         match bank {
             0x00 ... 0x3f | 0x80 ... 0xbf => match addr {
                 0x0000 ... 0x1fff => self.wram[addr as usize] = value,
@@ -299,7 +329,7 @@ impl Snes {
             }
 
             // Run a CPU instruction and calculate the master cycles elapsed
-            let cpu_master_cy = self.cpu.dispatch() as i32 + self.cpu.mem.cy as i32;
+            let cpu_master_cy = self.cpu.dispatch() as i32 * CPU_CYCLE + self.cpu.mem.cy as i32;
             self.cpu.mem.cy = 0;
             self.master_cy += cpu_master_cy as u64;
 

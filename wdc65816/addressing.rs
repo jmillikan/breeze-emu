@@ -1,6 +1,6 @@
 //! Contains addressing mode definitions
 
-use super::{Cpu, Mem, CPU_CYCLE};
+use super::{Cpu, Mem};
 
 use std::fmt;
 use libsavestate::SaveState;
@@ -153,7 +153,7 @@ impl AddressingMode {
                 (bank, addr)
             }
             AbsLongIndexedX(bank, addr) => {
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += 1 }
                 let a = ((bank as u32) << 16) | addr as u32;
                 let eff_addr = a + cpu.x as u32;
                 assert!(eff_addr & 0xff000000 == 0, "address overflow");
@@ -162,11 +162,11 @@ impl AddressingMode {
                 (bank as u8, addr)
             }
             AbsIndexedX(offset) => {
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += 1 }
                 (cpu.dbr, offset + cpu.x)
             }
             AbsIndexedY(offset) => {
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if !cpu.p.small_index() { cpu.cy += 1 }
                 (cpu.dbr, offset + cpu.y)
             }
             AbsIndexedIndirect(addr_ptr) => {
@@ -190,29 +190,29 @@ impl AddressingMode {
                 (cpu.pbr, (cpu.pc as i16).wrapping_add(rel_long) as u16)
             }
             Direct(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
                 (0, cpu.d.wrapping_add(offset as u16))
             }
             DirectIndexedX(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
+                if !cpu.p.small_index() { cpu.cy += 1 }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x))
             }
             DirectIndexedY(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
+                if !cpu.p.small_index() { cpu.cy += 1 }
                 (0, cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.y))
             }
             DirectIndexedIndirect(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16).wrapping_add(cpu.x);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
                 (cpu.dbr, (hi << 8) | lo)
             }
             DirectIndirectIndexed(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
+                if !cpu.p.small_index() { cpu.cy += 1 }
 
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u32;
@@ -226,14 +226,14 @@ impl AddressingMode {
                 (bank, addr)
             }
             DirectIndirect(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
                 (cpu.dbr, (hi << 8) | lo)
             }
             DirectIndirectLong(offset) => {
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u16;
                 let hi = cpu.loadb(0, addr_ptr + 1) as u16;
@@ -244,8 +244,8 @@ impl AddressingMode {
                 // "The 24-bit base address is pointed to by the sum of the second byte of the
                 // instruction and the Direct Register. The effective address is this 24-bit base
                 // address plus the Y Index Register."
-                if cpu.d & 0xff != 0 { cpu.cy += CPU_CYCLE }
-                if !cpu.p.small_index() { cpu.cy += CPU_CYCLE }
+                if cpu.d & 0xff != 0 { cpu.cy += 1 }
+                if !cpu.p.small_index() { cpu.cy += 1 }
 
                 let addr_ptr = cpu.d.wrapping_add(offset as u16);
                 let lo = cpu.loadb(0, addr_ptr) as u32;

@@ -17,13 +17,6 @@ pub trait Mem {
     fn store(&mut self, bank: u8, addr: u16, value: u8);
 }
 
-/// Rudimentary memory access break points. Stores (bank, address)-tuples that cause a break on
-/// read access.
-const MEM_BREAK_LOAD: &'static [(u8, u16)] = &[
-];
-const MEM_BREAK_STORE: &'static [(u8, u16)] = &[
-];
-
 // Emulation mode vectors
 const IRQ_VEC8: u16 = 0xFFFE;
 const RESET_VEC8: u16 = 0xFFFC;
@@ -43,10 +36,6 @@ const BRK_VEC16: u16 = 0xFFE6;
 #[allow(dead_code)]
 const COP_VEC16: u16 = 0xFFE4;
 
-/// One CPU cycle = 6 master clock cycles
-// FIXME Move out of this crate
-pub const CPU_CYCLE: u16 = 6;
-
 pub struct Cpu<M: Mem + SaveState> {
     a: u16,
     x: u16,
@@ -65,7 +54,7 @@ pub struct Cpu<M: Mem + SaveState> {
     p: StatusReg,
     emulation: bool,
 
-    /// Master clock cycle counter for the current instruction.
+    /// CPU clock cycle counter for the current instruction.
     cy: u16,
 
     pub trace: bool,
@@ -108,41 +97,9 @@ impl<M: Mem + SaveState> Cpu<M> {
         }
     }
 
-    /// Adds the time needed to access the given memory location to the cycle counter.
-    fn do_io_cycle(&mut self, bank: u8, addr: u16) {
-        // FIXME Move out of this crate
-        const FAST: u16 = 0;
-        const SLOW: u16 = 2;
-        const XSLOW: u16 = 6;
-
-        self.cy += match bank {
-            0x00 ... 0x3f => match addr {
-                0x0000 ... 0x1fff | 0x6000 ... 0xffff => SLOW,
-                0x4000 ... 0x41ff => XSLOW,
-                _ => FAST,
-            },
-            0x40 ... 0x7f => SLOW,
-            0x80 ... 0xbf => match addr {
-                0x0000 ... 0x1fff | 0x6000 ... 0x7fff => SLOW,
-                0x4000 ... 0x41ff => XSLOW,
-                // FIXME Depends on bit 1 in $420d. Assume slow for now.
-                0x8000 ... 0xffff => SLOW,
-                _ => FAST
-            },
-            // FIXME Depends on bit 1 in $420d. Assume slow for now.
-            0xc0 ... 0xff => SLOW,
-            _ => FAST,
-        }
-    }
-
-    /// Load a byte from memory. Will change the cycle counter according to the memory speed.
+    /// Load a byte from memory.
     fn loadb(&mut self, bank: u8, addr: u16) -> u8 {
-        if MEM_BREAK_LOAD.iter().find(|&&(b, a)| bank == b && addr == a).is_some() {
-            debug!("MEM-BREAK: Breakpoint triggered on load from ${:02X}:{:04X} (${:02X})",
-                bank, addr, self.mem.load(bank, addr))
-        }
-
-        self.do_io_cycle(bank, addr);
+        // FIXME Remove?
         self.mem.load(bank, addr)
     }
     fn loadw(&mut self, bank: u8, addr: u16) -> u16 {
@@ -155,12 +112,7 @@ impl<M: Mem + SaveState> Cpu<M> {
     }
 
     fn storeb(&mut self, bank: u8, addr: u16, value: u8) {
-        if MEM_BREAK_STORE.iter().find(|&&(b, a)| bank == b && addr == a).is_some() {
-            debug!("MEM-BREAK: Breakpoint triggered on store of ${:02X} to ${:02X}:{:04X}",
-                value, bank, addr)
-        }
-
-        self.do_io_cycle(bank, addr);
+        // FIXME Remove?
         self.mem.store(bank, addr, value)
     }
     fn storew(&mut self, bank: u8, addr: u16, value: u16) {
@@ -269,7 +221,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         );
     }
 
-    /// Executes a single opcode and returns the number of master clock cycles used.
+    /// Executes a single opcode and returns the number of CPU clock cycles used.
     pub fn dispatch(&mut self) -> u16 {
         // CPU cycles each opcode takes (at the minimum).
         static CYCLE_TABLE: [u8; 256] = [
@@ -294,7 +246,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let pc = self.pc;
         self.cy = 0;
         let op = self.fetchb();
-        self.cy += CYCLE_TABLE[op as usize] as u16 * CPU_CYCLE;
+        self.cy += CYCLE_TABLE[op as usize] as u16;
 
         macro_rules! instr {
             ( $name:ident ) => {{
@@ -715,7 +667,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let a = self.a;
             self.pushw(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Pull Accumulator from stack
@@ -727,7 +679,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let a = self.popw();
             self.a = self.p.set_nz(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Push Index Register X
@@ -738,7 +690,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = self.x;
             self.pushw(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Pop Index Register X
@@ -750,7 +702,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = self.popw();
             self.x = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Push Index Register Y
@@ -761,7 +713,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = self.y;
             self.pushw(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Pop Index Register Y
@@ -773,7 +725,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = self.popw();
             self.y = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -804,7 +756,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = am.loadw(self);
             let res = self.a & val;
             self.a = self.p.set_nz(res);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// OR Accumulator with Memory
@@ -819,7 +771,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = am.loadw(self);
             let res = self.a | val;
             self.a = self.p.set_nz(res);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Exclusive Or Accumulator with Memory
@@ -834,7 +786,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = am.loadw(self);
             let res = self.a ^ val;
             self.a = self.p.set_nz(res);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -862,7 +814,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
 
             self.a = self.p.set_nz(res);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -887,7 +839,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_overflow((self.a ^ res as u16) & 0x80 != 0 && (self.a ^ v) & 0x80 == 0x80);
 
             self.a = self.p.set_nz(res as u16);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -917,7 +869,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_carry(val & 0x8000 != 0);
             let res = self.p.set_nz(val << 1);
             self.storew(bank, addr, res);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += 2;
         }
     }
     /// Rotate Accumulator Left
@@ -933,7 +885,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_carry(self.a & 0x8000 != 0);
             let res = (self.a << 1) | c as u16;
             self.a = self.p.set_nz(res);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Rotate Memory Left
@@ -950,7 +902,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_carry(a & 0x8000 != 0);
             let res = self.p.set_nz((a << 1) | c as u16);
             am.storew(self, res);
-            self.cy += CPU_CYCLE;   // FIXME times 2?
+            self.cy += 1;   // FIXME times 2?
         }
     }
 
@@ -994,7 +946,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = self.a;
             self.p.set_carry(val & 0x0001 != 0);
             self.a = self.p.set_nz((val >> 1) | ((c as u16) << 15));
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += 2;
         }
     }
     /// Rotate Memory Right
@@ -1014,7 +966,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             self.p.set_carry(val & 0x0001 != 0);
             let res = self.p.set_nz((val >> 1) | ((c as u16) << 15));
             self.storew(bank, addr, res);
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += 2;
         }
     }
 
@@ -1203,7 +1155,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if !self.p.negative() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if Minus/Negative (N = 1)
@@ -1211,7 +1163,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if self.p.negative() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if Overflow Clear
@@ -1219,7 +1171,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if !self.p.overflow() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if Overflow Set
@@ -1227,7 +1179,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if self.p.overflow() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if carry clear
@@ -1235,7 +1187,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if !self.p.carry() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if carry set
@@ -1243,7 +1195,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if self.p.carry() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if Equal
@@ -1251,7 +1203,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if self.p.zero() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Branch if Not Equal (Branch if Z = 0)
@@ -1259,7 +1211,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         let a = am.address(self);
         if !self.p.zero() {
             self.branch(a);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -1285,7 +1237,7 @@ impl<M: Mem + SaveState> Cpu<M> {
                     self.p.set_overflow(val & 0x4000 != 0);
                 }
             }
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Test and set memory bits against accumulator
@@ -1303,7 +1255,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let res = val | self.a;
             am.storew(self, res);
 
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += 2;
         }
     }
     /// Test and reset memory bits against accumulator
@@ -1321,7 +1273,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let res = val & !self.a;
             am.storew(self, res);
 
-            self.cy += 2 * CPU_CYCLE;
+            self.cy += 2;
         }
     }
 
@@ -1335,7 +1287,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let a = self.a;
             let b = am.loadw(self);
             self.compare(a, b);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Compare Index Register X with Memory
@@ -1348,7 +1300,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = am.loadw(self);
             let x = self.x;
             self.compare(x, val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Compare Index Register Y with Memory
@@ -1361,7 +1313,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             let val = am.loadw(self);
             let y = self.y;
             self.compare(y, val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -1430,7 +1382,7 @@ impl<M: Mem + SaveState> Cpu<M> {
             am.storeb(self, 0);
         } else {
             am.storew(self, 0);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -1443,7 +1395,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = am.loadw(self);
             self.a = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Load X register from memory
@@ -1455,7 +1407,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = am.loadw(self);
             self.x = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     /// Load Y register from memory
@@ -1467,7 +1419,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let val = am.loadw(self);
             self.y = self.p.set_nz(val);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -1480,7 +1432,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let w = self.a;
             am.storew(self, w);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     fn stx(&mut self, am: AddressingMode) {
@@ -1491,7 +1443,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let w = self.x;
             am.storew(self, w);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
     fn sty(&mut self, am: AddressingMode) {
@@ -1502,7 +1454,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         } else {
             let w = self.y;
             am.storew(self, w);
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
         }
     }
 
@@ -1638,7 +1590,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         if self.p.small_acc() {
             AddressingMode::Immediate8(self.fetchb())
         } else {
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
             AddressingMode::Immediate(self.fetchw())
         }
     }
@@ -1647,7 +1599,7 @@ impl<M: Mem + SaveState> Cpu<M> {
         if self.p.small_index() {
             AddressingMode::Immediate8(self.fetchb())
         } else {
-            self.cy += CPU_CYCLE;
+            self.cy += 1;
             AddressingMode::Immediate(self.fetchw())
         }
     }
