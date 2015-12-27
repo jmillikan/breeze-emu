@@ -16,6 +16,8 @@ use glium::vertex::VertexBuffer;
 
 use std::borrow::Cow;
 
+/// Our vertices are extremely simple: There's no need for more than 2 dimensions and the texture
+/// coordinates can be calculated from the position, so we don't need to store them.
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
@@ -54,8 +56,11 @@ const FRAGMENT_SHADER_SRC: &'static str = r#"
 
 pub struct GliumRenderer {
     display: GlutinFacade,
+    /// This vertex buffer will only ever store 4 vertices spanning the whole window
     vbuf: VertexBuffer<Vertex>,
+    /// A simple shader that maps our texture onto the window
     program: Program,
+    /// This texture is updated with the PPU's data every frame
     texture: Texture2d,
 }
 
@@ -65,6 +70,7 @@ impl Default for GliumRenderer {
             .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
             .with_title("sneeze".to_owned())
             .build_glium().unwrap();
+        // Create a rectangle spanning the whole viewport/window. This is a triangle strip.
         let shape = [
             Vertex::new(-1.0, 1.0),
             Vertex::new(1.0, 1.0),
