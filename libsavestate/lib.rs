@@ -6,6 +6,24 @@ use std::io::{self, Read, Write};
 use std::mem;
 use std::slice;
 
+/// Copied from `std`.
+// FIXME: Remove once stable Rust has this (1.6)
+fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
+    while !buf.is_empty() {
+        match r.read(buf) {
+            Ok(0) => break,
+            Ok(n) => { let tmp = buf; buf = &mut tmp[n..]; }
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    if !buf.is_empty() {
+        Err(io::Error::new(io::ErrorKind::Other, "failed to fill whole buffer"))
+    } else {
+        Ok(())
+    }
+}
+
 /// Trait for types which can be serialized in a save state.
 ///
 /// Note that this approach is a bit different from usual serialization: `restore_state` takes a
@@ -51,7 +69,7 @@ impl<T: TransmuteByteSafe> SaveState for T {
     }
 
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
-        r.read_exact(unsafe {
+        read_exact(r, unsafe {
             slice::from_raw_parts_mut(self as *mut _ as *mut u8, mem::size_of::<Self>())
         })
     }
@@ -65,7 +83,7 @@ impl SaveState for bool {
 
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
         let mut val = [0xff];
-        try!(r.read_exact(&mut val));
+        try!(read_exact(r, &mut val));
 
         match val[0] {
             0 => *self = false,
@@ -92,7 +110,7 @@ impl<T: SaveState + Default> SaveState for Option<T> {
 
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
         let mut val = [0xff];
-        try!(r.read_exact(&mut val));
+        try!(read_exact(r, &mut val));
 
         match val[0] {
             0 => *self = None,

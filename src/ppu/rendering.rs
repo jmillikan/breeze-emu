@@ -37,7 +37,6 @@ impl Ppu {
             0b011 => if !size_toggle {(16,16)} else {(32,32)},
             0b100 => if !size_toggle {(16,16)} else {(64,64)},
             0b101 => if !size_toggle {(32,32)} else {(64,64)},
-            // FIXME Figure out if we want to support these:
             0b110 => if !size_toggle {(16,32)} else {(32,64)},
             0b111 => if !size_toggle {(16,32)} else {(32,32)},
             _ => unreachable!(),
