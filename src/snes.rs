@@ -1,14 +1,15 @@
 //! Contains the `Snes` struct, which wields the combined power of this project.
 
-use apu::Spc700;
-use cpu::Cpu;
 use dma::*;
 use frontend::{FrontendAction, Renderer};
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
 use rom::Rom;
-use savestate::SaveState;
+
+use apu::Spc700;
+use cpu::Cpu;
+use libsavestate::SaveState;
 
 use std::env;
 use std::fs::File;
@@ -18,7 +19,7 @@ use cpu::Mem;
 const CPU_CYCLE: i32 = 6;
 
 const WRAM_SIZE: usize = 128 * 1024;
-byte_array!(Wram[WRAM_SIZE]);
+byte_array!(Wram[WRAM_SIZE] with save state please);
 
 /// Contains everything connected to the CPU via one of the two address buses. All memory accesses
 /// will be directed through this (the CPU already takes access time into account).

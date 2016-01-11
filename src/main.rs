@@ -8,7 +8,7 @@ extern crate env_logger;
 extern crate arrayvec;
 
 #[macro_use] #[no_link] extern crate byte_array;
-#[macro_use] extern crate libsavestate as savestate;
+#[macro_use] extern crate libsavestate;
 extern crate wdc65816 as cpu;
 extern crate spc700 as apu;
 
@@ -22,8 +22,8 @@ use std::env;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
+use libsavestate::SaveState;
 use rom::Rom;
-use savestate::SaveState;
 use snes::Snes;
 
 #[macro_use] mod log_util;

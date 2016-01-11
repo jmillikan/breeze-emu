@@ -8,7 +8,8 @@ use std::slice;
 
 /// Copied from `std`.
 // FIXME: Remove once stable Rust has this (1.6)
-fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
+// (pub for convenience only)
+pub fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
     while !buf.is_empty() {
         match r.read(buf) {
             Ok(0) => break,
@@ -56,9 +57,11 @@ unsafe impl TransmuteByteSafe for usize {}
 unsafe impl TransmuteByteSafe for i8 {}
 unsafe impl TransmuteByteSafe for i16 {}
 unsafe impl TransmuteByteSafe for i32 {}
+unsafe impl TransmuteByteSafe for i64 {}
+unsafe impl TransmuteByteSafe for isize {}
 
 /// Everything that can be transmuted to/from fixed-size byte slices can trivially implement
-/// `SaveState`. This includes a large portion of the emulator state, since much of it consist of
+/// `SaveState`. This includes a large portion of the emulator state, since much of it consists of
 /// primitive integer values.
 impl<T: TransmuteByteSafe> SaveState for T {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
@@ -126,28 +129,31 @@ impl<T: SaveState + Default> SaveState for Option<T> {
     }
 }
 
-/// **NOTE** The `SaveState` impl for slices of `T` assumes that it is only used for fixed-size
-/// arrays, which can easily lead to bugs!
-///
-// (FIXME)
-// (this only works because array deref to slices. slice size can't be changed. this would only be
-// clean if we implemented this for all fixed-size array. all of them. not 32.)
-impl<T: SaveState> SaveState for [T] {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        for t in self {
-            try!(t.save_state(w))
-        }
-        Ok(())
-    }
+macro_rules! impl_fixed_size_array {
+    ( $e:expr ) => { $e };
+    ( $($size:tt)+ ) => { $(
+        impl<T: SaveState> SaveState for [T; impl_fixed_size_array!($size)] {
+            fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+                for t in self {
+                    try!(t.save_state(w))
+                }
+                Ok(())
+            }
 
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
-        // Assume `self` always has the same size
-        for t in self {
-            try!(t.restore_state(r));
+            fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+                // Assume `self` always has the same size
+                for t in self {
+                    try!(t.restore_state(r));
+                }
+                Ok(())
+            }
         }
-        Ok(())
-    }
+    )+ };
 }
+
+impl_fixed_size_array!(
+    0 1 2 3 4 5 6 7 8
+);
 
 /// `Vec<T>`s `SaveState` impl will read/write the `Vec`s length first, followed by its contents.
 ///
@@ -157,7 +163,10 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
     fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
         // Write the len first:
         try!(self.len().save_state(w));
-        (&self[..]).save_state(w)
+        for item in self {
+            try!(item.save_state(w));
+        }
+        Ok(())
     }
 
     fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {

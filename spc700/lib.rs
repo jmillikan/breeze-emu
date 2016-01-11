@@ -26,7 +26,7 @@ use self::timer::Timer;
 
 
 const RAM_SIZE: usize = 65536;
-byte_array!(Ram[RAM_SIZE] with u16 indexing please);
+byte_array!(Ram[RAM_SIZE] with u16 indexing, save state please);
 
 const RESET_VEC: u16 = 0xFFFE;
 

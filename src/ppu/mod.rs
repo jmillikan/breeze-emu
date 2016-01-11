@@ -23,9 +23,9 @@ const OAM_SIZE: usize = 544;
 const CGRAM_SIZE: usize = 512;
 const VRAM_SIZE: usize = 64 * 1024;
 const FRAME_BUF_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize * 3;
-byte_array!(Oam[OAM_SIZE] with u16 indexing please);
-byte_array!(Cgram[CGRAM_SIZE] with u16 indexing please);
-byte_array!(Vram[VRAM_SIZE] with u16 indexing please);
+byte_array!(Oam[OAM_SIZE] with u16 indexing, save state please);
+byte_array!(Cgram[CGRAM_SIZE] with u16 indexing, save state please);
+byte_array!(Vram[VRAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub FrameBuf[FRAME_BUF_SIZE]);
 
 #[derive(Default)]
