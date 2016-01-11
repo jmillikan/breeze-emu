@@ -1,5 +1,6 @@
 [package]
 name = "libsavestate"
+description = "A crate for easy implementation of emulator save states"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 
