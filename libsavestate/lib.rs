@@ -176,7 +176,43 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
     }
 }
 
-/// Generates the functions of the `SaveState` trait
+/// Generates the functions of the `SaveState` trait.
+///
+/// The `impl_save_state` macro should be the preferred way of implementing the `SaveState` trait.
+/// However, that might not be possible. For example, the type for which to implement `SaveState`
+/// might have generic parameters, which must be reflected on all `impl`s. In that case, you can
+/// manually write an `impl` block and use this macro in its body to generate the actual
+/// implementation.
+///
+/// # Example
+///
+/// ```
+/// #[macro_use]
+/// extern crate libsavestate;
+///
+/// struct Generic<T> {
+///     field: T,
+///     other: u8,
+/// }
+///
+/// // Doesn't work, even though `field` is ignored :(
+/// //impl_save_state!(Generic {
+/// //    other
+/// //} ignore {
+/// //    field
+/// //});
+///
+/// // This works, but we need the right `impl` block around it
+/// impl<T> ::libsavestate::SaveState for Generic<T> {
+///     impl_save_state_fns!(Generic {
+///         other
+///     } ignore {
+///         field
+///     });
+/// }
+///
+/// # fn main() {}
+/// ```
 #[macro_export]
 macro_rules! impl_save_state_fns {
     ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {
@@ -209,7 +245,26 @@ macro_rules! impl_save_state_fns {
 ///
 /// To prevent bugs, these lists must contains all fields of the type exactly once or this won't
 /// compile.
-// TODO Add example
+///
+/// # Example
+/// ```
+/// #[macro_use]
+/// extern crate libsavestate;
+///
+/// struct Struct {
+///     field: u8,
+///     field2: Vec<u8>,
+///     ignored: String,
+/// }
+///
+/// impl_save_state!(Struct {
+///     field, field2
+/// } ignore {
+///     ignored
+/// });
+///
+/// # fn main() {}
+/// ```
 #[macro_export]
 macro_rules! impl_save_state {
     ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {

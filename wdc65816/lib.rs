@@ -61,6 +61,7 @@ pub struct Cpu<M: Mem + SaveState> {
     pub mem: M,
 }
 
+// Needs an explicit impl because `Cpu` is generic over `M`.
 impl<M: Mem + SaveState> SaveState for Cpu<M> {
     impl_save_state_fns!(Cpu {
         a, x, y, s, dbr, pbr, d, pc, p, emulation, mem
