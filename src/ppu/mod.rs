@@ -377,7 +377,7 @@ impl_save_state!(Ppu {
 });
 
 #[derive(Debug)]
-struct Rgb {
+pub struct Rgb {
     r: u8,
     g: u8,
     b: u8,

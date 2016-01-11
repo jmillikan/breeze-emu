@@ -28,7 +28,7 @@ pub trait SaveState {
 /// This is true for all types which don't impose any restrictions on their raw content, so this
 /// would not be safe to implement for types like `bool` or `char`. This is also obviously unsafe
 /// for non-`#[repr(C)]`-structs.
-unsafe trait TransmuteByteSafe {}
+pub unsafe trait TransmuteByteSafe {}
 
 unsafe impl TransmuteByteSafe for u8 {}
 unsafe impl TransmuteByteSafe for u16 {}
