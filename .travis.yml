@@ -3,5 +3,8 @@ rust:
   - stable
   - beta
   - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
 sudo: false
 script: cargo build --no-default-features --features=glium
