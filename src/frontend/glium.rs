@@ -68,7 +68,7 @@ impl Default for GliumRenderer {
     fn default() -> Self {
         let display = WindowBuilder::new()
             .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
-            .with_title("sneeze".to_owned())
+            .with_title("breeze".to_owned())
             .build_glium().unwrap();
         // Create a rectangle spanning the whole viewport/window. This is a triangle strip.
         let shape = [

@@ -95,7 +95,7 @@ impl Default for SdlRenderer {
         SDL.with(|sdl_cell| {
             let sdl = sdl_cell.borrow_mut();
             let video = sdl.video().unwrap();
-            let window = video.window("sneeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
+            let window = video.window("breeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
                 .resizable()
                 .build().unwrap();
             let renderer = window.renderer().accelerated().build().unwrap();

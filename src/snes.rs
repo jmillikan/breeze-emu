@@ -290,14 +290,14 @@ impl Snes {
         match action {
             FrontendAction::Exit => return true,
             FrontendAction::SaveState => {
-                let mut file = File::create("sneeze.sav").unwrap();
+                let mut file = File::create("breeze.sav").unwrap();
                 self.save_state(&mut file).unwrap();
             }
             FrontendAction::LoadState => {
                 if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {
                     error!("cannot load a save state while recording or replaying input!");
                 } else {
-                    let mut file = File::open("sneeze.sav").unwrap();
+                    let mut file = File::open("breeze.sav").unwrap();
                     self.restore_state(&mut file).unwrap();
                 }
             }
@@ -308,8 +308,8 @@ impl Snes {
 
     pub fn run(&mut self) {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
-        let trace_start = env::var("SNEEZE_TRACE")
-            .map(|string| string.parse().expect("invalid value for SNEEZE_TRACE"))
+        let trace_start = env::var("BREEZE_TRACE")
+            .map(|string| string.parse().expect("invalid value for BREEZE_TRACE"))
             .unwrap_or(!0);
 
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we

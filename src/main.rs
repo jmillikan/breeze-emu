@@ -36,11 +36,11 @@ mod snes;
 
 fn main() {
     if env::var_os("RUST_LOG").is_none() {
-        env::set_var("RUST_LOG", "sneeze=INFO");
+        env::set_var("RUST_LOG", "breeze=INFO");
     }
     env_logger::init().unwrap();
 
-    let args = clap_app!(sneeze =>
+    let args = clap_app!(breeze =>
         (version: option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown version>"))
         (about: "SNES emulator")
         (@arg ROM_PATH: +required "The ROM file to execute")
