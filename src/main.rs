@@ -5,12 +5,9 @@
 #[macro_use] #[no_link] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
-extern crate arrayvec;
 
-#[macro_use] #[no_link] extern crate byte_array;
 #[macro_use] extern crate libsavestate;
-extern crate wdc65816 as cpu;
-extern crate spc700 as apu;
+extern crate breeze_core as breeze;
 
 #[cfg(feature = "sdl2")]
 extern crate sdl2;
@@ -23,16 +20,10 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 
 use libsavestate::SaveState;
-use rom::Rom;
-use snes::Snes;
+use breeze::rom::Rom;
+use breeze::snes::Snes;
 
-#[macro_use] mod log_util;
-mod dma;
 mod frontend;
-mod input;
-mod ppu;
-mod rom;
-mod snes;
 
 fn main() {
     if env::var_os("RUST_LOG").is_none() {

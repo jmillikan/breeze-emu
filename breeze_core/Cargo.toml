@@ -1,0 +1,16 @@
+[package]
+name = "breeze_core"
+description = "The Breeze emulator core"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+wdc65816 = { path = "../wdc65816" }
+spc700 = { path = "../spc700" }
+byte_array = { path = "../byte_array" }
+libsavestate = { path = "../libsavestate" }
+log = "0.3"
+arrayvec = "0.3"

@@ -292,6 +292,7 @@ impl Snes {
             FrontendAction::SaveState => {
                 let mut file = File::create("breeze.sav").unwrap();
                 self.save_state(&mut file).unwrap();
+                info!("Created a save state");
             }
             FrontendAction::LoadState => {
                 if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {

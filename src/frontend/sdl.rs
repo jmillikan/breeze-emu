@@ -1,8 +1,8 @@
 //! Render to an SDL window
 
-use super::{FrontendAction, FrontendResult};
-use input::InputState;
-use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use breeze::frontend::{FrontendAction, FrontendResult};
+use breeze::input::InputState;
+use breeze::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use sdl2::{EventPump, Sdl};
 use sdl2::event::WindowEventId;
