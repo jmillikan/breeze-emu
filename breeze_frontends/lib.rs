@@ -20,7 +20,7 @@ extern crate sdl2;
 pub use frontend_api::*;
 pub use frontend_api::input::InputState;
 
-use std::collections::HashMap;
+pub type RendererMap = ::std::collections::BTreeMap<&'static str, Option<fn() -> Box<Renderer>>>;
 
 mod frontend_dummy;
 #[cfg(feature = "glium")]
@@ -29,7 +29,7 @@ mod frontend_glium;
 pub mod frontend_sdl;    // FIXME Make private after input handling is better
 
 lazy_static! {
-    pub static ref RENDERER_MAP: HashMap<&'static str, Option<fn() -> Box<Renderer>>> = {
+    pub static ref RENDERER_MAP: RendererMap = {
         macro_rules! make_fn {
             ( #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
                 #[cfg($m)]
@@ -53,7 +53,7 @@ lazy_static! {
             }};
         }
 
-        let mut map = HashMap::new();
+        let mut map = RendererMap::new();
         map.insert("glium", make_fn!(#[cfg(feature = "glium")] frontend_glium::GliumRenderer));
         map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] frontend_sdl::SdlRenderer));
         map.insert("dummy", make_fn!(frontend_dummy::DummyRenderer));

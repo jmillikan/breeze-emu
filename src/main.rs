@@ -44,7 +44,14 @@ fn main() {
     let renderer_fn = match frontends::RENDERER_MAP.get(renderer_name) {
         None => {
             println!("error: unknown renderer: {}", renderer_name);
-            // FIXME Print list of known renderers
+            println!("{} renderers known:", frontends::RENDERER_MAP.len());
+            for (name, opt_fn) in frontends::RENDERER_MAP.iter() {
+                println!("\t{}\t{}", name, match *opt_fn {
+                    Some(_) => "available",
+                    None => "not compiled in",
+                });
+            }
+
             return
         }
         Some(&None) => {
