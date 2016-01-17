@@ -15,6 +15,9 @@
 //! }
 //! ```
 
+#![deny(warnings)]
+#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
+
 #[macro_export]
 #[doc = "hidden"]
 macro_rules! impl_byte_array_extra {

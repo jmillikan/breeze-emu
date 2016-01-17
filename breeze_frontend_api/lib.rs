@@ -1,3 +1,6 @@
+#![deny(warnings)]
+#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
+
 #[macro_use] extern crate libsavestate;
 
 pub mod input;

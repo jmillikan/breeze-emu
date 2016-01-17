@@ -2,6 +2,9 @@
 //!
 //! Note that this is wildly unsafe, but that's okay because it's open source.
 
+#![deny(warnings)]
+#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
+
 use std::io::{self, Read, Write};
 use std::mem;
 use std::slice;
