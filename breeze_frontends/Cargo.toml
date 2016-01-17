@@ -1,0 +1,25 @@
+[package]
+name = "breeze_frontends"
+description = "Breeze Emulator Frontend implementations"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+breeze_frontend_api = { path = "../breeze_frontend_api" }
+log = "0.3"
+lazy_static = "0.1"
+
+[dependencies.glium]
+version = "0.13"
+optional = true
+# glium comes with some default features we don't need or want (`cgmath`,
+# `nalgebra`, `image`). We only need glutin.
+features = ["glutin"]
+default-features = false
+
+[dependencies.sdl2]
+version = "0.13"
+optional = true

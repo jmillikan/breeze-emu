@@ -6,16 +6,27 @@
 // TODO We could easily do render tests with a custom `Renderer`, and even supply scripted input
 // with an `InputSource`
 
-pub use breeze::frontend::*;
-pub use breeze::input::InputState;
+extern crate breeze_frontend_api as frontend_api;
+
+#[macro_use] #[no_link] extern crate lazy_static;
+#[macro_use] extern crate log;
+
+#[cfg(feature = "sdl2")]
+extern crate sdl2;
+
+#[cfg(feature = "glium")]
+#[macro_use] extern crate glium;
+
+pub use frontend_api::*;
+pub use frontend_api::input::InputState;
 
 use std::collections::HashMap;
 
-mod dummy;
+mod frontend_dummy;
 #[cfg(feature = "glium")]
-mod glium;
+mod frontend_glium;
 #[cfg(feature = "sdl2")]
-pub mod sdl;    // FIXME Make private after input handling is better
+pub mod frontend_sdl;    // FIXME Make private after input handling is better
 
 lazy_static! {
     pub static ref RENDERER_MAP: HashMap<&'static str, Option<fn() -> Box<Renderer>>> = {
@@ -43,9 +54,9 @@ lazy_static! {
         }
 
         let mut map = HashMap::new();
-        map.insert("glium", make_fn!(#[cfg(feature = "glium")] glium::GliumRenderer));
-        map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] sdl::SdlRenderer));
-        map.insert("dummy", make_fn!(dummy::DummyRenderer));
+        map.insert("glium", make_fn!(#[cfg(feature = "glium")] frontend_glium::GliumRenderer));
+        map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] frontend_sdl::SdlRenderer));
+        map.insert("dummy", make_fn!(frontend_dummy::DummyRenderer));
         map
     };
 

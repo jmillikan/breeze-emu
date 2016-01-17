@@ -1,0 +1,11 @@
+[package]
+name = "breeze_frontend_api"
+description = "Breeze Emulator Frontend API"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+libsavestate = { path = "../libsavestate" }

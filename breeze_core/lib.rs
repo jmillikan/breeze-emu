@@ -8,11 +8,12 @@ extern crate arrayvec;
 #[macro_use] extern crate libsavestate;
 extern crate wdc65816 as cpu;
 extern crate spc700 as apu;
+extern crate breeze_frontend_api as frontend;
 
 #[macro_use] mod log_util;
 mod dma;
 pub mod ppu;
 pub mod input;
-pub mod frontend;
 pub mod rom;
 pub mod snes;
+ 

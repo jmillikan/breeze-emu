@@ -5,6 +5,7 @@ authors = ["Jonas Schievink <jonas@schievink.net>"]
 
 [dependencies]
 breeze_core = { path = "breeze_core" }
+breeze_frontends = { path = "breeze_frontends" }
 libsavestate = { path = "libsavestate" }
 log = "0.3"
 env_logger = "0.3"
@@ -13,17 +14,7 @@ lazy_static = "0.1"
 # and command correction)
 clap = { version = "1.4", default-features = false }
 
-[dependencies.glium]
-version = "0.13"
-optional = true
-# glium comes with some default features we don't need or want (`cgmath`,
-# `nalgebra`, `image`). We only need glutin.
-features = ["glutin"]
-default-features = false
-
-[dependencies.sdl2]
-version = "0.13"
-optional = true
-
 [features]
-default = ["sdl2"]
+# reexport frontends
+default = ["breeze_frontends/sdl2"]
+glium = ["breeze_frontends/glium"]

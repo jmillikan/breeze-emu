@@ -1,3 +1,8 @@
+#[macro_use] extern crate libsavestate;
+
+pub mod input;
+pub mod ppu;
+
 use input::InputState;
 
 /// An action that can be performed by the user, is detected by the frontend and executed by the

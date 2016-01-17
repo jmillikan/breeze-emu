@@ -8,6 +8,7 @@ authors = ["Jonas Schievink <jonas@schievink.net>"]
 path = "lib.rs"
 
 [dependencies]
+breeze_frontend_api = { path = "../breeze_frontend_api" }
 wdc65816 = { path = "../wdc65816" }
 spc700 = { path = "../spc700" }
 byte_array = { path = "../byte_array" }

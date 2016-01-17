@@ -8,12 +8,7 @@ extern crate env_logger;
 
 #[macro_use] extern crate libsavestate;
 extern crate breeze_core as breeze;
-
-#[cfg(feature = "sdl2")]
-extern crate sdl2;
-
-#[cfg(feature = "glium")]
-#[macro_use] extern crate glium;
+extern crate breeze_frontends as frontends;
 
 use std::env;
 use std::fs::File;
@@ -22,8 +17,6 @@ use std::io::{BufReader, Read};
 use libsavestate::SaveState;
 use breeze::rom::Rom;
 use breeze::snes::Snes;
-
-mod frontend;
 
 fn main() {
     if env::var_os("RUST_LOG").is_none() {
@@ -46,11 +39,12 @@ fn main() {
         return;
     }
 
-    let renderer_name = args.value_of("renderer").unwrap_or(&*frontend::DEFAULT_RENDERER);
+    let renderer_name = args.value_of("renderer").unwrap_or(&*frontends::DEFAULT_RENDERER);
 
-    let renderer_fn = match frontend::RENDERER_MAP.get(renderer_name) {
+    let renderer_fn = match frontends::RENDERER_MAP.get(renderer_name) {
         None => {
             println!("error: unknown renderer: {}", renderer_name);
+            // FIXME Print list of known renderers
             return
         }
         Some(&None) => {

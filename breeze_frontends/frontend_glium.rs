@@ -2,8 +2,8 @@
 
 // FIXME: Support resizing the window, like the SDL renderer does
 
-use breeze::frontend::FrontendAction;
-use breeze::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use frontend_api::FrontendAction;
+use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
