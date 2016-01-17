@@ -4,7 +4,7 @@
 /// Bits (`HIGH | LOW`):
 /// `B Y Select Start Up Down Left Right | A X L R 0 0 0 0`
 #[derive(Clone, Copy, Default)]
-pub struct InputState(pub u16);
+pub struct InputState(u16);
 
 impl_save_state_for_newtype!(InputState);
 
@@ -25,7 +25,17 @@ pub const BIT_LEFT: u8 = 9;
 pub const BIT_RIGHT: u8 = 8;
 
 impl InputState {
+    /// Creates a new `InputState` with no buttons pressed
     pub fn new() -> Self { Self::default() }
+
+    /// Get the inner `u16` representing the `InputState` (see `InputState` docs for more info)
+    pub fn as_u16(&self) -> u16 { self.0 }
+
+    /// Creates an `InputState` from a `u16`
+    pub fn from_u16(val: u16) -> Self {
+        // FIXME The 4 lower bits should always be 0, not sure if that's important
+        InputState(val)
+    }
 
     fn set(&mut self, bit: u8, value: bool) -> &mut Self {
         match value {

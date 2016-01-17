@@ -110,8 +110,8 @@ impl Input {
                 let bitpos = self.bitpos4016;
                 if bitpos == 16 { 1 } else {
                     // Read controller 1 and 3
-                    let a = self.states[0].0 & (0x8000 >> bitpos as u16) != 0;
-                    let c = self.states[2].0 & (0x8000 >> bitpos as u16) != 0;
+                    let a = self.states[0].as_u16() & (0x8000 >> bitpos as u16) != 0;
+                    let c = self.states[2].as_u16() & (0x8000 >> bitpos as u16) != 0;
                     self.bitpos4016 += 1;
 
                     (if c {0x02} else {0x00}) | (if a {0x01} else {0x00})
@@ -121,8 +121,8 @@ impl Input {
                 let bitpos = self.bitpos4017;
                 if bitpos == 16 { 1 } else {
                     // Read controller 2 and 4
-                    let a = self.states[1].0 & (0x8000 >> bitpos as u16) != 0;
-                    let c = self.states[3].0 & (0x8000 >> bitpos as u16) != 0;
+                    let a = self.states[1].as_u16() & (0x8000 >> bitpos as u16) != 0;
+                    let c = self.states[3].as_u16() & (0x8000 >> bitpos as u16) != 0;
                     self.bitpos4017 += 1;
 
                     (if c {0x02} else {0x00}) | (if a {0x01} else {0x00})
@@ -134,8 +134,8 @@ impl Input {
                 let hi = reg & 1 != 0;
                 let state = &self.states[controller as usize];
                 match hi {
-                    false => state.0 as u8,
-                    true => (state.0 >> 8) as u8,
+                    false => state.as_u16() as u8,
+                    true => (state.as_u16() >> 8) as u8,
                 }
             }
             _ => panic!("${:04X} is not an input register", reg)
@@ -179,8 +179,8 @@ impl Recorder {
 
         let mut changed = false;
         for i in 0..4 {
-            let last = self.last_state[i].0;
-            let new = new_state[i].0;
+            let last = self.last_state[i].as_u16();
+            let new = new_state[i].as_u16();
             if last != new {
                 if !changed { try!(write!(self.out, "{}:", self.frame)); }
                 changed = true;
@@ -291,7 +291,7 @@ impl Replayer {
         if self.frame == self.next_frame {
             // This frame needs changes, apply them:
             for i in 0..4 {
-                self.last_state[i].0 = self.next_state[i];
+                self.last_state[i] = InputState::from_u16(self.next_state[i]);
             }
 
             try!(self.read_next_line());
