@@ -263,19 +263,8 @@ impl_save_state!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
 
 impl Snes {
     pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
-        // FIXME Temporary hack to have any input at all working. Replace with autodetection.
-        #[cfg(feature = "sdl2")]
-        fn attach_default_input(input: &mut Input) {
-            input.sources[0] = Some(Box::new(::frontend::sdl::KeyboardInput))
-        }
-        #[cfg(not(feature = "sdl2"))]
-        fn attach_default_input(_: &mut Input) {}
-
-        let mut input = Input::default();
-        attach_default_input(&mut input);
-
         Snes {
-            cpu: Cpu::new(Peripherals::new(rom, input)),
+            cpu: Cpu::new(Peripherals::new(rom, Input::default())),
             renderer: renderer,
             master_cy: 0,
             apu_master_cy_debt: 0,

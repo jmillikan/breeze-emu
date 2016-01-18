@@ -17,6 +17,15 @@ use std::io::{BufReader, Read};
 use libsavestate::SaveState;
 use breeze::rom::Rom;
 use breeze::snes::Snes;
+use breeze::input::Input;
+
+// FIXME Replace this hack with input detection
+#[cfg(feature = "sdl")]
+fn attach_default_input(input: &mut Input) {
+    input.sources[0] = Some(Box::new(::frontends::frontend_sdl::KeyboardInput))
+}
+#[cfg(not(feature = "sdl"))]
+fn attach_default_input(_: &mut Input) {}
 
 fn main() {
     if env::var_os("RUST_LOG").is_none() {
@@ -74,6 +83,7 @@ fn main() {
     let rom = Rom::from_bytes(&buf).unwrap();
 
     let mut snes = Snes::new(rom, renderer_fn());
+    attach_default_input(snes.input_mut());
     if let Some(record_file) = args.value_of("record") {
         snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));
     }

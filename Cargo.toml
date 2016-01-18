@@ -16,5 +16,6 @@ clap = { version = "1.4", default-features = false }
 
 [features]
 # reexport frontends
-default = ["breeze_frontends/sdl2"]
+default = ["sdl"]
+sdl = ["breeze_frontends/sdl2"]
 glium = ["breeze_frontends/glium"]
