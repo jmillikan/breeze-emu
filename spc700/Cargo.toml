@@ -3,6 +3,7 @@ name = "spc700"
 description = "An (incomplete) emulator for the Super Nintendo's APU"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
+license = "Apache-2.0/MIT"
 
 [lib]
 path = "lib.rs"

@@ -3,6 +3,7 @@ name = "breeze_core"
 description = "The Breeze emulator core"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
+license = "Apache-2.0/MIT"
 
 [lib]
 path = "lib.rs"

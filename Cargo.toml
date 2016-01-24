@@ -2,6 +2,7 @@
 name = "breeze"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
+license = "Apache-2.0/MIT"
 
 [dependencies]
 breeze_core = { path = "breeze_core" }
