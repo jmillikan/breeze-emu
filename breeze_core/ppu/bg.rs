@@ -17,12 +17,12 @@ struct BgSettings {
     tilemap_mirror_h: bool,
     /// When `true`, this BGs tilemaps are mirrored downwards
     tilemap_mirror_v: bool,
-    /// Either 8 or 16.
-    tile_size: u8,
+    /// If `true`, BG tiles are 16x16 pixels. If `false`, they are 8x8 pixels.
+    tile_size_16: bool,
     /// Character Data start address in VRAM
     chr_addr: u16,
-    hscroll: u16,
-    vscroll: u16,
+    hofs: u16,
+    vofs: u16,
 }
 
 /// Unpacked tilemap entry for internal (rendering) use
@@ -99,24 +99,20 @@ impl Ppu {
             tilemap_word_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
             tilemap_mirror_h: bgsc & 0b01 == 0, // inverted bit value
             tilemap_mirror_v: bgsc & 0b10 == 0, // inverted bit value
-            tile_size: match self.bg_mode() {
+            tile_size_16: match self.bg_mode() {
                 // "If the BG character size for BG1/BG2/BG3/BG4 bit is set, then the BG is made of
                 // 16x16 tiles. Otherwise, 8x8 tiles are used. However, note that Modes 5 and 6
                 // always use 16-pixel wide tiles, and Mode 7 always uses 8x8 tiles."
-                5 | 6 => 16,
-                7 => 8,
+                5 | 6 => true,
+                7 => false,
                 _ => {
-                    // BGMODE: `4321----` (`-` = not relevant here)
-                    if self.bgmode & (1 << (bg + 3)) == 0 {
-                        8
-                    } else {
-                        16
-                    }
+                    // BGMODE: `4321----` (`-` = not relevant here) - Use 16x16 tiles?
+                    self.bgmode & (1 << (bg + 3)) != 0
                 }
             },
             chr_addr: (chr as u16) << 12,
-            hscroll: hofs,
-            vscroll: vofs,
+            hofs: hofs,
+            vofs: vofs,
         }
     }
 
@@ -212,12 +208,12 @@ impl Ppu {
         let x = self.x;
         let y = self.scanline;
         let bg = self.bg_settings(bg_num);
-        let tile_size = bg.tile_size;
-        let (xscroll, yscroll) = (bg.hscroll, bg.vscroll);
-        let tile_x = x.wrapping_add(xscroll) / tile_size as u16;
-        let tile_y = y.wrapping_add(yscroll) / tile_size as u16;
-        let off_x = (x.wrapping_add(xscroll) % tile_size as u16) as u8;
-        let off_y = (y.wrapping_add(yscroll) % tile_size as u16) as u8;
+        let tile_size = if bg.tile_size_16 { 16 } else { 8 };
+        let (hofs, vofs) = (bg.hofs, bg.vofs);
+        let tile_x = x.wrapping_add(hofs) / tile_size as u16;
+        let tile_y = y.wrapping_add(vofs) / tile_size as u16;
+        let off_x = (x.wrapping_add(hofs) % tile_size as u16) as u8;
+        let off_y = (y.wrapping_add(vofs) % tile_size as u16) as u8;
         let (sx, sy) = (!bg.tilemap_mirror_h, !bg.tilemap_mirror_v);
 
         // Calculate the VRAM word address, where the tilemap entry for our tile is stored

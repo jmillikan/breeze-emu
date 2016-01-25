@@ -10,7 +10,7 @@ mod bg;
 mod rendering;
 mod sprites;
 
-use self::sprites::RenderState;
+use self::sprites::SpriteRenderState;
 
 /// Physical screen width
 /// (this is the width of a field, or a half-frame)
@@ -40,7 +40,7 @@ pub struct Ppu {
     pub framebuf: FrameBuf,
 
     /// Opaque state object used by the render code. This value may change between frames.
-    render_state: RenderState,
+    sprite_render_state: SpriteRenderState,
 
     /// Object Attribute Memory
     ///
@@ -373,7 +373,7 @@ impl_save_state!(Ppu {
     m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog,
     wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline
 } ignore {
-    framebuf, render_state, x
+    framebuf, sprite_render_state, x
 });
 
 #[derive(Debug)]

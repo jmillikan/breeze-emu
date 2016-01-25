@@ -289,6 +289,7 @@ impl Snes {
                 } else {
                     let mut file = File::open("breeze.sav").unwrap();
                     self.restore_state(&mut file).unwrap();
+                    info!("Restored save state");
                 }
             }
         }

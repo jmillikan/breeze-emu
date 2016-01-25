@@ -5,9 +5,10 @@ use super::{Ppu, Rgb};
 use arrayvec::ArrayVec;
 use std::mem::replace;
 
-/// "Persistent" render state stored inside the `Ppu`.
+/// Render state stored inside the `Ppu`. We use this to cache the visible sprites for each
+/// scanline, just like the real PPU would.
 #[derive(Default)]
-pub struct RenderState {
+pub struct SpriteRenderState {
     /// Contains up to 34 `SpriteTile`s that are visible on the current scanline
     visible_sprite_tiles: Vec<SpriteTile>,
 }
@@ -124,7 +125,7 @@ impl Ppu {
         // FIXME Is this ^^ correct?
 
         // FIXME Use `ArrayVec<[_; 34]>` when it works
-        let mut visible_tiles = replace(&mut self.render_state.visible_sprite_tiles, Vec::new());
+        let mut visible_tiles = replace(&mut self.sprite_render_state.visible_sprite_tiles, Vec::new());
         visible_tiles.clear();
 
         // Word address of first sprite character table
@@ -182,7 +183,7 @@ impl Ppu {
             }
         }
 
-        self.render_state.visible_sprite_tiles = visible_tiles;
+        self.sprite_render_state.visible_sprite_tiles = visible_tiles;
     }
 
     /// Determines if the given sprite has any tiles on the current scanline
@@ -215,7 +216,7 @@ impl Ppu {
     pub fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
         if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
 
-        for tile in &self.render_state.visible_sprite_tiles {
+        for tile in &self.sprite_render_state.visible_sprite_tiles {
             if tile.priority == prio {
                 // The tile must be on this scanline, we just have to check X
                 if tile.x <= self.x as i16 && tile.x + 8 > self.x as i16 {
