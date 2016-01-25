@@ -43,6 +43,15 @@ pub struct Peripherals {
     /// * `y`: Enable IRQ on V-Counter match
     /// * `a`: Enable auto-joypad read
     nmien: u8,
+    /// `$4201` - WRIO: Programmable I/O Port (out-port)
+    /// `abxxxxxx`
+    /// * `a`: Connected to Port 0 `IOBit`
+    /// * `b`: Connected to Port 1 `IOBit`
+    /// * `x`: Not connected
+    ///
+    /// Any bit set to 0 will be 0 when read from `$4213`. If `a` is 0, reading `$2137` will not
+    /// latch the H/V Counters.
+    wrio: u8,
     /// `$4202` - WRMPYA: Multiplicand 1
     wrmpya: u8,
     /// `$4204`/`$4205` - WRDIVH/WRDIVL: Dividend
@@ -71,27 +80,29 @@ pub struct Peripherals {
 }
 
 impl_save_state!(Peripherals {
-    apu, ppu, rom, wram, dma, hdmaen, nmien, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi, irq,
-    cy, input
+    apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi,
+    irq, cy, input
 } ignore {});
 
 impl Peripherals {
     pub fn new(rom: Rom, input: Input) -> Peripherals {
         Peripherals {
             rom: rom,
+            input: input,
+            wrdiv: 0xffff,
+            htime: 0x1ff,
+            vtime: 0x1ff,
+            wrio: 0xff,
+
             apu: Spc700::default(),
             ppu: Ppu::default(),
             wram: Wram::default(),
-            input: input,
             dma: [DmaChannel::default(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
             wrmpya: 0,
-            wrdiv: 0xffff,
             rddiv: 0,
             rdmpy: 0,
-            htime: 0x1ff,
-            vtime: 0x1ff,
             nmi: false,
             irq: false,
             cy: 0,
@@ -209,6 +220,7 @@ impl Mem for Peripherals {
                     if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
                     self.nmien = value;
                 }
+                0x4201 => self.wrio = value,
                 0x4202 => self.wrmpya = value,
                 // WRMPYB: Performs multiplication on write
                 0x4203 => self.rdmpy = self.wrmpya as u16 * value as u16,
