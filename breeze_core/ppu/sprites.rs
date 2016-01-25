@@ -56,7 +56,7 @@ impl Ppu {
     fn get_oam_entry(&self, index: u8) -> OamEntry {
         debug_assert!(index <= 127, "attempted to access sprite #{}", index);
 
-        // FIXME Is this correct?
+        // OAM entry start address (low table)
         let start = index as u16 * 4;
         let mut x = self.oam[start] as u16;
 
@@ -77,7 +77,7 @@ impl Ppu {
         if byte & msb_mask != 0 {
             // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
             // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
-            x = 0xfff0 | x;
+            x = 0xff00 | x;
         }
 
         OamEntry {
