@@ -1,6 +1,6 @@
 //! Dummy frontend that does nothing.
 
-use super::*;
+use frontend_api::{FrontendAction, Renderer};
 
 /// Renderer that just does nothing.
 #[derive(Default)]

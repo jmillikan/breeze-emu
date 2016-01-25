@@ -7,7 +7,7 @@
 // with an `InputSource`
 
 #![deny(warnings)]
-#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
+#![deny(unused_import_braces, unused_qualifications)]
 
 extern crate breeze_frontend_api as frontend_api;
 
@@ -20,8 +20,7 @@ extern crate sdl2;
 #[cfg(feature = "glium")]
 #[macro_use] extern crate glium;
 
-pub use frontend_api::*;
-pub use frontend_api::input::InputState;
+use frontend_api::Renderer;
 
 pub type RendererMap = ::std::collections::BTreeMap<&'static str, Option<fn() -> Box<Renderer>>>;
 

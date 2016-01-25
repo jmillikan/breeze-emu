@@ -356,7 +356,7 @@ impl Snes {
                         }
                     }
                     (225, 0) => {
-                        // V-Blank
+                        // First V-Blank pixel
                         self.cpu.mem.input.new_frame();
                         if self.cpu.mem.nmi_enabled() {
                             self.cpu.mem.nmi = true;
@@ -365,6 +365,17 @@ impl Snes {
                             // too many cycles.
                             break;
                         }
+                    }
+                    (225, 50) => {
+                        // Auto-Joypad read
+                        // "This begins between dots 32.5 and 95.5 of the first V-Blank scanline,
+                        // and ends 4224 master cycles later."
+                        self.cpu.mem.input.perform_auto_read();
+                        // FIXME Set auto read status bit
+                    }
+                    (_, 180) => {
+                        // Approximate DRAM refresh (FIXME Probably incorrect, but does it matter?)
+                        self.cpu.mem.cy += 40;
                     }
                     _ => {}
                 }

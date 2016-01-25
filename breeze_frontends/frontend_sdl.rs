@@ -1,7 +1,7 @@
 //! Render to an SDL window
 
-use frontend_api::{FrontendAction, FrontendResult};
-use frontend_api::input::InputState;
+use frontend_api::FrontendAction;
+use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use sdl2::{EventPump, Sdl};
@@ -116,7 +116,7 @@ impl Default for SdlRenderer {
     }
 }
 
-impl super::Renderer for SdlRenderer {
+impl ::frontend_api::Renderer for SdlRenderer {
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)
@@ -170,12 +170,24 @@ impl SdlRenderer {
 #[allow(dead_code)]
 pub struct KeyboardInput;
 
-impl super::InputSource for KeyboardInput {
-    fn poll(&mut self) -> FrontendResult<InputState> {
+macro_rules! impl_fn {
+    ( $btn:ident = $key:ident ) => {
+        fn $btn(&mut self) -> bool {
+            SDL.with(|sdl_cell| {
+                let sdl = sdl_cell.borrow();
+                let state = sdl.event_pump.keyboard_state();
+                state.is_scancode_pressed(::sdl2::keyboard::Scancode::$key)
+            })
+        }
+    };
+}
+
+impl JoypadImpl for KeyboardInput {
+    fn update_state(&mut self) -> JoypadState {
         use sdl2::keyboard::Scancode::*;
 
         SDL.with(|sdl_cell| {
-            let mut input = InputState::new();
+            let mut joypad = JoypadState::new();
             {
                 // Fetch input state
                 let sdl = sdl_cell.borrow();
@@ -188,28 +200,24 @@ impl super::InputSource for KeyboardInput {
                 // L ↑           Y X R
                 // < ↓ > Sel Sta B A
 
-                if state.is_scancode_pressed(W) { input.up(true); }
-                if state.is_scancode_pressed(A) { input.left(true); }
-                if state.is_scancode_pressed(S) { input.down(true); }
-                if state.is_scancode_pressed(D) { input.right(true); }
+                if state.is_scancode_pressed(W) { joypad.set(JoypadButton::Up, true); }
+                if state.is_scancode_pressed(A) { joypad.set(JoypadButton::Left, true); }
+                if state.is_scancode_pressed(S) { joypad.set(JoypadButton::Down, true); }
+                if state.is_scancode_pressed(D) { joypad.set(JoypadButton::Right, true); }
 
-                if state.is_scancode_pressed(G) { input.select(true); }
-                if state.is_scancode_pressed(H) { input.start(true); }
+                if state.is_scancode_pressed(G) { joypad.set(JoypadButton::Select, true); }
+                if state.is_scancode_pressed(H) { joypad.set(JoypadButton::Start, true); }
 
-                if state.is_scancode_pressed(L) { input.a(true); }
-                if state.is_scancode_pressed(K) { input.b(true); }
-                if state.is_scancode_pressed(O) { input.x(true); }
-                if state.is_scancode_pressed(I) { input.y(true); }
+                if state.is_scancode_pressed(L) { joypad.set(JoypadButton::A, true); }
+                if state.is_scancode_pressed(K) { joypad.set(JoypadButton::B, true); }
+                if state.is_scancode_pressed(O) { joypad.set(JoypadButton::X, true); }
+                if state.is_scancode_pressed(I) { joypad.set(JoypadButton::Y, true); }
 
-                if state.is_scancode_pressed(P) { input.r(true); }
-                if state.is_scancode_pressed(Q) { input.l(true); }
+                if state.is_scancode_pressed(P) { joypad.set(JoypadButton::R, true); }
+                if state.is_scancode_pressed(Q) { joypad.set(JoypadButton::L, true); }
             }
 
-            let action = sdl_cell.borrow_mut().update();
-            FrontendResult {
-                result: input,
-                action: action,
-            }
+            joypad
         })
     }
 }

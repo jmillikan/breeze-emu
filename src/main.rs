@@ -1,5 +1,5 @@
 #![deny(warnings)]
-#![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
+#![deny(unused_import_braces, unused_qualifications)]
 
 #[macro_use] extern crate clap;
 #[macro_use] #[no_link] extern crate lazy_static;
@@ -9,6 +9,7 @@ extern crate env_logger;
 #[macro_use] extern crate libsavestate;
 extern crate breeze_core as breeze;
 extern crate breeze_frontends as frontends;
+extern crate breeze_frontend_api as frontend_api;
 
 use std::env;
 use std::fs::File;
@@ -22,7 +23,8 @@ use breeze::input::Input;
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
-    input.sources[0] = Some(Box::new(::frontends::frontend_sdl::KeyboardInput))
+    let ports = input.unwrap_ports();
+    ports.0 = Some(Box::new(::frontend_api::input::joypad::Joypad::new(Box::new(::frontends::frontend_sdl::KeyboardInput))));
 }
 #[cfg(not(feature = "sdl"))]
 fn attach_default_input(_: &mut Input) {}

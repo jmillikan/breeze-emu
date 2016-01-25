@@ -229,7 +229,7 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
 macro_rules! impl_save_state_fns {
     ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {
         fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
-            let $t { $(ref $field),*, $(ref $ignore,)* } = *self;
+            let $t { $(ref $field,)* $(ref $ignore,)* } = *self;
             $(
                 try!($field.save_state(w));
             );*
@@ -240,7 +240,7 @@ macro_rules! impl_save_state_fns {
         }
 
         fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
-            let $t { $(ref mut $field),*, $(ref mut $ignore,)* } = *self;
+            let $t { $(ref mut $field,)* $(ref mut $ignore,)* } = *self;
             $(
                 try!($field.restore_state(r));
             );*

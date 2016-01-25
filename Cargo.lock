@@ -3,6 +3,7 @@ name = "breeze"
 version = "0.1.0"
 dependencies = [
  "breeze_core 0.1.0",
+ "breeze_frontend_api 0.1.0",
  "breeze_frontends 0.1.0",
  "clap 1.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",

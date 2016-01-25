@@ -1,12 +1,8 @@
 #![deny(warnings)]
 #![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
 
-#[macro_use] extern crate libsavestate;
-
 pub mod input;
 pub mod ppu;
-
-use input::InputState;
 
 /// An action that can be performed by the user, is detected by the frontend and executed by the
 /// emulator core.
@@ -44,13 +40,4 @@ pub trait Renderer {
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction>;
-}
-
-/// Should be implemented for all input implementations (such as controller, keyboard, perhaps
-/// stdin or something like that).
-pub trait InputSource {
-    /// Poll the input state. For synchronization purposes, we guarantee that this method is called
-    /// exactly once per frame. However, the exact time within a frame is left unspecified (we might
-    /// want to call this function as late as possible to optimize input latency).
-    fn poll(&mut self) -> FrontendResult<InputState>;
 }

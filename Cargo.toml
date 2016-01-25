@@ -7,6 +7,7 @@ license = "Apache-2.0/MIT"
 [dependencies]
 breeze_core = { path = "breeze_core" }
 breeze_frontends = { path = "breeze_frontends" }
+breeze_frontend_api = { path = "breeze_frontend_api" }
 libsavestate = { path = "libsavestate" }
 log = "0.3"
 env_logger = "0.3"

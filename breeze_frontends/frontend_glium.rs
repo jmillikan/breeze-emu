@@ -2,7 +2,7 @@
 
 // FIXME: Support resizing the window, like the SDL renderer does
 
-use frontend_api::FrontendAction;
+use frontend_api::{FrontendAction, Renderer};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use glium::{DisplayBuild, Surface, Rect};
@@ -106,7 +106,7 @@ impl GliumRenderer {
     }
 }
 
-impl super::Renderer for GliumRenderer {
+impl Renderer for GliumRenderer {
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         // upload new texture data
         self.texture.write(Rect {
