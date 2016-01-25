@@ -21,14 +21,24 @@ enum RomType {
 }
 
 impl RomHeader {
+    fn dump(&self) {
+        info!("'{}'", str::from_utf8(&self.title).unwrap_or("").trim_right());
+        info!("{} KB ROM / {} KB Cartridge RAM", self.rom_size / 1024, self.ram_size / 1024);
+    }
+
     /// Loads the ROM header from the given byte slice (must be exactly 64 bytes large).
-    /// `rom_type` is the expected type of the ROM header, based on its location. It will be
-    /// used for the actual type if the type inside the header mismatches. This is apparently
-    /// required for some broken ROMs.
-    fn load(bytes: &[u8], rom_type: RomType) -> Result<RomHeader, ()> {
+    /// `rom_type` is the expected type of the ROM header, based on its location.
+    ///
+    /// Returns the decoded `RomHeader` and a scoring value. The higher the score, the more likely
+    /// the header matches the `RomType`.
+    fn load(bytes: &[u8], rom_type: RomType) -> (RomHeader, i16) {
         // The header size must be correct (the ROM loader won't pass a wrong size)
         assert_eq!(bytes.len(), 64);
 
+        // Score value. Decremented whenever something isn't right. Subject to tweaking.
+        let mut score = 0;
+
+        debug!("loading {:?} header", rom_type);
         debug!("raw rom header: {:?}", bytes);
 
         // Byte 28/29 is the checksum's complement followed by the checksum itself in Byte 30/31.
@@ -36,11 +46,11 @@ impl RomHeader {
         // validated by the loader.
         // 16 bit, little-endian.
         let check_inv = (bytes[29] as u16) << 8 | bytes[28] as u16;
-        let checksum = (bytes[31] as u16) << 8 | bytes[30] as u16;
-        if check_inv != !checksum {
+        let rom_checksum = (bytes[31] as u16) << 8 | bytes[30] as u16;
+        if check_inv != !rom_checksum {
             debug!("checksum invalid: stored complement is ${:04X}, stored checksum is ${:04X}",
-                check_inv, checksum);
-            return Err(());
+                check_inv, rom_checksum);
+            score -= 4;
         }
 
         let mut title = [0; 21];
@@ -52,15 +62,16 @@ impl RomHeader {
                 }
                 _ => {
                     if !warned {
-                        warn!("title contains non-ascii byte: ${:02X}", *c);
+                        debug!("title contains non-ascii byte: ${:02X}", *c);
                         warned = true;
+                        score -= 2;
                     }
                     title[i] = b' ';
                 }
             }
         }
 
-        info!("loading '{}'", str::from_utf8(&title).unwrap().trim_right());
+        debug!("loading '{}'", str::from_utf8(&title).unwrap().trim_right());
 
         // 21) ROM makeup byte
         // `---smmmm`
@@ -73,23 +84,25 @@ impl RomHeader {
         //  * `0101`: ExHiROM
         //  * `1010`: HiROM + SPC7110
         if bytes[21] & 0x10 == 0x10 {
-            warn!("FastROM not yet implemented!");
+            debug!("FastROM not yet implemented!");
         }
 
         let header_rom_type = match bytes[21] & 0x0f {
             0 => RomType::LoRom,
             1 => RomType::HiRom,
             t => {
-                error!("unknown / unimplemented ROM type {}", t);
-                return Err(())
+                debug!("unknown / unimplemented ROM type {}", t);
+                score -= 10;    // until we actually implement this (FIXME Dirty hack)
+                RomType::LoRom
             }
         };
 
         if header_rom_type == rom_type {
-            info!("type: {:?}", rom_type);
+            debug!("type: {:?}", rom_type);
         } else {
-            warn!("expected rom type {:?}, got {:?} (assuming {:?})", rom_type, header_rom_type,
+            debug!("expected rom type {:?}, got {:?} (assuming {:?})", rom_type, header_rom_type,
                 rom_type);
+            score -= 3;
         }
 
         // bytes[22] is the chipset info. For now, we don't care about that.
@@ -98,20 +111,20 @@ impl RomHeader {
         let rom_size = 0x400 << bytes[23] as u32;
         let ram_size = 0x400 << bytes[24] as u32;
         debug!("ROM/RAM size values: {:02X} {:02X}", bytes[23], bytes[24]);
-        info!("{} KB of ROM, {} KB of cartridge RAM", rom_size / 1024, ram_size / 1024);
+        debug!("{} KB of ROM, {} KB of cartridge RAM", rom_size / 1024, ram_size / 1024);
 
         // bytes[25-26] is a vendor code (doesn't matter)
         debug!("vendor code: 0x{:02X}{:02X}", bytes[25], bytes[26]);
         // 27 = version (also doesn't matter for us)
         debug!("version: 0x{:02X}", bytes[27]);
 
-        Ok(RomHeader {
+        (RomHeader {
             title: title,
             rom_size: rom_size,
             ram_size: ram_size,
-            checksum: checksum,
+            checksum: rom_checksum,
             rom_type: rom_type,
-        })
+        }, score)
     }
 }
 
@@ -134,7 +147,7 @@ impl Rom {
         // ROMs may begin with a 512 Bytes SMC header. It needs to go.
         match bytes.len() % 1024 {
             512 => {
-                debug!("stripping SMC header");
+                info!("stripping SMC header");
                 bytes = &bytes[512..];
             }
             0 => {},
@@ -145,9 +158,19 @@ impl Rom {
         // the ROM is HiROM or LoROM, so we must check both locations and pick the right one.
         // LoROM header is at 0x7FFF - 63, HiROM is at 0xFFFF - 63 (it is 64 Bytes large)
 
-        // Test LoROM first (it's more common)
-        let header = try!(RomHeader::load(&bytes[0x7FFF - 63..0x7FFF + 1], RomType::LoRom)
-            .or_else(|_| RomHeader::load(&bytes[0xFFFF - 63..0xFFFF + 1], RomType::HiRom)));
+        let (lo_header, lo_score) = RomHeader::load(&bytes[0x7FFF - 63..0x7FFF + 1],
+                                                    RomType::LoRom);
+        let (hi_header, hi_score) = RomHeader::load(&bytes[0xFFFF - 63..0xFFFF + 1],
+                                                    RomType::HiRom);
+
+        info!("LoROM/HiROM scores: {}, {}", lo_score, hi_score);
+        let header = if lo_score > hi_score {
+            lo_header
+        } else {
+            hi_header
+        };
+
+        header.dump();
 
         if bytes.len() != header.rom_size as usize {
             warn!("raw ROM is {} KB, but header specifies {} KB",
