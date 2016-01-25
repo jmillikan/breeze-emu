@@ -22,7 +22,7 @@ enum RomType {
 
 impl RomHeader {
     fn dump(&self) {
-        info!("'{}'", str::from_utf8(&self.title).unwrap_or("").trim_right());
+        info!("ROM name: '{}'", str::from_utf8(&self.title).unwrap_or("").trim_right());
         info!("{} KB ROM / {} KB Cartridge RAM", self.rom_size / 1024, self.ram_size / 1024);
     }
 

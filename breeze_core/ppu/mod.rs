@@ -484,11 +484,11 @@ impl Ppu {
                 if value & 0x20 != 0 { self.coldata_r = color; }
             }
             0x2133 => {
-                if value != 0 {
-                    // FIXME When implementing this, we'll need to dynamically adjust the
-                    // framebuffer size and various timings (needs `fn overscan() -> bool`).
-                    panic!("NYI: $2133 != 0")
-                }
+                assert!(value & 0x80 == 0, "ext. sync not yet implemented");
+                assert!(value & 0x40 == 0, "Mode 7 EXTBG not yet implemented");
+                if value & 0x08 != 0 { once!(warn!("pseudo-hires mode not yet implemented")); }
+                if value & 0x04 != 0 { once!(warn!("overscan not yet implemented")); }
+                if value & 0x03 != 0 { once!(warn!("interlace not yet implemented")); }
                 self.setini = value;
             }
             _ => panic!("invalid or unimplemented PPU store: ${:02X} to ${:04X}", value, addr),
