@@ -83,8 +83,12 @@ fn main() {
     file.read_to_end(&mut buf).unwrap();
 
     let rom = Rom::from_bytes(&buf).unwrap();
+    let mut renderer = renderer_fn();
+    if let Some(title) = rom.get_title() {
+        renderer.set_rom_title(title);
+    }
 
-    let mut snes = Snes::new(rom, renderer_fn());
+    let mut snes = Snes::new(rom, renderer);
     attach_default_input(snes.input_mut());
     if let Some(record_file) = args.value_of("record") {
         snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));

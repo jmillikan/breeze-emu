@@ -40,4 +40,7 @@ pub trait Renderer {
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction>;
+
+    /// Set the ROM title. This usually sets the window title.
+    fn set_rom_title(&mut self, title: &str);
 }

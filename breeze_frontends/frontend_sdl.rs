@@ -130,6 +130,13 @@ impl ::frontend_api::Renderer for SdlRenderer {
 
         SDL.with(|sdl| sdl.borrow_mut().update())
     }
+
+    fn set_rom_title(&mut self, title: &str) {
+        match self.renderer.window_mut() {
+            Some(win) => win.set_title(title),
+            None => {},
+        }
+    }
 }
 
 impl SdlRenderer {

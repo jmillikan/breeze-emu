@@ -135,4 +135,11 @@ impl Renderer for GliumRenderer {
 
         self.handle_events()
     }
+
+    fn set_rom_title(&mut self, title: &str) {
+        match self.display.get_window() {
+            Some(win_ref) => win_ref.set_title(title),
+            None => {},     // Headless? Ignore.
+        }
+    }
 }

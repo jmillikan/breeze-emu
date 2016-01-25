@@ -37,6 +37,7 @@ impl Ppu {
             0b011 => if !size_toggle {(16,16)} else {(32,32)},
             0b100 => if !size_toggle {(16,16)} else {(64,64)},
             0b101 => if !size_toggle {(32,32)} else {(64,64)},
+
             0b110 => if !size_toggle {(16,32)} else {(32,64)},
             0b111 => if !size_toggle {(16,32)} else {(32,32)},
             _ => unreachable!(),
@@ -49,8 +50,7 @@ impl Ppu {
     /// Looks up a color index in the CGRAM and converts the stored 15-bit BGR color to 24-bit RGB
     /// (the 15-bit range is stretched to 24 bits).
     pub fn lookup_color(&self, color: u8) -> Rgb {
-        // 16-bit big endian value! (high byte, high address first)
-        // -bbbbbgg gggrrrrr
+        // -bbbbbgg gggrrrrr (16-bit big endian value! (high byte, high address first))
         let lo = self.cgram[color as u16 * 2] as u16;
         let hi = self.cgram[color as u16 * 2 + 1] as u16;
         let val = (hi << 8) | lo;

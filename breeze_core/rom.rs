@@ -180,6 +180,10 @@ impl Rom {
         })
     }
 
+    pub fn get_title(&self) -> Option<&str> {
+        str::from_utf8(&self.header.title).ok().map(|s| s.trim_right())
+    }
+
     fn resolve_lorom(&mut self, bank: u8, addr: u16) -> &mut u8 {
         match addr {
             0x0000 ... 0x7fff => {
