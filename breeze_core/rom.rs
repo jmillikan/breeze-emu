@@ -100,17 +100,18 @@ impl RomHeader {
         if header_rom_type == rom_type {
             debug!("type: {:?}", rom_type);
         } else {
-            debug!("expected rom type {:?}, got {:?} (assuming {:?})", rom_type, header_rom_type,
-                rom_type);
+            debug!("expected rom type {:?}, got {:?}", rom_type, header_rom_type);
             score -= 3;
         }
 
         // bytes[22] is the chipset info. For now, we don't care about that.
         debug!("chipset: 0x{:02X}", bytes[22]);
 
-        let rom_size = 0x400 << bytes[23] as u32;
-        let ram_size = 0x400 << bytes[24] as u32;
         debug!("ROM/RAM size values: {:02X} {:02X}", bytes[23], bytes[24]);
+        // Size values are masked with 0x0F to prevent overlong bitshifts. The valid values are all
+        // in range 0x00 to 0x0F anyway.
+        let rom_size = 0x400 << (bytes[23] as u32 & 0x0f);
+        let ram_size = 0x400 << (bytes[24] as u32 & 0x0f);
         debug!("{} KB of ROM, {} KB of cartridge RAM", rom_size / 1024, ram_size / 1024);
 
         // bytes[25-26] is a vendor code (doesn't matter)

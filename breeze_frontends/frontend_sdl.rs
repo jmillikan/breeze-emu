@@ -99,7 +99,6 @@ impl Default for SdlRenderer {
                 .resizable()
                 .build().unwrap();
             let renderer = window.renderer().accelerated().build().unwrap();
-            debug!("renderer: {:?}", renderer.info());
             let texture = renderer.create_texture(
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,

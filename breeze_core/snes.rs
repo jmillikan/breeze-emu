@@ -220,7 +220,10 @@ impl Mem for Peripherals {
                     if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
                     self.nmien = value;
                 }
-                0x4201 => self.wrio = value,
+                0x4201 => {
+                    // FIXME: Propagate to controller ports and the I/O read port
+                    self.wrio = value
+                }
                 0x4202 => self.wrmpya = value,
                 // WRMPYB: Performs multiplication on write
                 0x4203 => self.rdmpy = self.wrmpya as u16 * value as u16,
