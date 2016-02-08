@@ -3,7 +3,6 @@
 use super::{Cpu, Mem};
 
 use std::fmt;
-use libsavestate::SaveState;
 
 /// As a safety measure, the load and store methods take the mode by value and consume it. Using
 /// the same object twice requires an explicit `.clone()` (`Copy` isn't implemented).
@@ -106,7 +105,7 @@ pub enum AddressingMode {
 
 impl AddressingMode {
     /// Loads a byte from where this AM points to (or returns the immediate value)
-    pub fn loadb<M: Mem + SaveState>(self, cpu: &mut Cpu<M>) -> u8 {
+    pub fn loadb<M: Mem>(self, cpu: &mut Cpu<M>) -> u8 {
         match self {
             AddressingMode::Immediate(_) => panic!("loadb on 16-bit immediate"),
             AddressingMode::Immediate8(val) => val,
@@ -116,7 +115,7 @@ impl AddressingMode {
             }
         }
     }
-    pub fn loadw<M: Mem + SaveState>(self, cpu: &mut Cpu<M>) -> u16 {
+    pub fn loadw<M: Mem>(self, cpu: &mut Cpu<M>) -> u16 {
         match self {
             AddressingMode::Immediate(val) => val,
             AddressingMode::Immediate8(_) => panic!("loadw on 8-bit immediate"),
@@ -127,18 +126,18 @@ impl AddressingMode {
         }
     }
 
-    pub fn storeb<M: Mem + SaveState>(self, cpu: &mut Cpu<M>, value: u8) {
+    pub fn storeb<M: Mem>(self, cpu: &mut Cpu<M>, value: u8) {
         let (bank, addr) = self.address(cpu);
         cpu.storeb(bank, addr, value);
     }
-    pub fn storew<M: Mem + SaveState>(self, cpu: &mut Cpu<M>, value: u16) {
+    pub fn storew<M: Mem>(self, cpu: &mut Cpu<M>, value: u16) {
         let (bank, addr) = self.address(cpu);
         cpu.storew(bank, addr, value);
     }
 
     /// Computes the effective address as a bank-address-tuple. Panics if the addressing mode is
     /// immediate. For jumps, the effective address is the jump target.
-    pub fn address<M: Mem + SaveState>(&self, cpu: &mut Cpu<M>) -> (u8, u16) {
+    pub fn address<M: Mem>(&self, cpu: &mut Cpu<M>) -> (u8, u16) {
         use self::AddressingMode::*;
 
         // FIXME is something here dependant on register sizes?

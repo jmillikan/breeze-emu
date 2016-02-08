@@ -36,7 +36,7 @@ const BRK_VEC16: u16 = 0xFFE6;
 #[allow(dead_code)]
 const COP_VEC16: u16 = 0xFFE4;
 
-pub struct Cpu<M: Mem + SaveState> {
+pub struct Cpu<M: Mem> {
     a: u16,
     x: u16,
     y: u16,
@@ -68,7 +68,7 @@ impl<M: Mem + SaveState> SaveState for Cpu<M> {
     } ignore { cy, trace });
 }
 
-impl<M: Mem + SaveState> Cpu<M> {
+impl<M: Mem> Cpu<M> {
     /// Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
     /// put the CPU in emulation mode.
     pub fn new(mut mem: M) -> Cpu<M> {
@@ -588,7 +588,7 @@ impl<M: Mem + SaveState> Cpu<M> {
 }
 
 /// Opcode implementations
-impl<M: Mem + SaveState> Cpu<M> {
+impl<M: Mem> Cpu<M> {
     /// Move Next (incrementing address). Copies C+1 (16-bit A) bytes from the address in X to the
     /// address in Y.
     fn mvn(&mut self, am: AddressingMode) {
@@ -1519,7 +1519,7 @@ impl<M: Mem + SaveState> Cpu<M> {
 }
 
 /// Addressing mode construction
-impl<M: Mem + SaveState> Cpu<M> {
+impl<M: Mem> Cpu<M> {
     fn block_move(&mut self) -> AddressingMode {
         let dest = self.fetchb();
         let src = self.fetchb();
