@@ -11,10 +11,9 @@ breeze_frontend_api = { path = "breeze_frontend_api" }
 libsavestate = { path = "libsavestate" }
 log = "0.3"
 env_logger = "0.3"
-lazy_static = "0.1"
 # clap comes with a few optional features we don't really need (colored output
 # and command correction)
-clap = { version = "1.4", default-features = false }
+clap = { version = "2.0", default-features = false }
 
 [features]
 # reexport frontends

@@ -1,9 +1,8 @@
 #![deny(warnings)]
 #![deny(unused_import_braces, unused_qualifications)]
 
-#[macro_use] extern crate clap;
-#[macro_use] #[no_link] extern crate lazy_static;
 #[macro_use] extern crate log;
+extern crate clap;
 extern crate env_logger;
 
 #[macro_use] extern crate libsavestate;
@@ -35,15 +34,32 @@ fn main() {
     }
     env_logger::init().unwrap();
 
-    let args = clap_app!(breeze =>
-        (version: option_env!("CARGO_PKG_VERSION").unwrap_or("<unknown version>"))
-        (about: "SNES emulator")
-        (@arg ROM_PATH: +required "The ROM file to execute")
-        (@arg renderer: -R --renderer +takes_value "The renderer to use")
-        (@arg savestate: --savestate +takes_value "The save state file to load")
-        (@arg record: --record +takes_value "Record input to a text file")
-        (@arg replay: --replay +takes_value "Replay a recording from a text file")
-    ).get_matches();
+    let args = clap::App::new("breeze")
+        .version(env!("CARGO_PKG_VERSION"))
+        .about("SNES emulator")
+        .arg(clap::Arg::with_name("rom")
+            .required(true)
+            .value_name("ROM_PATH")
+            .takes_value(true)
+            .help("The ROM file to execute"))
+        .arg(clap::Arg::with_name("renderer")
+            .short("R")
+            .long("renderer")
+            .takes_value(true)
+            .help("The renderer to use"))
+        .arg(clap::Arg::with_name("savestate")
+            .long("savestate")
+            .takes_value(true)
+            .help("The save state file to load"))
+        .arg(clap::Arg::with_name("record")
+            .long("record")
+            .takes_value(true)
+            .help("Record input to a text file"))
+        .arg(clap::Arg::with_name("replay")
+            .long("replay")
+            .takes_value(true)
+            .help("Replay a recording from a text file"))
+    .get_matches();
 
     if args.value_of("record").is_some() && args.value_of("replay").is_some() {
         println!("`record` and `replay` may not be specified together!");
@@ -77,7 +93,7 @@ fn main() {
         }
     };
 
-    let filename = args.value_of("ROM_PATH").unwrap();
+    let filename = args.value_of("rom").unwrap();
     let mut file = File::open(&filename).unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
