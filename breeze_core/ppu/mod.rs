@@ -628,10 +628,13 @@ impl Ppu {
         match self.vmain & 0b11 {
             0b00 => 1,
             0b01 => 32,
-            _ => 128,   // 0b10 | 0b11
+            // FIXME: What is really correct here? (the sources disagree)
+            0b10 => 64,
+            0b11 => 128,
+            _ => unreachable!(),
         }
     }
-    /// Translate a VRAM word address according to the address translation bits of `$2115`
+    /// Translate a VRAM byte address according to the address translation bits of `$2115`
     fn vram_translate_addr(&self, addr: u16) -> u16 {
         // * 00 = None
         // * 01 = Remap addressing aaaaaaaaBBBccccc => aaaaaaaacccccBBB
