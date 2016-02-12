@@ -33,16 +33,17 @@ byte_array!(Ram[RAM_SIZE] with u16 indexing, save state please);
 
 const RESET_VEC: u16 = 0xFFFE;
 
-/// The SPC700 processor used in the APU is an 8-bit processor with a 16-bit address space. It has
-/// 64 KB of RAM shared with the DSP. The last 64 Bytes in its address space are mapped to the
-/// "IPL ROM", which contains a small piece of startup code that allows the main CPU to transfer a
-/// program to the APU (we just copy the IPL ROM into the RAM and make it read-write).
+/// The SPC700 is an 8-bit processor with a 16-bit address space.
+///
+/// It has 64 KB of RAM shared with the DSP. The last 64 Bytes in its address space are mapped to
+/// the "IPL ROM", which contains a small piece of startup code that allows the main CPU to transfer
+/// a program to the APU.
 pub struct Spc700 {
     /// 64KB of RAM, shared with DSP
     mem: Ram,
 
     /// The SPC700 starts with the IPL ROM mapped into the highest 64 Bytes of address space. It can
-    /// be unmapped by clearing bit 7 in `$f1` (CONTROL), which allow using this space as normal
+    /// be unmapped by clearing bit 7 in `$f1` (`CONTROL`), which allow using this space as normal
     /// RAM (writes to this area always go to RAM).
     ipl_rom_mapped: bool,
     /// `$f2` - DSP address selection (`$f3` - DSP data)
@@ -95,27 +96,22 @@ impl Default for Spc700 {
     }
 }
 
-// Public interface
 impl Spc700 {
-    /// Store a byte in an IO port (0-3)
+    /// Store a byte in an IO port (`0-3`)
     ///
-    /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
+    /// SNES IO ports `$2140-$2143` are mapped to internal registers `$f4-$f7`
     pub fn store_port(&mut self, port: u8, value: u8) {
         debug_assert!(port < 4);
         self.io_vals[port as usize] = value;
     }
 
-    /// Load a byte from an IO port (0-3)
-    ///
-    /// IO ports 0x2140... are mapped to internal registers 0xf4 - 0xf7
+    /// Load a byte from an IO port
     pub fn read_port(&mut self, port: u8) -> u8 {
         debug_assert!(port < 4);
         let val = self.mem[0xf4 + port as u16];
         val
     }
-}
 
-impl Spc700 {
     fn load(&mut self, addr: u16) -> u8 {
         match addr {
             0xf0 | 0xf1 | 0xfa ... 0xfc =>
@@ -216,6 +212,7 @@ impl Spc700 {
         );
     }
 
+    /// Dispatch an opcode
     pub fn dispatch(&mut self) -> u8 {
         use log::LogLevel::Trace;
 

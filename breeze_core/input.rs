@@ -6,6 +6,7 @@ use std::io::{BufRead, Write};
 use std::mem;
 use std::ops::{Index, IndexMut};
 
+/// Represents the 2 controller ports on the SNES
 pub struct Ports(pub Option<Box<ControllerPortAttachment>>,
                  pub Option<Box<ControllerPortAttachment>>);
 

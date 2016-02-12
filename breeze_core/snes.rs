@@ -1,4 +1,4 @@
-//! Contains the `Snes` struct, which wields the combined power of this project.
+//! This module glues everything together and coordinates emulation.
 
 use dma::*;
 use frontend::{FrontendAction, Renderer};
@@ -22,7 +22,7 @@ const WRAM_SIZE: usize = 128 * 1024;
 byte_array!(Wram[WRAM_SIZE] with save state please);
 
 /// Contains everything connected to the CPU via one of the two address buses. All memory accesses
-/// will be directed through this (the CPU already takes access time into account).
+/// will be directed through this.
 pub struct Peripherals {
     apu: Spc700,
     ppu: Ppu,
@@ -263,6 +263,7 @@ impl Mem for Peripherals {
     }
 }
 
+/// The emulator.
 pub struct Snes {
     cpu: Cpu<Peripherals>,
     renderer: Box<Renderer>,
@@ -277,6 +278,9 @@ impl_save_state!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
     ignore { renderer });
 
 impl Snes {
+    /// Creates a new emulator instance from a loaded ROM and a renderer.
+    ///
+    /// This will also create a default `Input` instance without any attached peripherals.
     pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),

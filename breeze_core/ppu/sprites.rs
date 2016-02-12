@@ -93,6 +93,9 @@ impl Ppu {
         }
     }
 
+    /// Collects visible sprites and sprite tiles for the current scanline.
+    ///
+    /// Called when rendering the first pixel on a scanline.
     pub fn collect_sprite_data_for_scanline(&mut self) {
         let first_sprite = if self.oamaddh & 0x80 == 0 {
             0
@@ -213,6 +216,9 @@ impl Ppu {
         }
     }
 
+    /// Returns the current pixel on the sprite layer.
+    ///
+    /// Searches for a sprite tile overlapping with the current pixel and looks up its color.
     pub fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
         if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
 

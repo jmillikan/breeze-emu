@@ -35,8 +35,8 @@ pub struct Ppu {
     /// component and the third byte is the blue component. The fourth byte is then the red
     /// component of the second pixel (at coordinate `(1,0)`), and so on.
     ///
-    /// FIXME The size can change depending on the PPU config, make sure all frames fit in
-    /// FIXME How would this work in high resolution modes?
+    // FIXME The size can change depending on the PPU config, make sure all frames fit in
+    // FIXME How would this work in high resolution modes?
     pub framebuf: FrameBuf,
 
     /// Opaque state object used by the render code. This value may change between frames.
@@ -62,10 +62,8 @@ pub struct Ppu {
     /// CGRAM - Stores the color palette
     ///
     /// There are 256 colors in the palette, each 15 bits (5 bits per color channel), represented
-    /// by 2 Bytes of CGRAM. Layout:
+    /// by 2 Bytes of CGRAM. Layout (16-bit big endian value - high byte and high address first):
     /// `?bbbbbgg` `gggrrrrr` (the `?`-bit is ignored)
-    ///
-    /// FIXME LSB/MSB?
     cgram: Cgram,
 
     /// VRAM - Stores background maps and tile/character data
@@ -535,7 +533,9 @@ impl Ppu {
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     #[allow(dead_code)] // FIXME: Take this into account
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
+    /// Returns the current X position
     pub fn h_counter(&self) -> u16 { self.x }
+    /// Returns the current Y position (scanline)
     pub fn v_counter(&self) -> u16 { self.scanline }
 
     fn set_pixel(&mut self, x: u16, y: u16, rgb: Rgb) {
