@@ -4,6 +4,7 @@ rust:
   - beta
   - nightly
 matrix:
+  fast_finish: true
   allow_failures:
     - rust: nightly
 sudo: false
@@ -15,15 +16,17 @@ env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
   matrix:
-    - CARGO_ARGS="--no-default-features"
+    - CARGO_ARGS="--no-default-features" UPLOAD_DOCS="true"
     - CARGO_ARGS="--no-default-features --features=glium"
     # SDL can't be easily tested, sadly :(
 script:
   # FIXME: Run tests of all local crates
   - |
       echo "rust is: $TRAVIS_RUST_VERSION" &&
-      travis-cargo build -- $CARGO_ARGS &&
-      travis-cargo --only beta doc -- -p breeze_core
+      travis-cargo build -- $CARGO_ARGS
 after_success:
-  - travis-cargo doc-upload
-  # FIXME: This doesn't work :(
+  - |
+      test -n "$UPLOAD_DOCS" &&
+      cd breeze_core &&
+      travis-cargo --only stable doc &&
+      travis-cargo --only stable doc-upload
