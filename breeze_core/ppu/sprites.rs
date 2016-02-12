@@ -235,7 +235,7 @@ impl Ppu {
                     debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
 
                     // color index 0 is always transparent
-                    if rel_color == 0 { return None }
+                    if rel_color == 0 { continue }
 
                     let abs_color = 128 + tile.palette * 16 + rel_color;
                     // FIXME Color math
