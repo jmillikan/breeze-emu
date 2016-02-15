@@ -4,11 +4,15 @@ version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
 
+[[bin]]
+name = "breeze"
+path = "src/breeze/main.rs"
+
 [dependencies]
-breeze_core = { path = "breeze_core" }
-breeze_frontends = { path = "breeze_frontends" }
-breeze_frontend_api = { path = "breeze_frontend_api" }
-libsavestate = { path = "libsavestate" }
+breeze_core = { path = "src/breeze_core" }
+breeze_frontends = { path = "src/breeze_frontends" }
+breeze_frontend_api = { path = "src/breeze_frontend_api" }
+libsavestate = { path = "src/libsavestate" }
 log = "0.3"
 env_logger = "0.3"
 # clap comes with a few optional features we don't really need (colored output
