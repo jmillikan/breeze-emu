@@ -119,18 +119,20 @@ impl Ppu {
     /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
     /// 256). `X` denotes a BG for offset-per-tile data.
     ///
-    ///     Mode    # Colors for BG
-    ///              1   2   3   4
-    ///     ======---=---=---=---=
-    ///     0        4   4   4   4
-    ///     1       16  16   4   -
-    ///     2       16  16   X   -
-    ///     3      256  16   -   -
-    ///     4      256   4   X   -
-    ///     5       16   4   -   -
-    ///     6       16   -   X   -
-    ///     7      256   -   -   -
-    ///     7EXTBG 256 128   -   -
+    /// ```ignore
+    /// Mode    # Colors for BG
+    ///          1   2   3   4
+    /// ======---=---=---=---=
+    /// 0        4   4   4   4
+    /// 1       16  16   4   -
+    /// 2       16  16   X   -
+    /// 3      256  16   -   -
+    /// 4      256   4   X   -
+    /// 5       16   4   -   -
+    /// 6       16   -   X   -
+    /// 7      256   -   -   -
+    /// 7EXTBG 256 128   -   -
+    /// ```
     fn color_count_for_bg(&self, bg: u8) -> u16 {
         match self.bg_mode() {
             0 => 4,
