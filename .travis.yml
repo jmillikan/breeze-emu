@@ -11,7 +11,8 @@ sudo: false
 before_script:
   - |
       pip install 'travis-cargo<0.2' --user &&
-      export PATH=$HOME/.local/bin:$PATH
+      cargo install cargo-local-pkgs &&
+      export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
@@ -20,10 +21,10 @@ env:
     - CARGO_ARGS="--no-default-features --features=glium"
     # SDL can't be easily tested, sadly :(
 script:
-  # FIXME: Run tests of all local crates
   - |
       echo "rust is: $TRAVIS_RUST_VERSION" &&
-      travis-cargo build -- $CARGO_ARGS
+      travis-cargo build -- $CARGO_ARGS &&
+      cargo local-pkgs test $CARGO_ARGS
 after_success:
   - |
       test -n "$UPLOAD_DOCS" &&
