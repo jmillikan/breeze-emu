@@ -25,6 +25,9 @@ const DATA_ADDRESS_BANK: u8 = DATA_ADDRESS.0;
 const DATA_ADDRESS_LO: u8 = DATA_ADDRESS.1 as u8;
 const DATA_ADDRESS_HI: u8 = (DATA_ADDRESS.1 >> 8) as u8;
 
+/// Test code is placed at this address (CPU view)
+const CODE_ADDRESS: u16 = 0x8000;
+
 /// Meta data for render tests
 pub struct Test {
     /// Number of frames to run this test before comparing output
@@ -60,6 +63,7 @@ macro_rules! include_tests {
         mod tests {
             use super::Test;
             use super::{DATA_ADDRESS_BANK, DATA_ADDRESS_HI, DATA_ADDRESS_LO};
+            use super::CODE_ADDRESS;
 
             $(
                 // Okay, `include!` is awesome! (and a bit scary)
