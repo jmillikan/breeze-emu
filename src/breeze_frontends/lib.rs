@@ -25,8 +25,8 @@ use frontend_api::Renderer;
 pub type RendererMap = ::std::collections::BTreeMap<&'static str, Option<fn() -> Box<Renderer>>>;
 
 mod frontend_dummy;
-#[cfg(test)]
-mod frontend_test;
+#[doc(hidden)]  // just used by rendertest
+pub mod frontend_test;
 #[cfg(feature = "glium")]
 mod frontend_glium;
 #[cfg(feature = "sdl2")]
