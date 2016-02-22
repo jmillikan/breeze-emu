@@ -136,6 +136,7 @@ pub struct Rom {
     rom: Vec<u8>,
 }
 
+// NB: If we want to support "realistic" saves, we'd just save the cartridge RAM and nothing else
 impl_save_state!(Rom { ram } ignore { header, rom });
 
 impl Rom {
@@ -152,7 +153,10 @@ impl Rom {
                 bytes = &bytes[512..];
             }
             0 => {},
-            n => panic!("len() % 1024 == {} (expected 512 or 0)", n),
+            n => {
+                error!("len() % 1024 == {} (expected 512 or 0)", n);
+                return Err(());
+            }
         }
 
         // Read the SNES header. It is located in a really stupid location which depends on whether

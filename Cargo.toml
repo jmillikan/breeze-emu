@@ -8,6 +8,11 @@ license = "Apache-2.0/MIT"
 name = "breeze"
 path = "src/breeze/main.rs"
 
+[[test]]
+name = "rendertest"
+path = "rendertest/main.rs"
+harness = false
+
 [dependencies]
 breeze_core = { path = "src/breeze_core" }
 breeze_frontends = { path = "src/breeze_frontends" }
@@ -18,6 +23,10 @@ env_logger = "0.3"
 # clap comes with a few optional features we don't really need (colored output
 # and command correction)
 clap = { version = "2.0", default-features = false }
+
+[dev-dependencies]
+rustasm6502 = "0.1"
+term = "0.4"
 
 [features]
 # reexport frontends
