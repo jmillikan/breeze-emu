@@ -224,9 +224,15 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let rom = build_rom(name, test);
 
     let rom = Rom::from_bytes(&rom).unwrap();
-    let renderer = Box::new(TestRenderer::new(test.frames));
-    let mut snes = Snes::new(rom, renderer);
-    snes.run();
+    let mut renderer = TestRenderer::new(test.frames);
+
+    {
+        let mut snes = Snes::new(rom, &mut renderer);
+        snes.run();
+    }
+
+    // TODO get expected output and compare
+    //let got_frame = renderer.last_frame();
 
     Ok(())//unimplemented!()    // TODO
 }

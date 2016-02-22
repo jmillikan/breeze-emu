@@ -264,9 +264,9 @@ impl Mem for Peripherals {
 }
 
 /// The emulator.
-pub struct Snes {
+pub struct Snes<'r> {
     cpu: Cpu<Peripherals>,
-    renderer: Box<Renderer>,
+    renderer: &'r mut Renderer,
     master_cy: u64,
     /// Master clock cycles for the APU not yet accounted for (can be negative)
     apu_master_cy_debt: i32,
@@ -274,14 +274,16 @@ pub struct Snes {
     ppu_master_cy_debt: i32,
 }
 
-impl_save_state!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
-    ignore { renderer });
+impl<'a> SaveState for Snes<'a> {
+    impl_save_state_fns!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
+        ignore { renderer });
+}
 
-impl Snes {
+impl<'r> Snes<'r> {
     /// Creates a new emulator instance from a loaded ROM and a renderer.
     ///
     /// This will also create a default `Input` instance without any attached peripherals.
-    pub fn new(rom: Rom, renderer: Box<Renderer>) -> Snes {
+    pub fn new(rom: Rom, renderer: &'r mut Renderer) -> Snes {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
             renderer: renderer,

@@ -1,5 +1,5 @@
 Test {
-    frames: 42,
+    frames: 8,
     description: "dummy test producing a black screen, tests test harness sanity",
     preparation: &[],
     data_file: Some("data.hex"),

@@ -44,3 +44,13 @@ pub trait Renderer {
     /// Set the ROM title. This usually sets the window title.
     fn set_rom_title(&mut self, title: &str);
 }
+
+impl<T: Renderer> Renderer for Box<T> {
+    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
+        (**self).render(frame_data)
+    }
+
+    fn set_rom_title(&mut self, title: &str) {
+        (**self).set_rom_title(title)
+    }
+}

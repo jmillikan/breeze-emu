@@ -104,7 +104,7 @@ fn main() {
         renderer.set_rom_title(title);
     }
 
-    let mut snes = Snes::new(rom, renderer);
+    let mut snes = Snes::new(rom, &mut *renderer);
     attach_default_input(snes.input_mut());
     if let Some(record_file) = args.value_of("record") {
         snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));
