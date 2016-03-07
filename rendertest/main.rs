@@ -249,7 +249,9 @@ fn main() {
     }
 
     println!("");
-    println!("running {} rendering tests", TESTS.len());
+    print!("running {} rendering test", TESTS.len());
+    if TESTS.len() != 1 { print!("s"); }
+    println!("");
     let mut failed_names = Vec::new();
     for &(name, ref test) in TESTS {
         print!("test {} ... ", name);
