@@ -3,6 +3,8 @@
 #[macro_use]
 extern crate rustasm6502;
 extern crate term;
+extern crate png;
+
 extern crate breeze_core;
 extern crate breeze_frontends;
 
@@ -231,10 +233,31 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
         snes.run();
     }
 
-    // TODO get expected output and compare
-    //let got_frame = renderer.last_frame();
+    let mut exp_data = Vec::new();
+    let mut exp_file = File::open(format!("rendertest/tests/{}/expected.png", name)).unwrap();
+    exp_file.read_to_end(&mut exp_data).unwrap();
+    let (info, mut reader) = png::Decoder::new(exp_data.as_slice()).read_info().unwrap();
 
-    Ok(())//unimplemented!()    // TODO
+    // sanity checks on image (should match what we test against)
+    assert_eq!(info.color_type, png::ColorType::RGB);
+    assert_eq!(info.bit_depth, png::BitDepth::Eight);
+    assert_eq!(info.width, 256);    // FIXME use PPU's constants
+    assert_eq!(info.height, 224);
+
+    // decode expected image into `exp_frame` - given the above sanity checks, it should have the
+    // same format the PPU emulation uses internally
+    let mut exp_frame = vec![0; info.buffer_size()];
+    reader.next_frame(&mut exp_frame).unwrap();
+
+    let got_frame = renderer.last_frame();
+    // we assert that the lengths match, since that's an issue with the expected image file
+    assert_eq!(got_frame.len(), exp_frame.len());
+
+    if exp_frame == got_frame {
+        Ok(())
+    } else {
+        Err(TestFailure)
+    }
 }
 
 fn main() {
