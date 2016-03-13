@@ -500,13 +500,7 @@ impl Ppu {
     pub fn update(&mut self) -> u8 {
         if !self.in_h_blank() && !self.in_v_blank() {
             // This pixel is visible
-            let pixel = if self.forced_blank() {
-                Rgb {r: 0, g: 0, b: 0}
-            } else {
-                // "Normal" pixel
-                self.render_pixel()
-            };
-
+            let pixel = self.render_pixel();
             let x = self.x;
             let y = self.scanline;
             self.set_pixel(x, y, pixel);

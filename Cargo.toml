@@ -36,3 +36,6 @@ png = { version = "0.4.2", default-features = false }
 default = ["sdl"]
 sdl = ["breeze_frontends/sdl2"]
 glium = ["breeze_frontends/glium"]
+
+[profile.test]
+opt-level = 2

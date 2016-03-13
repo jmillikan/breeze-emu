@@ -78,8 +78,15 @@ impl Ppu {
     }
 
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
-    /// we're not in any blank mode.
+    /// the current pixel is on the screen.
     pub fn render_pixel(&mut self) -> Rgb {
+        assert!(self.x < super::SCREEN_WIDTH as u16);
+        assert!(self.scanline < super::SCREEN_HEIGHT as u16);
+
+        if self.forced_blank() {
+            return Rgb {r: 0, g: 0, b: 0};
+        }
+
         if self.x == 0 && self.scanline == 0 {
             trace!("New frame. BG mode {}, layers enabled: {:05b}, sprites are {:?} or {:?}",
                 self.bg_mode(),
