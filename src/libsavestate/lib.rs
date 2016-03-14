@@ -12,7 +12,7 @@ use std::slice;
 /// Copied from `std`.
 // FIXME: Remove once stable Rust has this (1.6)
 // (pub for convenience only)
-pub fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
+pub fn read_exact<R: Read + ?Sized>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
     while !buf.is_empty() {
         match r.read(buf) {
             Ok(0) => break,
@@ -40,8 +40,8 @@ pub fn read_exact<R: Read>(r: &mut R, mut buf: &mut [u8]) -> io::Result<()> {
 /// to the type will cause a compilation error. By using the `impl_save_state!` macro defined
 /// below, this will be done automatically and produce an error when the struct is changed.
 pub trait SaveState {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()>;
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()>;
+    fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()>;
+    fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()>;
 }
 
 /// Declares that a type can be safely transmuted into a byte slice of same length as the type's
@@ -67,14 +67,14 @@ unsafe impl TransmuteByteSafe for isize {}
 /// `SaveState`. This includes a large portion of the emulator state, since much of it consists of
 /// primitive integer values.
 impl<T: TransmuteByteSafe> SaveState for T {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+    fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()> {
         let bytes = unsafe {
             slice::from_raw_parts(self as *const _ as *const u8, mem::size_of::<Self>())
         };
         w.write_all(bytes)
     }
 
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+    fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()> {
         read_exact(r, unsafe {
             slice::from_raw_parts_mut(self as *mut _ as *mut u8, mem::size_of::<Self>())
         })
@@ -83,11 +83,11 @@ impl<T: TransmuteByteSafe> SaveState for T {
 
 /// `bool` will always be saved as a `1` or `0` byte.
 impl SaveState for bool {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+    fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()> {
         w.write_all(&[if *self {1} else {0}])
     }
 
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+    fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()> {
         let mut val = [0xff];
         try!(read_exact(r, &mut val));
 
@@ -103,7 +103,7 @@ impl SaveState for bool {
 /// `Option<T>` will either save/restore `true` followed by its contents, or `false` if it's
 /// `None`.
 impl<T: SaveState + Default> SaveState for Option<T> {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+    fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()> {
         match *self {
             None => try!(false.save_state(w)),
             Some(ref t) => {
@@ -114,7 +114,7 @@ impl<T: SaveState + Default> SaveState for Option<T> {
         Ok(())
     }
 
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+    fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()> {
         let mut val = [0xff];
         try!(read_exact(r, &mut val));
 
@@ -136,14 +136,14 @@ macro_rules! impl_fixed_size_array {
     ( $e:expr ) => { $e };
     ( $($size:tt)+ ) => { $(
         impl<T: SaveState> SaveState for [T; impl_fixed_size_array!($size)] {
-            fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+            fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()> {
                 for t in self {
                     try!(t.save_state(w))
                 }
                 Ok(())
             }
 
-            fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+            fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()> {
                 // Assume `self` always has the same size
                 for t in self {
                     try!(t.restore_state(r));
@@ -163,7 +163,7 @@ impl_fixed_size_array!(
 /// **NOTE**: When restoring a `Vec<T>`, this will allocate an arbitrary amount of memory, so don't
 /// feed it with untrusted data.
 impl<T: SaveState + Default> SaveState for Vec<T> {
-    fn save_state<W: Write>(&self, w: &mut W) -> io::Result<()> {
+    fn save_state<W: Write + ?Sized>(&self, w: &mut W) -> io::Result<()> {
         // Write the len first:
         try!(self.len().save_state(w));
         for item in self {
@@ -172,7 +172,7 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
         Ok(())
     }
 
-    fn restore_state<R: Read>(&mut self, r: &mut R) -> io::Result<()> {
+    fn restore_state<R: Read + ?Sized>(&mut self, r: &mut R) -> io::Result<()> {
         let mut len = 0usize;
         try!(len.restore_state(r));
         // FIXME We should limit the size of `len`, but it's unclear what limit to impose: Some
@@ -228,7 +228,7 @@ impl<T: SaveState + Default> SaveState for Vec<T> {
 #[macro_export]
 macro_rules! impl_save_state_fns {
     ( $t:ident { $( $field:ident ),* } ignore { $( $ignore:ident ),* } ) => {
-        fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
+        fn save_state<W: ::std::io::Write + ?Sized>(&self, w: &mut W) -> ::std::io::Result<()> {
             let $t { $(ref $field,)* $(ref $ignore,)* } = *self;
             $(
                 try!($field.save_state(w));
@@ -239,7 +239,7 @@ macro_rules! impl_save_state_fns {
             Ok(())
         }
 
-        fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
+        fn restore_state<R: ::std::io::Read + ?Sized>(&mut self, r: &mut R) -> ::std::io::Result<()> {
             let $t { $(ref mut $field,)* $(ref mut $ignore,)* } = *self;
             $(
                 try!($field.restore_state(r));
@@ -293,11 +293,11 @@ macro_rules! impl_save_state {
 macro_rules! impl_save_state_for_newtype {
     ( $t:ident ) => {
         impl $crate::SaveState for $t {
-            fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
+            fn save_state<W: ::std::io::Write + ?Sized>(&self, w: &mut W) -> ::std::io::Result<()> {
                 self.0.save_state(w)
             }
 
-            fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
+            fn restore_state<R: ::std::io::Read + ?Sized>(&mut self, r: &mut R) -> ::std::io::Result<()> {
                 self.0.restore_state(r)
             }
         }

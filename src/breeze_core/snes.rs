@@ -1,20 +1,21 @@
 //! This module glues everything together and coordinates emulation.
 
 use dma::*;
-use frontend::{FrontendAction, Renderer};
 use input::Input;
 use log_util::LogOnPanic;
 use ppu::Ppu;
 use rom::Rom;
+use save::SaveStateFormat;
 
 use apu::Spc700;
-use cpu::Cpu;
+use cpu::{Cpu, Mem};
+use frontend::{FrontendAction, Renderer};
 use libsavestate::SaveState;
 
 use std::env;
 use std::fs::File;
+use std::io::BufReader;
 
-use cpu::Mem;
 
 const CPU_CYCLE: i32 = 6;
 
@@ -301,15 +302,16 @@ impl<'r> Snes<'r> {
             FrontendAction::Exit => return true,
             FrontendAction::SaveState => {
                 let mut file = File::create("breeze.sav").unwrap();
-                self.save_state(&mut file).unwrap();
+                self.create_save_state(SaveStateFormat::default(), &mut file).unwrap();
                 info!("Created a save state");
             }
             FrontendAction::LoadState => {
                 if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {
                     error!("cannot load a save state while recording or replaying input!");
                 } else {
-                    let mut file = File::open("breeze.sav").unwrap();
-                    self.restore_state(&mut file).unwrap();
+                    let file = File::open("breeze.sav").unwrap();
+                    let mut bufrd = BufReader::new(file);
+                    self.restore_save_state(SaveStateFormat::default(), &mut bufrd).unwrap();
                     info!("Restored save state");
                 }
             }

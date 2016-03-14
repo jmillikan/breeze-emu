@@ -15,4 +15,5 @@ mod dma;
 pub mod ppu;
 pub mod input;
 pub mod rom;
+pub mod save;
 pub mod snes;

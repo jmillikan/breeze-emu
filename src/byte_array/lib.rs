@@ -33,10 +33,10 @@ macro_rules! impl_byte_array_extra {
     };
     ( $name:ident | save state $($rest:tt)* ) => {
         impl ::libsavestate::SaveState for $name {
-            fn save_state<W: ::std::io::Write>(&self, w: &mut W) -> ::std::io::Result<()> {
+            fn save_state<W: ::std::io::Write + ?Sized>(&self, w: &mut W) -> ::std::io::Result<()> {
                 w.write_all(&self.0)
             }
-            fn restore_state<R: ::std::io::Read>(&mut self, r: &mut R) -> ::std::io::Result<()> {
+            fn restore_state<R: ::std::io::Read + ?Sized>(&mut self, r: &mut R) -> ::std::io::Result<()> {
                 ::libsavestate::read_exact(r, &mut self.0)
             }
         }

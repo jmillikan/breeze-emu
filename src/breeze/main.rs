@@ -5,19 +5,18 @@
 extern crate clap;
 extern crate env_logger;
 
-#[macro_use] extern crate libsavestate;
 extern crate breeze_core as breeze;
 extern crate breeze_frontends as frontends;
 extern crate breeze_frontend_api as frontend_api;
 
-use std::env;
-use std::fs::File;
-use std::io::{BufReader, Read};
-
-use libsavestate::SaveState;
 use breeze::rom::Rom;
 use breeze::snes::Snes;
 use breeze::input::Input;
+use breeze::save::SaveStateFormat;
+
+use std::env;
+use std::fs::File;
+use std::io::{BufReader, Read};
 
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
@@ -113,7 +112,10 @@ fn main() {
         snes.input_mut().start_replay(Box::new(BufReader::new(File::open(replay_file).unwrap())));
     }
     if let Some(filename) = args.value_of("savestate") {
-        snes.restore_state(&mut File::open(filename).unwrap()).unwrap()
+        let file = File::open(filename).unwrap();
+        let mut bufrd = BufReader::new(file);
+        snes.restore_save_state(SaveStateFormat::default(),
+            &mut bufrd).unwrap()
     }
     snes.run();
 }
