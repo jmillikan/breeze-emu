@@ -119,7 +119,7 @@ impl Ppu {
     /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
     /// 256). `X` denotes a BG for offset-per-tile data.
     ///
-    /// ```ignore
+    /// ```text
     /// Mode    # Colors for BG
     ///          1   2   3   4
     /// ======---=---=---=---=

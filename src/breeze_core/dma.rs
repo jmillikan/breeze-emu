@@ -70,25 +70,37 @@ impl Default for DmaChannel {
     }
 }
 
-use self::TransferMode::*;
-
 /// Describes how a single DMA unit (max. 4 Bytes) is transferred
+///
+/// ```text
+/// Mode  Bytes              B-Bus 21xxh Address   ;Usage Examples...
+/// 0  =  Transfer 1 byte    xx                    ;eg. for WRAM (port 2180h)
+/// 1  =  Transfer 2 bytes   xx, xx+1              ;eg. for VRAM (port 2118h/19h)
+/// 2  =  Transfer 2 bytes   xx, xx                ;eg. for OAM or CGRAM
+/// 3  =  Transfer 4 bytes   xx, xx,   xx+1, xx+1  ;eg. for BGnxOFS, M7x
+/// 4  =  Transfer 4 bytes   xx, xx+1, xx+2, xx+3  ;eg. for BGnSC, Window, APU..
+/// 5  =  Transfer 4 bytes   xx, xx+1, xx,   xx+1  ;whatever purpose, VRAM maybe
+/// 6  =  Transfer 2 bytes   xx, xx                ;same as mode 2
+/// 7  =  Transfer 4 bytes   xx, xx,   xx+1, xx+1  ;same as mode 3
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub enum TransferMode {
-    /// Just writes a single byte
-    OneOnce,
-    /// Read one Byte and writes it twice
-    OneTwice,
-    /// Reads two bytes and writes them to the destination
-    TwoOnce,
-    /// Does `OneTwice` two times: Reads a byte, writes it twice, reads another byte, writes it
-    /// twice.
-    TwoTwice,
-    /// Reads two Bytes, A and B. Writes A, B, A, B.
-    TwoTwiceAlternate,
-    /// Reads and writes 4 Bytes.
-    FourOnce,
+    /// Mode 0: Just reads and writes a single byte
+    Single,
+    /// Mode 1: Transfer 2 bytes. B-Bus address is incremented for the second byte.
+    TwoInc,
+    /// Mode 2/6: Reads two bytes and writes them to the destination. B-Bus address stays the same
+    /// for both bytes.
+    TwoNoInc,
+    /// Mode 3/7: Transfer 4 bytes and increment B-Bus address after the first 2 bytes.
+    FourIncOnce,
+    /// Mode 4: Transfer 4 bytes and increment B-Bus address after each.
+    FourIncAlways,
+    /// Mode 5: Transfer 4 bytes, use B-Bus address offsets `0, 1, 0, 1`.
+    FourToggle,
 }
+
+use self::TransferMode::*;
 
 impl DmaChannel {
     /// Load from `$43xN`, where `x` is the number of this DMA channel, and `N` is passed as
@@ -142,12 +154,12 @@ impl DmaChannel {
 
     fn transfer_mode(&self) -> TransferMode {
         match self.params & 0b111 {
-            0 => OneOnce,
-            1 => TwoOnce,
-            2|6 => OneTwice,
-            3|7 => TwoTwice,
-            4 => FourOnce,
-            5 => TwoTwiceAlternate,
+            0 => Single,
+            1 => TwoInc,
+            2|6 => TwoNoInc,
+            3|7 => FourIncOnce,
+            4 => FourIncAlways,
+            5 => FourToggle,
             _ => unreachable!(),
         }
     }
@@ -156,60 +168,59 @@ impl DmaChannel {
 /// Perform a single DMA transfer according to `mode`. Reads and writes up to 4 bytes using the
 /// given read/write functions.
 fn dma_transfer<R, W>(p: &mut Peripherals,
-                         mode: TransferMode,
-                         read_byte: &mut R,
-                         write_byte: &mut W)
-                         where R: FnMut(&mut Peripherals) -> u8, W: FnMut(&mut Peripherals, u8) {
+                      mode: TransferMode,
+                      b_addr: u16,
+                      read_byte: &mut R,
+                      write_byte: &mut W)
+                      where R: FnMut(&mut Peripherals, u16) -> u8,
+                            W: FnMut(&mut Peripherals, u8, u16) {
     match mode {
-        /// Just reads and writes a single byte
-        OneOnce => {
-            let b = read_byte(p);
-            write_byte(p, b);
+        Single => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
         }
-        /// Reads one Byte and writes it twice
-        OneTwice => {
-            let b = read_byte(p);
-            write_byte(p, b);
-            write_byte(p, b);
+        TwoInc => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
         }
-        /// Reads two bytes and writes them to the destination
-        TwoOnce => {
-            let b = read_byte(p);
-            write_byte(p, b);
-            let b = read_byte(p);
-            write_byte(p, b);
+        TwoNoInc => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
         }
-        /// Does `OneTwice` two times: Reads a byte, writes it twice, reads another byte,
-        /// writes it twice.
-        TwoTwice => {
-            let b = read_byte(p);
-            write_byte(p, b);
-            write_byte(p, b);
-            let b = read_byte(p);
-            write_byte(p, b);
-            write_byte(p, b);
+        FourIncOnce => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
         }
-        /// Reads two Bytes, A and B. Writes A, B, A, B.
-        TwoTwiceAlternate => {
-            // FIXME: Is this order correct or is it "Read A, Write A, Read B, Write B, Write A,
-            // Write B"?
-            let a = read_byte(p);
-            let b = read_byte(p);
-            write_byte(p, a);
-            write_byte(p, b);
-            write_byte(p, a);
-            write_byte(p, b);
+        FourIncAlways => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
+            let b = read_byte(p, b_addr + 2);
+            write_byte(p, b, b_addr + 2);
+            let b = read_byte(p, b_addr + 3);
+            write_byte(p, b, b_addr + 3);
         }
-        /// Reads and writes 4 Bytes.
-        FourOnce => {
-            let b = read_byte(p);
-            write_byte(p, b);
-            let b = read_byte(p);
-            write_byte(p, b);
-            let b = read_byte(p);
-            write_byte(p, b);
-            let b = read_byte(p);
-            write_byte(p, b);
+        FourToggle => {
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
+            let b = read_byte(p, b_addr);
+            write_byte(p, b, b_addr);
+            let b = read_byte(p, b_addr + 1);
+            write_byte(p, b, b_addr + 1);
         }
     }
 }
@@ -235,47 +246,47 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
             let write_to_a = chan.write_to_a();
             let mode = chan.transfer_mode();
             let bytes = Cell::new(chan.transfer_size());
+            let a_bank = chan.a_addr_bank;
+            let a_addr = Cell::new(chan.a_addr);
             let a_addr_inc = chan.a_addr_increment();
-
-            let src_bank = if write_to_a { 0 } else { chan.a_addr_bank };
-            let mut src_addr = if write_to_a {
-                0x2100 + chan.b_addr as u16
-            } else {
-                chan.a_addr
-            };
-            let dest_bank = if write_to_a { chan.a_addr_bank } else { 0 };
-            let mut dest_addr = if write_to_a {
-                chan.a_addr
-            } else {
-                0x2100 + chan.b_addr as u16
-            };
+            let b_addr = 0x2100 + chan.b_addr as u16;
 
             trace!("DMA on channel {} with {} bytes in mode {:?}, inc {} ({}), \
-                from ${:02X}:{:04X} to ${:02X}:{:04X}",
-                i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"}, src_bank,
-                src_addr, dest_bank, dest_addr);
+                A-Bus ${:02X}:{:04X}, B-Bus $00:{:04X}",
+                i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"}, a_bank,
+                a_addr.get(), b_addr);
 
-            let mut read_byte = |p: &mut Peripherals| {
+            // FIXME Decrement the channel's `dma_size` field
+            let mut read_byte = |p: &mut Peripherals, b_addr| -> u8 {
+                if bytes.get() == 0 { return 0 }
+                let (src_bank, src_addr) = match write_to_a {
+                    true => (0, b_addr),
+                    false => (a_bank, a_addr.get()),
+                };
                 let byte = p.load(src_bank, src_addr);
                 if !write_to_a {
-                    // adjust `src_addr`
-                    src_addr = (src_addr as i32 + a_addr_inc as i32) as u16;
+                    // adjust `a_addr`
+                    a_addr.set((a_addr.get() as i32 + a_addr_inc as i32) as u16);
                 }
                 byte
             };
-            let mut write_byte = |p: &mut Peripherals, byte| {
+            let mut write_byte = |p: &mut Peripherals, byte, b_addr| {
                 if bytes.get() == 0 { return }
+                let (dest_bank, dest_addr) = match write_to_a {
+                    true => (a_bank, a_addr.get()),
+                    false => (0, b_addr),
+                };
                 p.store(dest_bank, dest_addr, byte);
                 bytes.set(bytes.get() - 1);
                 if write_to_a {
-                    // adjust `dest_addr`
-                    dest_addr = (dest_addr as i32 + a_addr_inc as i32) as u16;
+                    // adjust `a_addr`
+                    a_addr.set((a_addr.get() as i32 + a_addr_inc as i32) as u16);
                 }
             };
 
             dma_cy += bytes.get() * 8;  // 8 master cycles per byte
             while bytes.get() > 0 {
-                dma_transfer(p, mode, &mut read_byte, &mut write_byte);
+                dma_transfer(p, mode, b_addr, &mut read_byte, &mut write_byte);
             }
 
             p.dma[i].dma_size = 0;
