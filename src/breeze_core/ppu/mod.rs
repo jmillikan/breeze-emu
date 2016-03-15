@@ -369,9 +369,10 @@ impl_save_state!(Ppu {
     bg2sc, bg3sc, bg4sc, bg12nba, bg34nba, bg1hofs, m7hofs, bg1vofs, m7vofs, bg2hofs, bg2vofs,
     bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7b_last,
     m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog,
-    wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline
+    wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline,
+    x
 } ignore {
-    framebuf, sprite_render_state, x
+    framebuf, sprite_render_state
 });
 
 #[derive(Debug)]

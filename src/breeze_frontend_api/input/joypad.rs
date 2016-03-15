@@ -76,16 +76,17 @@ impl super::ControllerPortAttachment for Joypad {
     fn read_bit(&mut self) -> (bool, bool) {
         // We read the highest bit...
         let status = self.state.0 & 0x8000 != 0;
-        // Shift the "shift register" to the right
+        // Shift the "shift register" to the left
         self.state.0 <<= 1;
         // And shift a 1 bit into the other end
         self.state.0 |= 1;
 
+        // The Data2 line is always 0 (it's not used by single joypads)
         (status, false)
     }
 
     fn set_io_bit(&mut self, _iobit: bool) {}
-    // FIXME: `IOBit` isn't connected. Does it read as 1 then?
+    // FIXME: `IOBit` isn't connected. Does it read as true or false then?
     fn read_io_bit(&mut self) -> bool { true }
 
     fn needs_hv_latch_control(&self) -> bool { false }

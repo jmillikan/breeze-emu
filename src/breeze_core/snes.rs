@@ -266,14 +266,16 @@ impl Mem for Peripherals {
 
 /// The emulator.
 pub struct Snes<'r> {
+    /// Reference to the renderer this emulator instance uses to display the screen
+    pub renderer: &'r mut Renderer,
     cpu: Cpu<Peripherals>,
-    renderer: &'r mut Renderer,
     master_cy: u64,
     /// Master clock cycles for the APU not yet accounted for (can be negative)
     apu_master_cy_debt: i32,
     /// Master clock cycles for the PPU not yet accounted for (can be negative)
     ppu_master_cy_debt: i32,
-
+    /// Master cycle at which the emulator should enable CPU and APU tracing. This will print all
+    /// opcodes as they are executed (as long as the `trace` log level is enabled).
     trace_start: u64,
 }
 
@@ -302,9 +304,8 @@ impl<'r> Snes<'r> {
         }
     }
 
-    pub fn set_renderer(&mut self, renderer: &'r mut Renderer) {
-        self.renderer = renderer;
-    }
+    /// Get a reference to the `Ppu` instance used for PPU emulation
+    pub fn ppu(&self) -> &Ppu { &self.cpu.mem.ppu }
 
     pub fn input_mut(&mut self) -> &mut Input { &mut self.cpu.mem.input }
 

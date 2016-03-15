@@ -17,7 +17,7 @@ use frontend_api::Renderer;
 
 use std::env;
 use std::fs::File;
-use std::io::{BufReader, Read, stdin};
+use std::io::{BufReader, Read};
 
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
@@ -128,12 +128,20 @@ fn main() {
     }
 
     if cfg!(debug_assertions) && args.is_present("oneframe") {
-        // FIXME the first frame is black for some reason!
-        snes.render_frame();
+        debug!("PPU H={}, V={}", snes.ppu().h_counter(), snes.ppu().v_counter());
         snes.render_frame();
 
-        // Keep the window open until we get any input
-        stdin().read_line(&mut String::new()).ok();
+        info!("frame rendered. pausing emulation.");
+
+        // Keep rendering, but don't run emulation
+        // Copy out the frame buffer because the damn borrow checker doesn't like it otherwise
+        let framebuf = snes.ppu().framebuf.clone();
+        loop {
+            let action = snes.renderer.render(&*framebuf);
+            if let Some(a) = action {
+                if snes.handle_action(a) { break }
+            }
+        }
     } else {
         // Run normally
         snes.run();

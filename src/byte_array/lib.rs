@@ -56,6 +56,11 @@ macro_rules! impl_byte_array {
         impl ::std::default::Default for $name {
             fn default() -> Self { $name([0; $size]) }
         }
+        impl ::std::clone::Clone for $name {
+            fn clone(&self) -> Self {
+                $name(self.0)
+            }
+        }
         impl ::std::ops::Deref for $name {
             type Target = [u8; $size];
             fn deref(&self) -> &[u8; $size] { &self.0 }
