@@ -27,8 +27,9 @@ clap = { version = "2.0", default-features = false }
 [dev-dependencies]
 rustasm6502 = "0.1"
 term = "0.4"
-# Disable PNG default features (PNG encoding) since that would depend on flate2 and thus C code
-# (this is also the reason we depend directly on png instead of the image crate)
+# Disable PNG default features (PNG encoding) since that would depend on flate2
+# and thus C code (this is also the reason we depend directly on png instead of
+# the image crate)
 png = { version = "0.4.2", default-features = false }
 
 [features]
@@ -37,5 +38,7 @@ default = ["sdl"]
 sdl = ["breeze_frontends/sdl2"]
 glium = ["breeze_frontends/glium"]
 
+# Run render tests optimized (the unoptimized emulator is just too slow for that
+# to scale well)
 [profile.test]
 opt-level = 2
