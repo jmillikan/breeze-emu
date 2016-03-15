@@ -163,7 +163,7 @@ impl Ppu {
         }
     }
 
-    /// Calculates the palette base index for a tile in the given background layer. `tile_palette`
+    /// Calculates the palette base index for a tile in the given background layer. `palette_num`
     /// is the palette number stored in the tilemap entry (the 3 `p` bits).
     fn palette_base_for_bg_tile(&self, bg: u8, palette_num: u8) -> u8 {
         debug_assert!(bg >= 1 && bg <= 4);

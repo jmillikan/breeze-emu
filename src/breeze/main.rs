@@ -13,10 +13,11 @@ use breeze::rom::Rom;
 use breeze::snes::Snes;
 use breeze::input::Input;
 use breeze::save::SaveStateFormat;
+use frontend_api::Renderer;
 
 use std::env;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, stdin};
 
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
@@ -33,7 +34,7 @@ fn main() {
     }
     env_logger::init().unwrap();
 
-    let args = clap::App::new("breeze")
+    let mut app = clap::App::new("breeze")
         .version(env!("CARGO_PKG_VERSION"))
         .about("SNES emulator")
         .arg(clap::Arg::with_name("rom")
@@ -57,8 +58,16 @@ fn main() {
         .arg(clap::Arg::with_name("replay")
             .long("replay")
             .takes_value(true)
-            .help("Replay a recording from a text file"))
-    .get_matches();
+            .help("Replay a recording from a text file"));
+
+    // Add debugging options
+    if cfg!(debug_assertions) {
+        app = app.arg(clap::Arg::with_name("oneframe")
+            .long("oneframe")
+            .help("Render a single frame, then pause"));
+    }
+
+    let args = app.get_matches();
 
     if args.value_of("record").is_some() && args.value_of("replay").is_some() {
         println!("`record` and `replay` may not be specified together!");
@@ -117,5 +126,16 @@ fn main() {
         snes.restore_save_state(SaveStateFormat::default(),
             &mut bufrd).unwrap()
     }
-    snes.run();
+
+    if cfg!(debug_assertions) && args.is_present("oneframe") {
+        // FIXME the first frame is black for some reason!
+        snes.render_frame();
+        snes.render_frame();
+
+        // Keep the window open until we get any input
+        stdin().read_line(&mut String::new()).ok();
+    } else {
+        // Run normally
+        snes.run();
+    }
 }

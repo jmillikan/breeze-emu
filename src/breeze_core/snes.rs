@@ -273,11 +273,13 @@ pub struct Snes<'r> {
     apu_master_cy_debt: i32,
     /// Master clock cycles for the PPU not yet accounted for (can be negative)
     ppu_master_cy_debt: i32,
+
+    trace_start: u64,
 }
 
 impl<'a> SaveState for Snes<'a> {
     impl_save_state_fns!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
-        ignore { renderer });
+        ignore { renderer, trace_start });
 }
 
 impl<'r> Snes<'r> {
@@ -285,25 +287,36 @@ impl<'r> Snes<'r> {
     ///
     /// This will also create a default `Input` instance without any attached peripherals.
     pub fn new(rom: Rom, renderer: &'r mut Renderer) -> Snes {
+        // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
+        let trace_start = env::var("BREEZE_TRACE")
+            .map(|string| string.parse().expect("invalid value for BREEZE_TRACE"))
+            .unwrap_or(!0);
+
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
             renderer: renderer,
             master_cy: 0,
             apu_master_cy_debt: 0,
             ppu_master_cy_debt: 0,
+            trace_start: trace_start,
         }
+    }
+
+    pub fn set_renderer(&mut self, renderer: &'r mut Renderer) {
+        self.renderer = renderer;
     }
 
     pub fn input_mut(&mut self) -> &mut Input { &mut self.cpu.mem.input }
 
     /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
-    fn handle_action(&mut self, action: FrontendAction) -> bool {
+    pub fn handle_action(&mut self, action: FrontendAction) -> bool {
         match action {
             FrontendAction::Exit => return true,
             FrontendAction::SaveState => {
-                let mut file = File::create("breeze.sav").unwrap();
+                let path = "breeze.sav";
+                let mut file = File::create(path).unwrap();
                 self.create_save_state(SaveStateFormat::default(), &mut file).unwrap();
-                info!("Created a save state");
+                info!("created a save state in '{}'", path);
             }
             FrontendAction::LoadState => {
                 if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {
@@ -312,7 +325,7 @@ impl<'r> Snes<'r> {
                     let file = File::open("breeze.sav").unwrap();
                     let mut bufrd = BufReader::new(file);
                     self.restore_save_state(SaveStateFormat::default(), &mut bufrd).unwrap();
-                    info!("Restored save state");
+                    info!("restored save state");
                 }
             }
         }
@@ -320,25 +333,22 @@ impl<'r> Snes<'r> {
         false
     }
 
-    pub fn run(&mut self) {
-        // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
-        let trace_start = env::var("BREEZE_TRACE")
-            .map(|string| string.parse().expect("invalid value for BREEZE_TRACE"))
-            .unwrap_or(!0);
-
+    /// Runs emulation until the next frame is completed.
+    pub fn render_frame(&mut self) -> Option<FrontendAction> {
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
         const APU_DIVIDER: i32 = 21;
 
-        let working_cy = LogOnPanic::new("cycle count", 0);
+        let working_cy = LogOnPanic::new("cycle count", self.master_cy);
 
         loop {
             // Store an action we should perform. We might need to load a save state, so we have to
             // make sure no important local variable is left in its old state.
             let mut action = None;
+            let mut frame_rendered = false;
 
-            if self.master_cy >= trace_start {
+            if self.master_cy >= self.trace_start {
                 self.cpu.trace = true;
                 self.cpu.mem.apu.trace = true;
             }
@@ -378,6 +388,7 @@ impl<'r> Snes<'r> {
                         if let Some(a) = self.renderer.render(&*self.cpu.mem.ppu.framebuf) {
                             if action.is_none() { action = Some(a); }
                         }
+                        frame_rendered = true;
                     }
                     (225, 0) => {
                         // First V-Blank pixel
@@ -421,11 +432,19 @@ impl<'r> Snes<'r> {
                 }
             }
 
+            if frame_rendered { return action; }
+
+            working_cy.set(self.master_cy);
+        }
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            let action = self.render_frame();
+
             if let Some(a) = action {
                 if self.handle_action(a) { return }
             }
-
-            working_cy.set(self.master_cy);
         }
     }
 }
