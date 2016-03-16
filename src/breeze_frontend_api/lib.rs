@@ -45,7 +45,7 @@ pub trait Renderer {
     fn set_rom_title(&mut self, title: &str);
 }
 
-impl<T: Renderer> Renderer for Box<T> {
+impl<T: Renderer + ?Sized> Renderer for Box<T> {
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         (**self).render(frame_data)
     }
