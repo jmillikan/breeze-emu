@@ -13,19 +13,23 @@ struct BgSettings {
     /// "Starting at the tilemap address, the first $800 bytes are for tilemap A. Then come the
     /// $800 bytes for B, then C then D."
     tilemap_word_addr: u16,
-    /// When `true`, this BGs tilemaps are mirrored sideways
+    /// When `true`, this BGs tilemaps are repeated sideways
     tilemap_mirror_h: bool,
-    /// When `true`, this BGs tilemaps are mirrored downwards
+    /// When `true`, this BGs tilemaps are repeated downwards
     tilemap_mirror_v: bool,
     /// If `true`, BG tiles are 16x16 pixels. If `false`, they are 8x8 pixels.
     tile_size_16: bool,
     /// Character Data start address in VRAM
     chr_addr: u16,
+    /// Horizontal scroll offset. Moves the BG layer to the left by some number of pixels.
     hofs: u16,
+    /// Vertical scroll offset. Moves the BG layer up by some number of pixels.
     vofs: u16,
 }
 
-/// Unpacked tilemap entry for internal (rendering) use
+/// Unpacked tilemap entry for internal (rendering) use.
+///
+/// A tilemap entry is 2 bytes large and contains informations about a single background layer tile.
 struct TilemapEntry {
     #[allow(dead_code)] // FIXME
     vflip: bool,
@@ -35,7 +39,8 @@ struct TilemapEntry {
     priority: u8,
     /// Tile palette (0-7)
     palette: u8,
-    /// Index into the character/tile data, where the actual tile is stored
+    /// Index into the character/tile data, where the actual tile character data is stored in
+    /// bitplanes (10 bits)
     tile_number: u16,
 }
 
@@ -116,9 +121,11 @@ impl Ppu {
         }
     }
 
-    /// Returns the number of colors in the given BG layer in the current BG mode (4, 16, 128 or
-    /// 256). `X` denotes a BG for offset-per-tile data.
+    /// Returns the number of color bits in the given BG layer in the current BG mode (2, 4, 7 or
+    /// 8). To get the number of colors, use `1 << color_bits_for_bg`.
     ///
+    /// Table of colors for BG layers (not what this function returns!). `X` denotes a BG for
+    /// offset-per-tile data.
     /// ```text
     /// Mode    # Colors for BG
     ///          1   2   3   4
@@ -133,31 +140,31 @@ impl Ppu {
     /// 7      256   -   -   -
     /// 7EXTBG 256 128   -   -
     /// ```
-    fn color_count_for_bg(&self, bg: u8) -> u16 {
+    fn color_bits_for_bg(&self, bg: u8) -> u8 {
         match self.bg_mode() {
-            0 => 4,
+            0 => 2,
             1 => match bg {
-                1 | 2 => 16,
-                3 => 4,
+                1 | 2 => 4,
+                3 => 2,
                 _ => unreachable!(),
             },
-            2 => 16,
+            2 => 4,
             3 => match bg {
-                1 => 256,
-                2 => 16,
+                1 => 8,
+                2 => 4,
                 _ => unreachable!(),
             },
             4 => match bg {
-                1 => 256,
-                2 => 4,
+                1 => 8,
+                2 => 2,
                 _ => unreachable!(),
             },
             5 => match bg {
-                1 => 16,
-                2 => 4,
+                1 => 4,
+                2 => 2,
                 _ => unreachable!(),
             },
-            6 => 16,
+            6 => 4,
             7 => panic!("NYI: color_count_for_bg for mode 7"),   // (make sure to handle EXTBG)
             _ => unreachable!(),
         }
@@ -169,7 +176,7 @@ impl Ppu {
         debug_assert!(bg >= 1 && bg <= 4);
         match self.bg_mode() {
             0 => palette_num * 4 + (bg - 1) * 32,
-            1 | 5 => palette_num * self.color_count_for_bg(bg) as u8,   // doesn't have 256 colors
+            1 | 5 => palette_num * (1 << self.color_bits_for_bg(bg) as u8),
             2 => palette_num * 16,
             3 => match bg {
                 1 => 0,
@@ -229,22 +236,18 @@ impl Ppu {
         let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
         if tilemap_entry.priority != prio { return None }
 
-        let color_count = self.color_count_for_bg(bg_num);
-        debug_assert!(color_count.is_power_of_two());  // should be power of two
-        if color_count == 256 {
+        let color_bits = self.color_bits_for_bg(bg_num);
+        if color_bits == 8 {
+            // can use direct color mode
             debug_assert!(self.cgwsel & 0x01 == 0, "NYI: direct color mode");
         }
 
-        // Calculate the number of bitplanes needed to store a color in this BG
-        let bitplane_count = (color_count - 1).count_ones() as u16;
-
-        // FIXME: Formula taken from the wiki, is this correct? In particular: `chr_addr<<1`?
         let bitplane_start_addr =
             (bg.chr_addr << 1) +
-            (tilemap_entry.tile_number * 8 * bitplane_count);   // 8 bytes per bitplane
+            (tilemap_entry.tile_number * 8 * color_bits as u16);   // 8 bytes per bitplane
 
         let palette_base = self.palette_base_for_bg_tile(bg_num, tilemap_entry.palette);
-        let palette_index = self.read_chr_entry(bitplane_count as u8,
+        let palette_index = self.read_chr_entry(color_bits,
                                                 bitplane_start_addr,
                                                 tile_size,
                                                 (off_x, off_y));
