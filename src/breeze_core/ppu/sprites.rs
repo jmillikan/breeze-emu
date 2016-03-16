@@ -3,14 +3,22 @@
 use super::{Ppu, Rgb};
 
 use arrayvec::ArrayVec;
-use std::mem::replace;
 
 /// Render state stored inside the `Ppu`. We use this to cache the visible sprites for each
 /// scanline, just like the real PPU would.
-#[derive(Default)]
 pub struct SpriteRenderState {
-    /// Contains up to 34 `SpriteTile`s that are visible on the current scanline
-    visible_sprite_tiles: Vec<SpriteTile>,
+    /// Caches a prerendered scanline of sprite pixels. This is rendered at the start of each
+    /// scanline and contains, for each pixel on the scanline, the color of the OBJ (= sprite) layer
+    /// and the priority of that pixel (`None` in case there's no opaque sprite pixel there).
+    sprite_scanline: [(Option<(Rgb, u8)>); super::SCREEN_WIDTH as usize],
+}
+
+impl Default for SpriteRenderState {
+    fn default() -> Self {
+        SpriteRenderState {
+            sprite_scanline: [None; super::SCREEN_WIDTH as usize],
+        }
+    }
 }
 
 /// Unpacked OAM entry for internal use.
@@ -37,7 +45,7 @@ struct OamEntry {
 struct SpriteTile {
     /// Address of character data for this tile
     chr_addr: u16,
-    /// X position of the tile on the screen.
+    /// X position of the tile on the screen. Can be negative if the tile starts outside the screen.
     x: i16,
     /// Y position of the scanline inside the tile (0-7)
     /// FIXME Can we just store the pixel row that's on the scanline? (for each priority)
@@ -104,11 +112,11 @@ impl Ppu {
             (self.oamaddl as u16 & 0xfe) >> 1
         };
 
-        // Find the first 32 sprites on the current scanline
+        // Find the first 32 sprites on the current scanline (RANGE)
         // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
         let mut visible_sprites = ArrayVec::<[_; 32]>::new();
         for i in first_sprite..first_sprite+128 {
-            let entry = self.get_oam_entry((i & 0x7f) as u8);   // limit to 127
+            let entry = self.get_oam_entry((i & 0x7f) as u8);   // limit to 127 and wrap back around
             if self.sprite_on_scanline(&entry) {
                 if let Some(_) = visible_sprites.push(entry) {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
@@ -128,14 +136,14 @@ impl Ppu {
         // FIXME Is this ^^ correct?
 
         // FIXME Use `ArrayVec<[_; 34]>` when it works
-        let mut visible_tiles = replace(&mut self.sprite_render_state.visible_sprite_tiles, Vec::new());
-        visible_tiles.clear();
+        let mut visible_tiles = array_vec![SpriteTile; 34];
 
         // Word address of first sprite character table
         let name_base: u16 = (self.obsel as u16 & 0b111) << 13;
         let name_select: u16 = (self.obsel as u16 >> 3) & 0b11;
 
-        // Start at the last sprite found
+        // TIME: Start at the last sprite found, load up to 34 8x8 tiles (for each sprite from left
+        // to right, after taking flip bits of the sprite into account)
         'collect_tiles: for sprite in visible_sprites.iter().rev() {
             // How many tiles are there?
             let (sprite_w, _) = self.obj_size(sprite.size_toggle);
@@ -158,8 +166,9 @@ impl Ppu {
             // format as BG character data (bitplanes, etc.). Keep in mind that sprites do not have
             // tilemaps.
             // One 8x8 tile is 32 Bytes large (4 bits per pixel).
-            // Tiles in a single (8 pixel high) row of the sprite are stored sequentially: Tile
-            // coord (1,0) is stored directly behind (0,0), which is stored at `tile_start_addr`.
+            // Tiles in a single (1 tile or 8 pixel high) row of the sprite are stored sequentially:
+            // Tile coord (1,0) is stored directly behind (0,0), which is stored at
+            // `tile_start_addr`.
             // Rows of tiles, however, are always stored 512 Bytes (or 16 tiles/128 pixels) apart:
             // If tile (0,0) is at address $0000, tile (0,1) is at $0200. This is independent of
             // the sprite size, which means that there are "holes" in the sprite character data,
@@ -186,7 +195,34 @@ impl Ppu {
             }
         }
 
-        self.sprite_render_state.visible_sprite_tiles = visible_tiles;
+        // With all 34 visible sprite tiles collected, prerender them into a cache. We also store
+        // the priority in the cache to correctly layer the OBJ layer between BGs. This also
+        // emulates the "sprite priority quirk" (as it is known primarily on the NES, which seems to
+        // share this behavior).
+        // "Sprites with a lower index are always in front of sprites with a higher index."
+        // Since the sprite list is already sorted by index, and the tile list is built up
+        // backwards, we should be fine with iterating over all 34 (or less) tiles and rendering
+        // them in order (overwriting what's already there).
+        self.sprite_render_state.sprite_scanline = [None; super::SCREEN_WIDTH as usize];
+
+        for tile in &visible_tiles {
+            for x_off in 0u8..8 {
+                let screen_x = tile.x + x_off as i16;
+                if screen_x >= 0 && screen_x < super::SCREEN_WIDTH as i16 {
+                    // on-screen pixel (can write to buffer)
+                    let color = self.read_sprite_tile_pixel(tile, x_off);
+                    let buffer = &mut self.sprite_render_state.sprite_scanline;
+                    match color {
+                        Some(rgb) => {
+                            buffer[screen_x as usize] = Some((rgb, tile.priority));
+                        }
+                        None => {
+                            // do nothing (don't overwrite visible pixels with transparent ones)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Determines if the given sprite has any tiles on the current scanline
@@ -216,35 +252,36 @@ impl Ppu {
         }
     }
 
-    /// Returns the current pixel on the sprite layer.
-    ///
-    /// Searches for a sprite tile overlapping with the current pixel and looks up its color.
+    fn read_sprite_tile_pixel(&self, tile: &SpriteTile, x_offset: u8) -> Option<Rgb> {
+        debug_assert!(x_offset < 8);
+        let rel_color = self.read_chr_entry(4,  // 16 colors
+                                            tile.chr_addr,
+                                            8,  // 8x8 tiles
+                                            (x_offset as u8, tile.y_off));
+        debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
+
+        // color index 0 is always transparent
+        if rel_color == 0 { return None }
+
+        let abs_color = 128 + tile.palette * 16 + rel_color;
+        // FIXME Color math
+        let rgb = self.lookup_color(abs_color);
+
+        Some(rgb)
+    }
+
+    /// Returns the value of the current pixel on the sprite layer if it has the given priority
+    /// (and `None` otherwise).
     pub fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
         if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
 
-        for tile in &self.sprite_render_state.visible_sprite_tiles {
-            if tile.priority == prio {
-                // The tile must be on this scanline, we just have to check X
-                if tile.x <= self.x as i16 && tile.x + 8 > self.x as i16 {
-                    let x_offset = self.x as i16 - tile.x;
-                    debug_assert!(0 <= x_offset && x_offset <= 7, "x_offset = {}", x_offset);
-                    let rel_color = self.read_chr_entry(4,  // 16 colors
-                                                        tile.chr_addr,
-                                                        8,  // 8x8 tiles
-                                                        (x_offset as u8, tile.y_off));
-                    debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
-
-                    // color index 0 is always transparent
-                    if rel_color == 0 { continue }
-
-                    let abs_color = 128 + tile.palette * 16 + rel_color;
-                    // FIXME Color math
-                    let rgb = self.lookup_color(abs_color);
-                    return Some(rgb)
-                }
-            }
+        match self.sprite_render_state.sprite_scanline[self.x as usize] {
+            None => None,   // No pixel or transparent pixel on OBJ layer
+            Some((rgb, obj_prio)) => if obj_prio == prio {
+                Some(rgb)
+            } else {
+                None
+            },
         }
-
-        None
     }
 }

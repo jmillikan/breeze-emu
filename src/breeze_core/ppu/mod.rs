@@ -39,7 +39,8 @@ pub struct Ppu {
     // FIXME How would this work in high resolution modes?
     pub framebuf: FrameBuf,
 
-    /// Opaque state object used by the render code. This value may change between frames.
+    /// Opaque state object used by the render code. This value may change between frames/scanlines
+    /// and is used as a cache between pixels.
     sprite_render_state: SpriteRenderState,
 
     /// Object Attribute Memory
@@ -375,7 +376,7 @@ impl_save_state!(Ppu {
     framebuf, sprite_render_state
 });
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Rgb {
     r: u8,
     g: u8,
