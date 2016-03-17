@@ -31,9 +31,9 @@ struct BgSettings {
 ///
 /// A tilemap entry is 2 bytes large and contains informations about a single background layer tile.
 struct TilemapEntry {
-    #[allow(dead_code)] // FIXME
+    /// Flip this tile vertically (flips top and down of the tile)
     vflip: bool,
-    #[allow(dead_code)]
+    /// Flip horizontally (flips left and right side)
     hflip: bool,
     /// Priority bit (0-1)
     priority: u8,
@@ -234,7 +234,8 @@ impl Ppu {
         let palette_index = self.read_chr_entry(color_bits,
                                                 bitplane_start_addr,
                                                 tile_size,
-                                                (off_x, off_y));
+                                                (off_x, off_y),
+                                                (tilemap_entry.vflip, tilemap_entry.hflip));
 
         match palette_index {
             0 => None,

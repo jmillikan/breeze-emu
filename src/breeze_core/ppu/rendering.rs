@@ -1,4 +1,4 @@
-//! PPU rendering code
+//! Common PPU rendering code (used by sprite and BG rendering)
 //!
 //! # Terminology
 //!
@@ -185,17 +185,24 @@ impl Ppu {
     /// * `start_addr`: Address of the first bitplane (or the first 2)
     /// * `tile_size`: 8 or 16
     /// * `(x, y)`: Offset inside the tile (`0-7` or `0-15`, depending on the tile size)
+    /// * `(vflip, hflip)`: Flip this tile vertically (top and down are flipped) or horizontally
+    ///   (left and right are flipped)
     pub fn read_chr_entry(&self,
-                      bitplane_count: u8,
-                      start_addr: u16,
-                      tile_size: u8,
-                      (x, y): (u8, u8)) -> u8 {
+                          bitplane_count: u8,
+                          start_addr: u16,
+                          tile_size: u8,
+                          (x, y): (u8, u8),
+                          (vflip, hflip): (bool, bool)) -> u8 {
         // 2 bitplanes are stored interleaved with each other, so there can only be an even number
         debug_assert!(bitplane_count & 1 == 0, "odd bitplane count");
         debug_assert!(x <= 7 || (x <= 15 && tile_size == 16), "invalid x value: {}", x);
         debug_assert!(y <= 7 || (y <= 15 && tile_size == 16), "invalid y value: {}", y);
         debug_assert!(tile_size == 8, "non-8x8 tiles unsupported"); // FIXME support 16x16 tiles
         let bitplane_pairs = bitplane_count >> 1;
+
+        // Flip coordinates, if necessary
+        let x = if hflip { tile_size - x - 1 } else { x };
+        let y = if vflip { tile_size - y - 1 } else { y };
 
         let mut palette_index = 0u8;
         for i in 0..bitplane_pairs {
@@ -215,7 +222,6 @@ impl Ppu {
     /// * `bitplanes_start`: Start address of the bitplanes
     /// * `(x_off, y_off)`: Offset into the tile (`0-7`)
     fn read_2_bitplanes(&self, bitplanes_start: u16, (x_off, y_off): (u8, u8)) -> u8 {
-        // FIXME Handle flipped tiles somewhere in here (or not in here)
         // Bit 0 in low bytes, bit 1 in high bytes
         let lo = self.vram[bitplanes_start + y_off as u16 * 2];
         let hi = self.vram[bitplanes_start + y_off as u16 * 2 + 1];

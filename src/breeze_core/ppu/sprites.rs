@@ -257,7 +257,8 @@ impl Ppu {
         let rel_color = self.read_chr_entry(4,  // 16 colors
                                             tile.chr_addr,
                                             8,  // 8x8 tiles
-                                            (x_offset as u8, tile.y_off));
+                                            (x_offset as u8, tile.y_off),
+                                            (false, false));    // FIXME sprite tile flip
         debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
 
         // color index 0 is always transparent
