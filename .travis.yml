@@ -28,6 +28,5 @@ script:
 after_success:
   - |
       test -n "$UPLOAD_DOCS" &&
-      cd breeze_core &&
       travis-cargo --only stable doc &&
       travis-cargo --only stable doc-upload
