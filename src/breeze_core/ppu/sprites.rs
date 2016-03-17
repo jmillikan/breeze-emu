@@ -35,16 +35,15 @@ struct OamEntry {
     priority: u8,
     /// 0-7. The first palette entry is `128+ppp*16`.
     palette: u8,
-    #[allow(dead_code)] // FIXME
     hflip: bool,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // FIXME up-down flipping not implemented
     vflip: bool,
     size_toggle: bool,
 }
 
 /// Informations about a single tile of a sprite, needed for drawing.
 #[derive(Copy, Clone, Default)]
-struct SpriteTile {
+struct SpriteTile<'a> {
     /// Address of character data for this tile
     chr_addr: u16,
     /// X position of the tile on the screen. Can be negative if the tile starts outside the screen.
@@ -52,12 +51,18 @@ struct SpriteTile {
     /// Y position of the scanline inside the tile (0-7)
     /// FIXME Can we just store the pixel row that's on the scanline? (for each priority)
     y_off: u8,
-    /// Priority of the sprite (0-3)
-    priority: u8,
-    /// Palette of the sprite (0-7)
-    palette: u8,
+    /// Reference to the sprite this tile is a part of. Note that tiles can be shared, but that
+    /// doesn't matter for this.
+    ///
+    /// This is only an `Option` so it can implement `Default`. Integer generics should make this go
+    /// away (since they'd make `arrayvec` more usable).
+    sprite: Option<&'a OamEntry>,
+}
 
-    // FIXME hflip/vflip
+impl<'a> SpriteTile<'a> {
+    fn sprite(&self) -> &OamEntry {
+        self.sprite.unwrap()
+    }
 }
 
 impl Ppu {
@@ -124,7 +129,7 @@ impl Ppu {
             if self.sprite_on_scanline(&entry) {
                 if visible_sprites.push(entry).is_err() {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
-                    break
+                    break;
                 }
             }
         }
@@ -184,13 +189,14 @@ impl Ppu {
             // FIXME "Only those tiles with -8 < X < 256 are counted."
             // Add all tiles in this row to our tile list (left to right)
             for i in 0..sprite_w_tiles as i16 {
+                let flip_i = if sprite.hflip { sprite_w_tiles as i16 - i - 1 } else { i };
                 let tile = SpriteTile {
                     chr_addr: y_row_start_addr + 32 * i as u16,
-                    x: sprite.x + 8 * i,
+                    x: sprite.x + 8 * flip_i,
                     y_off: tile_y_off,
-                    priority: sprite.priority,
-                    palette: sprite.palette,
+                    sprite: Some(sprite),
                 };
+
                 if visible_tiles.push(tile).is_err() {
                     // FIXME Set sprite tile overflow flag
                     break 'collect_tiles
@@ -217,7 +223,7 @@ impl Ppu {
                     let buffer = &mut self.sprite_render_state.sprite_scanline;
                     match color {
                         Some(rgb) => {
-                            buffer[screen_x as usize] = Some((rgb, tile.priority));
+                            buffer[screen_x as usize] = Some((rgb, tile.sprite().priority));
                         }
                         None => {
                             // do nothing (don't overwrite visible pixels with transparent ones)
@@ -261,13 +267,13 @@ impl Ppu {
                                             tile.chr_addr,
                                             8,  // 8x8 tiles
                                             (x_offset as u8, tile.y_off),
-                                            (false, false));    // FIXME sprite tile flip
+                                            (tile.sprite().vflip, tile.sprite().hflip));
         debug_assert!(rel_color < 16, "rel_color = {} (but is 4-bit!)", rel_color);
 
         // color index 0 is always transparent
         if rel_color == 0 { return None }
 
-        let abs_color = 128 + tile.palette * 16 + rel_color;
+        let abs_color = 128 + tile.sprite().palette * 16 + rel_color;
         // FIXME Color math
         let rgb = self.lookup_color(abs_color);
 
