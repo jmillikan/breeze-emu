@@ -98,7 +98,10 @@ impl Default for SdlRenderer {
             let window = video.window("breeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
                 .resizable()
                 .build().unwrap();
-            let renderer = window.renderer().accelerated().build().unwrap();
+            let renderer = window.renderer()
+                .accelerated()
+                .present_vsync()
+                .build().unwrap();
             let texture = renderer.create_texture(
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,
