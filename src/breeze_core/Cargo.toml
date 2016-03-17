@@ -15,4 +15,3 @@ spc700 = { path = "../spc700" }
 byte_array = { path = "../byte_array" }
 libsavestate = { path = "../libsavestate" }
 log = "0.3"
-arrayvec = "0.3"

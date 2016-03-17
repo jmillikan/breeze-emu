@@ -2,7 +2,7 @@
 
 use super::{Ppu, Rgb};
 
-use arrayvec::ArrayVec;
+use flexvec::FlexVec;
 
 /// Render state stored inside the `Ppu`. We use this to cache the visible sprites for each
 /// scanline, just like the real PPU would.
@@ -22,6 +22,7 @@ impl Default for SpriteRenderState {
 }
 
 /// Unpacked OAM entry for internal use.
+#[derive(Copy, Clone, Default)]
 struct OamEntry {
     /// First tile (0-255), needs to take name table selection bit into account
     tile: u8,
@@ -42,6 +43,7 @@ struct OamEntry {
 }
 
 /// Informations about a single tile of a sprite, needed for drawing.
+#[derive(Copy, Clone, Default)]
 struct SpriteTile {
     /// Address of character data for this tile
     chr_addr: u16,
@@ -114,11 +116,13 @@ impl Ppu {
 
         // Find the first 32 sprites on the current scanline (RANGE)
         // NB Priority is ignored for this step, it's only used for drawing, which isn't done here
-        let mut visible_sprites = ArrayVec::<[_; 32]>::new();
+        let mut visible_sprites = [OamEntry::default(); 32];
+        let mut visible_sprites = FlexVec::new(&mut visible_sprites);
         for i in first_sprite..first_sprite+128 {
-            let entry = self.get_oam_entry((i & 0x7f) as u8);   // limit to 127 and wrap back around
+            let index = (i & 0x7f) as u8;   // limit to 127 and wrap back around
+            let entry = self.get_oam_entry(index);
             if self.sprite_on_scanline(&entry) {
-                if let Some(_) = visible_sprites.push(entry) {
+                if visible_sprites.push(entry).is_err() {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
                     break
                 }
@@ -135,8 +139,8 @@ impl Ppu {
         // * Tiles are loaded iff they are on the current scanline (and have `-8 < X < 256`)
         // FIXME Is this ^^ correct?
 
-        // FIXME Use `ArrayVec<[_; 34]>` when it works
-        let mut visible_tiles = array_vec![SpriteTile; 34];
+        let mut visible_tiles = [SpriteTile::default(); 34];
+        let mut visible_tiles = FlexVec::new(&mut visible_tiles);
 
         // Word address of first sprite character table
         let name_base: u16 = (self.obsel as u16 & 0b111) << 13;
@@ -180,15 +184,14 @@ impl Ppu {
             // FIXME "Only those tiles with -8 < X < 256 are counted."
             // Add all tiles in this row to our tile list (left to right)
             for i in 0..sprite_w_tiles as i16 {
-                if visible_tiles.len() < 34 {
-                    visible_tiles.push(SpriteTile {
-                        chr_addr: y_row_start_addr + 32 * i as u16,
-                        x: sprite.x + 8 * i,
-                        y_off: tile_y_off,
-                        priority: sprite.priority,
-                        palette: sprite.palette,
-                    });
-                } else {
+                let tile = SpriteTile {
+                    chr_addr: y_row_start_addr + 32 * i as u16,
+                    x: sprite.x + 8 * i,
+                    y_off: tile_y_off,
+                    priority: sprite.priority,
+                    palette: sprite.palette,
+                };
+                if visible_tiles.push(tile).is_err() {
                     // FIXME Set sprite tile overflow flag
                     break 'collect_tiles
                 }
@@ -205,7 +208,7 @@ impl Ppu {
         // them in order (overwriting what's already there).
         self.sprite_render_state.sprite_scanline = [None; super::SCREEN_WIDTH as usize];
 
-        for tile in &visible_tiles {
+        for tile in visible_tiles.iter() {
             for x_off in 0u8..8 {
                 let screen_x = tile.x + x_off as i16;
                 if screen_x >= 0 && screen_x < super::SCREEN_WIDTH as i16 {
