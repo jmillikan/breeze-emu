@@ -141,31 +141,20 @@ impl Ppu {
     /// 7EXTBG 256 128   -   -
     /// ```
     fn color_bits_for_bg(&self, bg: u8) -> u8 {
-        match self.bg_mode() {
-            0 => 2,
-            1 => match bg {
-                1 | 2 => 4,
-                3 => 2,
-                _ => unreachable!(),
-            },
-            2 => 4,
-            3 => match bg {
-                1 => 8,
-                2 => 4,
-                _ => unreachable!(),
-            },
-            4 => match bg {
-                1 => 8,
-                2 => 2,
-                _ => unreachable!(),
-            },
-            5 => match bg {
-                1 => 4,
-                2 => 2,
-                _ => unreachable!(),
-            },
-            6 => 4,
-            7 => panic!("NYI: color_count_for_bg for mode 7"),   // (make sure to handle EXTBG)
+        match (self.bg_mode(), bg) {
+            (0, _) => 2,
+            (1, 1) |
+            (1, 2) => 4,
+            (1, 3) => 2,
+            (2, _) => 4,
+            (3, 1) => 8,
+            (3, 2) => 4,
+            (4, 1) => 8,
+            (4, 2) => 2,
+            (5, 1) => 4,
+            (5, 2) => 2,
+            (6, _) => 4,
+            (7, _) => panic!("NYI: color_count_for_bg for mode 7"),   // (make sure to handle EXTBG)
             _ => unreachable!(),
         }
     }
@@ -174,22 +163,17 @@ impl Ppu {
     /// is the palette number stored in the tilemap entry (the 3 `p` bits).
     fn palette_base_for_bg_tile(&self, bg: u8, palette_num: u8) -> u8 {
         debug_assert!(bg >= 1 && bg <= 4);
-        match self.bg_mode() {
-            0 => palette_num * 4 + (bg - 1) * 32,
-            1 | 5 => palette_num * (1 << self.color_bits_for_bg(bg) as u8),
-            2 => palette_num * 16,
-            3 => match bg {
-                1 => 0,
-                2 => palette_num * 16,
-                _ => unreachable!(),    // no BG3/4
-            },
-            4 => match bg {
-                1 => 0,
-                2 => palette_num * 4,
-                _ => unreachable!(),    // no BG3/4
-            },
-            6 => palette_num * 16,      // BG1 has 16 colors
-            7 => panic!("NYI: palette_base_for_bg_tile for mode 7"),
+        match (self.bg_mode(), bg) {
+            (0, _) => palette_num * 4 + (bg - 1) * 32,
+            (1, _) |
+            (5, _) => palette_num * (1 << self.color_bits_for_bg(bg) as u8),
+            (2, _) => palette_num * 16,
+            (3, 1) => 0,
+            (3, 2) => palette_num * 16,
+            (4, 1) => 0,
+            (4, 2) => palette_num * 4,
+            (6, _) => palette_num * 16, // BG1 has 16 colors
+            (7, _) => panic!("NYI: palette_base_for_bg_tile for mode 7"),
             _ => unreachable!(),
         }
     }
