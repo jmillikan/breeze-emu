@@ -22,8 +22,10 @@ use std::io::{BufReader, Read};
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
+    use breeze::input::Peripheral;
+
     let ports = input.unwrap_ports();
-    ports.0 = Some(Box::new(::frontend_api::input::joypad::Joypad::new(Box::new(::frontends::frontend_sdl::KeyboardInput))));
+    ports.0 = Some(Peripheral::new_joypad(Box::new(::frontends::frontend_sdl::KeyboardInput)));
 }
 #[cfg(not(feature = "sdl"))]
 fn attach_default_input(_: &mut Input) {}

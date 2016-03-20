@@ -41,56 +41,27 @@ impl JoypadState {
         };
         self
     }
+
+    /// Reads a bit from the state, as if the state would be stored inside the joypads shift
+    /// register. This shifts the state to the left and inserts a 1-bit at the right side.
+    pub fn read_bit(&mut self) -> bool {
+        // We read the highest bit...
+        let status = self.0 & 0x8000 != 0;
+        // Shift the "shift register" to the left
+        self.0 <<= 1;
+        // And shift a 1 bit into the other end
+        self.0 |= 1;
+        status
+    }
 }
 
-
-/// A frontend implementation of a joypad-like peripheral. Provides methods for querying joypad
-/// buttons.
+/// Trait for joypad implementations.
+///
+/// This should be implemented by the frontend, and is a simple abstraction from the bit-level
+/// trickery at the controller port made for joysticks.
 pub trait JoypadImpl {
     /// Called to "latch" the current joypad state.
+    ///
+    /// This should check and return the current state of the joypad.
     fn update_state(&mut self) -> JoypadState;
-}
-
-/// A standard SNES Joypad.
-pub struct Joypad {
-    imp: Box<JoypadImpl>,
-    state: JoypadState,
-}
-
-impl Joypad {
-    pub fn new(imp: Box<JoypadImpl>) -> Self {
-        Joypad {
-            imp: imp,
-            state: JoypadState::new(),
-        }
-    }
-}
-
-impl super::ControllerPortAttachment for Joypad {
-    fn set_latch(&mut self, latch: bool) {
-        if latch {
-            self.state = self.imp.update_state();
-        }
-    }
-
-    fn read_bit(&mut self) -> (bool, bool) {
-        // We read the highest bit...
-        let status = self.state.0 & 0x8000 != 0;
-        // Shift the "shift register" to the left
-        self.state.0 <<= 1;
-        // And shift a 1 bit into the other end
-        self.state.0 |= 1;
-
-        // The Data2 line is always 0 (it's not used by single joypads)
-        (status, false)
-    }
-
-    fn set_io_bit(&mut self, _iobit: bool) {}
-    // FIXME: `IOBit` isn't connected. Does it read as true or false then?
-    fn read_io_bit(&mut self) -> bool { true }
-
-    fn needs_hv_latch_control(&self) -> bool { false }
-    fn update_hv_latch(&mut self) -> bool { false }
-
-    fn next_frame(&mut self) {}
 }

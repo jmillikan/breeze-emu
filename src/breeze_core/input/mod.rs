@@ -14,32 +14,31 @@
 //! light gun into port 1 (this doesn't work because the `IOBit` line of port 1 isn't connected to
 //! the PPUs counter latch line). The frontend should warn on these.
 
-use frontend::input::ControllerPortAttachment;
+mod port;
+
+pub use self::port::Peripheral;
 
 use std::io::{BufRead, Write};
 use std::mem;
 use std::ops::{Index, IndexMut};
 
 /// Represents the 2 controller ports on the SNES
-pub struct Ports(pub Option<Box<ControllerPortAttachment>>,
-                 pub Option<Box<ControllerPortAttachment>>);
+pub struct Ports(pub Option<Peripheral>, pub Option<Peripheral>);
 
 impl Ports {
     /// Run a closure on each attached peripheral
-    fn for_each_peripheral<F>(&mut self, mut f: F) where F: FnMut(&mut ControllerPortAttachment) {
-        if let Some(ref mut cpa) = self.0 {
-            let periph: &mut ControllerPortAttachment = &mut **cpa;
-            f(periph)
+    fn for_each_peripheral<F>(&mut self, mut f: F) where F: FnMut(&mut Peripheral) {
+        if let Some(ref mut peripheral) = self.0 {
+            f(peripheral)
         }
-        if let Some(ref mut cpa) = self.1 {
-            let periph: &mut ControllerPortAttachment = &mut **cpa;
-            f(periph)
+        if let Some(ref mut peripheral) = self.1 {
+            f(peripheral)
         }
     }
 }
 
 impl Index<u8> for Ports {
-    type Output = Option<Box<ControllerPortAttachment>>;
+    type Output = Option<Peripheral>;
     fn index(&self, i: u8) -> &Self::Output {
         match i {
             0 => &self.0,
