@@ -1,14 +1,12 @@
 //! Input emulation layer
 //!
 //! Our input emulation is modeled directly after the SNES hardware: We emulate the 2 controller
-//! ports separately, down to the individual wires. `ControllerPortAttachment`s (CPAs) can be
-//! plugged into each and have full control over the port: They can transmit individual bits on the
-//! two data lines when the SNES reads from the port, read/write the `IOBit` line, or read the latch
-//! line.
+//! ports separately, down to the individual wires. `Peripheral`s can be plugged into each and
+//! emulate a specific kind of device plugged into the port. The frontends provide the actual input
+//! reading implementation.
 //!
 //! This flexible setup should allow emulating all available peripherals: From the standard joypad
-//! to light guns and the multitap, everything should be implementable on top of
-//! `ControllerPortAttachment`.
+//! to light guns and the multitap.
 //!
 //! However, nothing is stopping the user from building unusable configurations, such as plugging a
 //! light gun into port 1 (this doesn't work because the `IOBit` line of port 1 isn't connected to

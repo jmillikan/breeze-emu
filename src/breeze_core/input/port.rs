@@ -13,7 +13,7 @@
 
 use frontend::input::joypad::{JoypadImpl, JoypadState};
 
-/// Enumeration of things that can be plugged into a controller port.
+/// Enumeration of things that can be plugged into a controller port on the SNES.
 pub enum Peripheral {
     /// The standard SNES joypad: A, B, X, Y, L, R, Start, Select, D-Pad
     Joypad {
