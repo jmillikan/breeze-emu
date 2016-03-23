@@ -42,15 +42,12 @@ impl Peripheral {
 
 /// CPU interface
 impl Peripheral {
-    /// Called with the value of the lowest bit written to `$4016`. When set to 1, the controller
+    /// Called when the value of the lowest bit of `$4016` changes. When set to 1, the controller
     /// should latch its input (whatever that means is specific to the attached peripheral).
     ///
     /// Auto-joypad mode writes 1 and then 0 to the latch before reading data.
     pub fn set_latch(&mut self, latch: bool) {
         if latch {
-            // FIXME This is flaky at best and doesn't emulate the hardware correctly: While latch
-            // is active (not when writing to it), button input is written into the latch and the
-            // clock is frozen, which means that the latch will return the first bit on every read.
             match *self {
                 Joypad { ref mut imp, ref mut state } => {
                     *state = imp.update_state();

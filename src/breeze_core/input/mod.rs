@@ -77,9 +77,10 @@ pub struct Input {
     auto_read_data: [u8; 8],
     /// Current latch state. Peripherals will have `set_latch` called when this changes.
     latch: bool,
+    latched_this_frame: bool,
 }
 
-impl_save_state!(Input { auto_read_data, latch } ignore { mode });
+impl_save_state!(Input { auto_read_data, latch, latched_this_frame } ignore { mode });
 
 impl Input {
     /// Start recording input to a `Write` implementor, often a file.
@@ -133,6 +134,17 @@ impl Input {
     }
 
     pub fn new_frame(&mut self) {
+        if self.latch {
+            once!(warn!("latch still active from older frame (might interfere with \
+                         recording); latch might be changed by emulator!"));
+        }
+
+        if !self.latched_this_frame {
+            self.store(0x4016, 1);
+            self.store(0x4016, 0);
+        }
+
+        self.latched_this_frame = false;
         match self.mode {
             InputMode::Normal(ref mut ports)
             | InputMode::Recorded(ref mut ports, _) => {
@@ -152,8 +164,6 @@ impl Input {
             },
             InputMode::Replayed(_) => unimplemented!(),
         };
-
-        self.record_port_data(port, data);
 
         data
     }
@@ -190,12 +200,28 @@ impl Input {
             let new_latch = val & 0x01 != 0;
             if self.latch != new_latch {
                 // Latch changed state
+                if new_latch {
+                    if self.latched_this_frame {
+                        once!(warn!("already latched input in this frame! (this might interfere \
+                                     with recording)"));
+                    }
+                    self.latched_this_frame = true;
+                }
+
                 match self.mode {
                     InputMode::Normal(ref mut ports) | InputMode::Recorded(ref mut ports, _) => {
                         ports.for_each_peripheral(|p| p.set_latch(new_latch))
                     }
                     InputMode::Replayed(_) => {}
                 }
+
+                if new_latch {
+                    // Input state was updated. Record it if necessary.
+                    if let InputMode::Recorded(_, _) = self.mode {
+                        unimplemented!();
+                    }
+                }
+
                 self.latch = new_latch;
             }
         } else {
@@ -238,16 +264,6 @@ impl Input {
             self.auto_read_data[2] |= a as u8;
             self.auto_read_data[6] <<= 1;       // `JOY4L`
             self.auto_read_data[6] |= b as u8;
-        }
-    }
-
-    /// Callback for recording controller data received via the 2 data lines.
-    fn record_port_data(&mut self, _port: u8, (_data1, _data2): (bool, bool)) {
-        // FIXME Unimplemented
-        // FIXME Record `IOBit` when it's supported
-
-        if let InputMode::Recorded(ref _ports, ref _out) = self.mode {
-            unimplemented!()
         }
     }
 }
