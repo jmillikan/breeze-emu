@@ -159,7 +159,14 @@ impl Input {
         let data = match self.mode {
             InputMode::Normal(ref mut ports) |
             InputMode::Recorded(ref mut ports, _) => match ports[port] {
-                Some(ref mut cpa) => cpa.read_bit(),
+                Some(ref mut cpa) => {
+                    if !self.latched_this_frame {
+                        once!(warn!("reading data lines without prior latching (this can interfere \
+                                     with input recording)"));
+                    }
+
+                    cpa.read_bit()
+                }
                 None => (false, false),     // If nothing is attached, we read 0s
             },
             InputMode::Replayed(_) => unimplemented!(),
