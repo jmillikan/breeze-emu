@@ -24,7 +24,7 @@ pub enum JoypadButton {
 
 /// State of a SNES joypad.
 ///
-/// Bits (`HIGH | LOW`):
+/// Bits (`HIGH | LOW`, returned on Data1 from high to low, or left to right):
 /// `B Y Select Start Up Down Left Right | A X L R 0 0 0 0`
 #[derive(Clone, Copy)]
 pub struct JoypadState(u16);

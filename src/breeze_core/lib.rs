@@ -12,6 +12,7 @@ extern crate breeze_frontend_api as frontend;
 #[macro_use] mod log_util;
 mod dma;
 mod flexvec;
+pub mod record;
 pub mod ppu;
 pub mod input;
 pub mod rom;

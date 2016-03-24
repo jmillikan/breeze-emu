@@ -406,7 +406,9 @@ impl<'r> Snes<'r> {
                         // Auto-Joypad read
                         // "This begins between dots 32.5 and 95.5 of the first V-Blank scanline,
                         // and ends 4224 master cycles later."
-                        self.cpu.mem.input.perform_auto_read();
+                        if self.cpu.mem.nmien & 1 != 0 {
+                            self.cpu.mem.input.perform_auto_read();
+                        }
                         // FIXME Set auto read status bit
                     }
                     (_, 180) => {

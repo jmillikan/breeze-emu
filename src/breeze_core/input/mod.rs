@@ -16,11 +16,12 @@ mod port;
 
 pub use self::port::Peripheral;
 
-use std::io::{BufRead, Write};
-use std::mem;
+use record::{Recorder, Replayer};
+
 use std::ops::{Index, IndexMut};
 
 /// Represents the 2 controller ports on the SNES
+#[derive(Default)]
 pub struct Ports(pub Option<Peripheral>, pub Option<Peripheral>);
 
 impl Ports {
@@ -57,20 +58,21 @@ impl IndexMut<u8> for Ports {
 }
 
 enum InputMode {
-    Normal(Ports),
-    Recorded(Ports, Box<Write>),
-    Replayed(Box<BufRead>),
+    Normal,
+    Recorded(Box<Recorder>),
+    Replayed(Box<Replayer>),
 }
 
 impl Default for InputMode {
     fn default() -> Self {
-        InputMode::Normal(Ports(None, None))
+        InputMode::Normal
     }
 }
 
 /// Controller input management.
 #[derive(Default)]
 pub struct Input {
+    pub ports: Ports,
     mode: InputMode,
 
     /// Auto-Joypad Data (`$4218` - `$421f`)
@@ -80,43 +82,27 @@ pub struct Input {
     latched_this_frame: bool,
 }
 
-impl_save_state!(Input { auto_read_data, latch, latched_this_frame } ignore { mode });
+impl_save_state!(Input { auto_read_data, latch, latched_this_frame } ignore { ports, mode });
 
 impl Input {
     /// Start recording input to a `Write` implementor, often a file.
     ///
     /// When reading data from a controller port, the recorder will write that data to the given
     /// `Box<Write>`.
-    pub fn start_recording(&mut self, w: Box<Write>) {
+    pub fn start_recording(&mut self, rec: Box<Recorder>) {
         assert!(!self.is_recording(), "already recording");
         assert!(!self.is_replaying(), "cannot record while already replaying");
 
-        let old_mode = mem::replace(&mut self.mode, InputMode::default());
-        self.mode = match old_mode {
-            InputMode::Normal(ports) => InputMode::Recorded(ports, w),
-            InputMode::Recorded(..) => panic!("already recording"),
-            InputMode::Replayed(_) => panic!("cannot record while already replaying"),
-        };
+        self.mode = InputMode::Recorded(rec);
     }
 
     /// Start replaying input from a recording made with `start_recording`. While replaying, user
     /// input is ignored (but input sources are still updated).
-    pub fn start_replay(&mut self, r: Box<BufRead>) {
+    pub fn start_replay(&mut self, replayer: Box<Replayer>) {
         assert!(!self.is_replaying(), "already replaying");
         assert!(!self.is_recording(), "cannot start a replay while recording input");
 
-        self.mode = InputMode::Replayed(r);
-    }
-
-    /// Gets the `Ports` on the SNES.
-    ///
-    /// If we're replaying input, this will panic (since no ports actually exist).
-    pub fn unwrap_ports(&mut self) -> &mut Ports {
-        match self.mode {
-            InputMode::Normal(ref mut ports) => ports,
-            InputMode::Recorded(ref mut ports, _) => ports,
-            InputMode::Replayed(_) => panic!("called Input::unwrap_ports while replaying"),
-        }
+        self.mode = InputMode::Replayed(replayer);
     }
 
     pub fn is_recording(&self) -> bool {
@@ -146,9 +132,9 @@ impl Input {
 
         self.latched_this_frame = false;
         match self.mode {
-            InputMode::Normal(ref mut ports)
-            | InputMode::Recorded(ref mut ports, _) => {
-                ports.for_each_peripheral(|p| p.next_frame())
+            InputMode::Normal
+            | InputMode::Recorded(_) => {
+                self.ports.for_each_peripheral(|p| p.next_frame())
             }
             InputMode::Replayed(_) => {}
         }
@@ -156,23 +142,17 @@ impl Input {
 
     /// Read the `Data1` and `Data2` line of a controller port.
     fn read_port(&mut self, port: u8) -> (bool, bool) {
-        let data = match self.mode {
-            InputMode::Normal(ref mut ports) |
-            InputMode::Recorded(ref mut ports, _) => match ports[port] {
-                Some(ref mut cpa) => {
-                    if !self.latched_this_frame {
-                        once!(warn!("reading data lines without prior latching (this can interfere \
-                                     with input recording)"));
-                    }
-
-                    cpa.read_bit()
+        match self.ports[port] {
+            Some(ref mut cpa) => {
+                if !self.latched_this_frame {
+                    once!(warn!("reading data lines without prior latching (this can interfere \
+                                 with input recording)"));
                 }
-                None => (false, false),     // If nothing is attached, we read 0s
-            },
-            InputMode::Replayed(_) => unimplemented!(),
-        };
 
-        data
+                cpa.read_bit()
+            }
+            None => (false, false),     // If nothing is attached, we read 0s
+        }
     }
 
     /// Read from an input register. Updates the controller state if this is the first load in this
@@ -216,16 +196,20 @@ impl Input {
                 }
 
                 match self.mode {
-                    InputMode::Normal(ref mut ports) | InputMode::Recorded(ref mut ports, _) => {
-                        ports.for_each_peripheral(|p| p.set_latch(new_latch))
+                    InputMode::Normal | InputMode::Recorded(..) => {
+                        self.ports.for_each_peripheral(|p| p.set_latch(new_latch))
                     }
                     InputMode::Replayed(_) => {}
                 }
 
                 if new_latch {
                     // Input state was updated. Record it if necessary.
-                    if let InputMode::Recorded(_, _) = self.mode {
-                        unimplemented!();
+                    if let InputMode::Recorded(ref mut recorder) = self.mode {
+                        if let Err(e) = recorder.record_frame(&self.ports) {
+                            error!("error when recording input: {}", e);
+                            error!("recording will be aborted!");
+                            // TODO Actually do that
+                        }
                     }
                 }
 

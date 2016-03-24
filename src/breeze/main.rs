@@ -13,6 +13,7 @@ use breeze::rom::Rom;
 use breeze::snes::Snes;
 use breeze::input::Input;
 use breeze::save::SaveStateFormat;
+use breeze::record::{RecordingFormat, create_recorder, create_replayer};
 use frontend_api::Renderer;
 
 use std::env;
@@ -23,9 +24,9 @@ use std::io::{BufReader, Read};
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
     use breeze::input::Peripheral;
+    use frontends::frontend_sdl::KeyboardInput;
 
-    let ports = input.unwrap_ports();
-    ports.0 = Some(Peripheral::new_joypad(Box::new(::frontends::frontend_sdl::KeyboardInput)));
+    input.ports.0 = Some(Peripheral::new_joypad(Box::new(KeyboardInput)));
 }
 #[cfg(not(feature = "sdl"))]
 fn attach_default_input(_: &mut Input) {}
@@ -117,10 +118,14 @@ fn main() {
     let mut snes = Snes::new(rom, &mut *renderer);
     attach_default_input(snes.input_mut());
     if let Some(record_file) = args.value_of("record") {
-        snes.input_mut().start_recording(Box::new(File::create(record_file).unwrap()));
+        let writer = Box::new(File::create(record_file).unwrap());
+        let recorder = create_recorder(RecordingFormat::default(), writer);
+        snes.input_mut().start_recording(recorder);
     }
     if let Some(replay_file) = args.value_of("replay") {
-        snes.input_mut().start_replay(Box::new(BufReader::new(File::open(replay_file).unwrap())));
+        let reader = Box::new(BufReader::new(File::open(replay_file).unwrap()));
+        let replayer = create_replayer(RecordingFormat::default(), reader);
+        snes.input_mut().start_replay(replayer);
     }
     if let Some(filename) = args.value_of("savestate") {
         let file = File::open(filename).unwrap();
