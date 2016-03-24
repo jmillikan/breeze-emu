@@ -2,6 +2,7 @@
 #![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
 
 #[macro_use] extern crate log;
+extern crate byteorder;
 
 #[macro_use] #[no_link] extern crate byte_array;
 #[macro_use] extern crate libsavestate;

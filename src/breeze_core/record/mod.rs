@@ -6,8 +6,9 @@ mod custom;
 mod smv;
 
 use input::Ports;
+use snes::Snes;
 
-use std::io::{self, Write, BufRead};
+use std::io::{self, Write, BufRead, Seek};
 
 #[derive(Debug)]
 pub enum RecordingFormat {
@@ -17,17 +18,23 @@ pub enum RecordingFormat {
     Custom,
 
     /// The SMV format used by Snes9x
+    ///
+    /// This implements SMV version 4, used by Snes9x 1.51
     Smv,
-
-    // TODO: maybe add a few other emulator formats
 }
 
 impl Default for RecordingFormat {
     fn default() -> Self {
-        RecordingFormat::Custom
+        RecordingFormat::Smv
     }
 }
 
+/// Trait for recording sources
+///
+/// This shouldn't be implemented manually
+pub trait WriteSeek : Write + Seek {}
+
+impl<T: Write + Seek> WriteSeek for T {}
 
 // TODO: Implement methods that detect the `RecordingFormat` from a file extension or a `Read`
 // instance (based on the header)
@@ -35,7 +42,7 @@ impl Default for RecordingFormat {
 /// Trait for input recorders
 pub trait Recorder {
     /// Create a new recorder, writing to the given writer
-    fn new(writer: Box<Write>) -> Self where Self: Sized;
+    fn new(writer: Box<WriteSeek>, snes: &Snes) -> io::Result<Self> where Self: Sized;
 
     /// Record the state of the peripherals attached to `ports`.
     ///
@@ -47,7 +54,7 @@ pub trait Recorder {
 /// Trait for record replayers
 pub trait Replayer {
     /// Create a new replayer, reading from the given buffered reader.
-    fn new(reader: Box<BufRead>) -> Self where Self: Sized;
+    fn new(reader: Box<BufRead>, snes: &Snes) -> io::Result<Self> where Self: Sized;
 
     /// Replay the next frame, updating the state of `ports`.
     ///
@@ -57,18 +64,24 @@ pub trait Replayer {
 }
 
 /// Create a recorder for a specified format.
-pub fn create_recorder(format: RecordingFormat, writer: Box<Write>) -> Box<Recorder> {
+pub fn create_recorder(format: RecordingFormat,
+                       writer: Box<WriteSeek>,
+                       snes: &Snes)
+                       -> io::Result<Box<Recorder>> {
     debug!("creating recorder for {:?} format", format);
-    match format {
-        RecordingFormat::Custom => Box::new(custom::Recorder::new(writer)),
-        RecordingFormat::Smv => Box::new(smv::Recorder::new(writer)),
-    }
+    Ok(match format {
+        RecordingFormat::Custom => Box::new(try!(custom::Recorder::new(writer, snes))),
+        RecordingFormat::Smv => Box::new(try!(smv::Recorder::new(writer, snes))),
+    })
 }
 
-pub fn create_replayer(format: RecordingFormat, reader: Box<BufRead>) -> Box<Replayer> {
+pub fn create_replayer(format: RecordingFormat,
+                       reader: Box<BufRead>,
+                       snes: &Snes)
+                       -> io::Result<Box<Replayer>> {
     debug!("creating replayer for {:?} format", format);
-    match format {
-        RecordingFormat::Custom => Box::new(custom::Replayer::new(reader)),
-        RecordingFormat::Smv => Box::new(smv::Replayer::new(reader)),
-    }
+    Ok(match format {
+        RecordingFormat::Custom => Box::new(try!(custom::Replayer::new(reader, snes))),
+        RecordingFormat::Smv => Box::new(try!(smv::Replayer::new(reader, snes))),
+    })
 }

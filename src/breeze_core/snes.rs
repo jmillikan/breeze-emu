@@ -307,6 +307,10 @@ impl<'r> Snes<'r> {
     /// Get a reference to the `Ppu` instance used for PPU emulation
     pub fn ppu(&self) -> &Ppu { &self.cpu.mem.ppu }
 
+    /// Get a reference to the `Input` instance
+    pub fn input(&self) -> &Input { &self.cpu.mem.input }
+
+    /// Get a mutable reference to the `Input` instance
     pub fn input_mut(&mut self) -> &mut Input { &mut self.cpu.mem.input }
 
     /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.

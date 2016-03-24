@@ -14,20 +14,22 @@
 
 #![allow(dead_code, unused_variables)]    // NYI
 
+use super::WriteSeek;
 use input::Ports;
+use snes::Snes;
 
-use std::io::{self, Write, BufRead};
+use std::io::{self, BufRead};
 
 /// Recorder for the custom recording format
 pub struct Recorder {
-    writer: Box<Write>,
+    writer: Box<WriteSeek>,
 }
 
 impl super::Recorder for Recorder {
-    fn new(writer: Box<Write>) -> Self {
-        Recorder {
+    fn new(writer: Box<WriteSeek>, _snes: &Snes) -> io::Result<Self> {
+        Ok(Recorder {
             writer: writer,
-        }
+        })
     }
 
     fn record_frame(&mut self, ports: &Ports) -> io::Result<()> {
@@ -40,10 +42,10 @@ pub struct Replayer {
 }
 
 impl super::Replayer for Replayer {
-    fn new(reader: Box<BufRead>) -> Self {
-        Replayer {
+    fn new(reader: Box<BufRead>, _snes: &Snes) -> io::Result<Self> {
+        Ok(Replayer {
             reader: reader,
-        }
+        })
     }
 
     fn replay_frame(&mut self, ports: &mut Ports) -> io::Result<()> {

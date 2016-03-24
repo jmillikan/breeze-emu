@@ -119,12 +119,12 @@ fn main() {
     attach_default_input(snes.input_mut());
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
-        let recorder = create_recorder(RecordingFormat::default(), writer);
+        let recorder = create_recorder(RecordingFormat::default(), writer, &snes).unwrap();
         snes.input_mut().start_recording(recorder);
     }
     if let Some(replay_file) = args.value_of("replay") {
         let reader = Box::new(BufReader::new(File::open(replay_file).unwrap()));
-        let replayer = create_replayer(RecordingFormat::default(), reader);
+        let replayer = create_replayer(RecordingFormat::default(), reader, &snes).unwrap();
         snes.input_mut().start_replay(replayer);
     }
     if let Some(filename) = args.value_of("savestate") {
