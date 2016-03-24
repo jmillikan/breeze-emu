@@ -6,7 +6,7 @@
 #![allow(dead_code, unused_variables)]  // NYI
 
 use super::WriteSeek;
-use input::Ports;
+use input::{Ports, Peripheral};
 use snes::Snes;
 
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -38,7 +38,29 @@ impl super::Recorder for Recorder {
         try!(writer.write_u32::<LittleEndian>(0xdeadbeef));  // num. of input samples
 
         // Controller info (for port 1 / port 2)
-        // TODO
+        let input = snes.input();
+        fn get_controller_type(port: &Option<Peripheral>) -> u8 {
+            match *port {
+                None => 0,
+                Some(Peripheral::Joypad {..}) => 1,
+            }
+        }
+
+        // Controller type (port 1 / port 2)
+        try!(writer.write_u8(get_controller_type(&input.ports.0)));
+        try!(writer.write_u8(get_controller_type(&input.ports.1)));
+        // Controller ID (port 1 / port 2) - This probably has to do with the multitap (hence why
+        // it's 4 bytes per port)
+        // FIXME: We'll just write -1 for unplugged everywhere
+        for i in 0..8 {
+            try!(writer.write_i8(-1));
+        }
+        try!(writer.write_all(&[0; 18]));       // 18 bytes reserved for future use
+
+        // Now follows a cartridge RAM image. It's apparently supposed to be gzip compressed and
+        // should decompress into 0x20000 bytes. Since we can't gzip shit currently, we'll have to
+        // waste all that space.
+        try!(writer.write_all(&[0; 0x20000]));   // empty SRAM image
 
         Ok(Recorder {
             writer: writer,
@@ -47,6 +69,7 @@ impl super::Recorder for Recorder {
     }
 
     fn record_frame(&mut self, ports: &Ports) -> io::Result<()> {
+        // TODO Record input data
         self.frames += 1;
         unimplemented!()
     }
@@ -54,6 +77,8 @@ impl super::Recorder for Recorder {
 
 impl Drop for Recorder {
     fn drop(&mut self) {
+        info!("finalizing SMV recording ({} frames)", self.frames);
+
         // FIXME At least warn when this fails
         self.writer.seek(SeekFrom::Start(16)).ok();
         self.writer.write_u32::<LittleEndian>(self.frames).ok();
