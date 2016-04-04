@@ -10,7 +10,7 @@ use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::{NoIndices, PrimitiveType};
 use glium::glutin::WindowBuilder;
 use glium::program::Program;
-use glium::texture::{ClientFormat, RawImage2d, Texture2d};
+use glium::texture::{ClientFormat, RawImage2d, SrgbTexture2d};
 use glium::uniforms::MagnifySamplerFilter;
 use glium::vertex::VertexBuffer;
 
@@ -61,7 +61,7 @@ pub struct GliumRenderer {
     /// A simple shader that maps our texture onto the window
     program: Program,
     /// This texture is updated with the PPU's data every frame
-    texture: Texture2d,
+    texture: SrgbTexture2d,
 }
 
 impl Default for GliumRenderer {
@@ -82,7 +82,7 @@ impl Default for GliumRenderer {
             vbuf: VertexBuffer::new(&display, &shape).unwrap(),
             program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
                 .unwrap(),
-            texture: Texture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)
+            texture: SrgbTexture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)
                 .unwrap(),
             display: display,
         }
