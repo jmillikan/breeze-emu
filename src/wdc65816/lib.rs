@@ -53,6 +53,9 @@ pub struct Cpu<M: Mem> {
     pc: u16,
     p: StatusReg,
     emulation: bool,
+    /// Set to true when executing a WAI instruction. Stops the processor from dispatching further
+    /// instructions until an interrupt is triggered.
+    wai: bool,
 
     /// CPU clock cycle counter for the current instruction.
     cy: u16,
@@ -64,7 +67,7 @@ pub struct Cpu<M: Mem> {
 // Needs an explicit impl because `Cpu` is generic over `M`.
 impl<M: Mem + SaveState> SaveState for Cpu<M> {
     impl_save_state_fns!(Cpu {
-        a, x, y, s, dbr, pbr, d, pc, p, emulation, mem
+        a, x, y, s, dbr, pbr, d, pc, p, emulation, wai, mem
     } ignore { cy, trace });
 }
 
@@ -92,6 +95,7 @@ impl<M: Mem> Cpu<M> {
             // Acc and index regs start in 8-bit mode, IRQs disabled, CPU in emulation mode
             p: StatusReg::new(),
             emulation: true,
+            wai: false,
             cy: 0,
             trace: false,
             mem: mem,
@@ -244,6 +248,11 @@ impl<M: Mem> Cpu<M> {
             2,5,5,7,5,4,6,6, 2,4,4,2,6,4,7,5,   // $f0 - $ff
         ];
 
+        // Still waiting for interrupt?
+        // GIANT FIXME: This doesn't take cycles, but if we return 0 the emulator freezes, because
+        // it coordinates everything in relation to CPU cycles.
+        if self.wai { return 5; }
+
         let pc = self.pc;
         self.cy = 0;
         let op = self.fetchb();
@@ -284,6 +293,7 @@ impl<M: Mem> Cpu<M> {
             0x38 => instr!(sec),
             0x58 => instr!(cli),
             0x78 => instr!(sei),
+            0xcb => instr!(wai),
             0xd8 => instr!(cld),
             0xf8 => instr!(sed),
             0xfb => instr!(xce),
@@ -524,6 +534,8 @@ impl<M: Mem> Cpu<M> {
     /// stack, sets the PBR to 0, loads the handler address from the given vector, and jumps to the
     /// handler.
     fn interrupt(&mut self, vector: u16) {
+        self.wai = false;
+
         if !self.emulation {
             let pbr = self.pbr;
             self.pushb(pbr);
@@ -1376,6 +1388,8 @@ impl<M: Mem> Cpu<M> {
     fn sed(&mut self) { self.p.set_decimal(true) }
     fn clc(&mut self) { self.p.set_carry(false) }
     fn sec(&mut self) { self.p.set_carry(true) }
+
+    fn wai(&mut self) { self.wai = true; }
 
     /// Store 0 to memory
     fn stz(&mut self, am: AddressingMode) {

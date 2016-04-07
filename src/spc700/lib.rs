@@ -43,7 +43,7 @@ pub struct Spc700 {
     mem: Ram,
 
     /// The SPC700 starts with the IPL ROM mapped into the highest 64 Bytes of address space. It can
-    /// be unmapped by clearing bit 7 in `$f1` (`CONTROL`), which allow using this space as normal
+    /// be unmapped by clearing bit 7 in `$f1` (`CONTROL`), which allows using this space as normal
     /// RAM (writes to this area always go to RAM).
     ipl_rom_mapped: bool,
     /// `$f2` - DSP address selection (`$f3` - DSP data)
@@ -114,7 +114,15 @@ impl Spc700 {
 
     fn load(&mut self, addr: u16) -> u8 {
         match addr {
-            0xf0 | 0xf1 | 0xfa ... 0xfc =>
+            0xf0 => panic!("undocumented register unimplemented"),
+            0xf1 => {
+                once!(warn!("read from write-only control register"));
+                let t0 = if self.timers[0].enabled() { 0b001 } else { 0 };
+                let t1 = if self.timers[1].enabled() { 0b010 } else { 0 };
+                let t2 = if self.timers[2].enabled() { 0b100 } else { 0 };
+                t0 | t1 | t2    // not sure what else to return
+            }
+            0xfa ... 0xfc =>
                 panic!("APU attempted read from write-only register ${:02X}", addr),
             0xf2 => self.reg_dsp_addr,
             0xf3 => self.dsp.load(self.reg_dsp_addr),

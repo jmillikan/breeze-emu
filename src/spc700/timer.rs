@@ -54,4 +54,6 @@ impl Timer {
 
         self.enabled = enable;
     }
+
+    pub fn enabled(&mut self) -> bool { self.enabled }
 }

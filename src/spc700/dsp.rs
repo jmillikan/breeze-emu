@@ -168,8 +168,8 @@ impl Dsp {
                     0x05 => voice.adsr1 = value,
                     0x06 => voice.adsr2 = value,
                     0x07 => voice.gain = value,
-                    0x08 => panic!("can't write to envelope value"),
-                    0x09 => panic!("can't write to sample value"),
+                    0x08 => once!(warn!("ignoring write to envelope value")),
+                    0x09 => once!(warn!("ignoring write to sample value")),
                     0x0f => voice.fir = value,
                     _ => panic!("invalid DSP write to ${:02X}", reg),
                 }
