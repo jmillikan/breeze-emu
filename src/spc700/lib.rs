@@ -437,6 +437,7 @@ impl Spc700 {
             0x5e => instr!(_ cmp abs y),
             0x75 => instr!(_ cmp abs_indexed_x a),
             0x76 => instr!(_ cmp abs_indexed_y a),
+            0x5a => instr!(_ cmpw direct),
 
             0xde => instr!("cbne {}, {}" cbne direct_indexed_x rel),
             0x2e => instr!("cbne {}, {}" cbne direct rel),
@@ -541,6 +542,7 @@ impl Spc700 {
             0xe4 => instr!(_ mov direct a),
             0xf8 => instr!(_ mov direct x),
             0xeb => instr!(_ mov direct y),
+            0xfa => instr!(_ mov direct direct),
             0xf4 => instr!(_ mov direct_indexed_x a),
             0xfb => instr!(_ mov direct_indexed_x y),
             0xe6 => instr!(_ mov indirect_x a),
@@ -659,6 +661,15 @@ impl Spc700 {
         let diff = b - a;
         self.psw.set_nz(diff as u8);
         self.psw.set_carry(diff >= 0);  // FIXME Not <0 right?
+    }
+
+    /// `cmpw YA, d` - Set N, Z (FIXME And maybe C?) according to `YA - d` (word comparison)
+    fn cmpw(&mut self, am: AddressingMode) {
+        let val = am.loadw(self);
+        let ya = ((self.y as u16) << 8) | self.a as u16;
+        let res = ya.wrapping_sub(val);
+        self.psw.set_zero(res == 0);
+        self.psw.set_negative(res & 0x80 != 0);
     }
 
     fn tset1(&mut self, am: AddressingMode) {
