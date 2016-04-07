@@ -1,5 +1,7 @@
 //! Render to an SDL window
 
+use viewport::*;
+
 use frontend_api::FrontendAction;
 use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
@@ -46,17 +48,6 @@ impl SdlManager {
                 }
                 _ => {}
             }
-        }
-
-        if self.event_pump.keyboard_state().is_scancode_pressed(Scancode::LCtrl) {
-            info!("<waiting>");
-            for event in self.event_pump.wait_iter() {
-                match event {
-                    KeyUp { scancode: Some(Scancode::LCtrl), .. } => { break }
-                    _ => {}
-                }
-            }
-            info!("<running>");
         }
 
         None
@@ -144,35 +135,12 @@ impl ::frontend_api::Renderer for SdlRenderer {
 impl SdlRenderer {
     /// Handle a window resize to `w, h`
     fn resize_to(&mut self, w: u32, h: u32) {
-        let w = w as f32;
-        let h = h as f32;
+        let Viewport { x, y, w, h } = viewport_for_window_size(w, h);
 
-        const NATIVE_RATIO: f32 = SCREEN_WIDTH as f32 / SCREEN_HEIGHT as f32;
-        let ratio = w / h;
-
-        let view_w;
-        let view_h;
-
-        if ratio > NATIVE_RATIO {
-            // Too wide
-            view_h = h;
-            view_w = h * NATIVE_RATIO;
-        } else {
-            // Too high
-            view_w = w;
-            view_h = w / NATIVE_RATIO;
-        }
-
-        let border_x = (w - view_w).round() as u32 / 2;
-        let border_y = (h - view_h).round() as u32 / 2;
-        let view_w = view_w.round() as u32;
-        let view_h = view_h.round() as u32;
-
-        let viewport = Rect::new(border_x as i32, border_y as i32, view_w, view_h).unwrap();
+        let viewport = Rect::new(x as i32, y as i32, w, h).unwrap();
         self.renderer.set_viewport(viewport);
 
-        info!("window ratio is {:.2} (native: {:.2}), viewport {}x{}, border ({},{})",
-            ratio, NATIVE_RATIO, view_w, view_h, border_x, border_y);
+        info!("viewport: ({}, {}); {}x{}", x, y, w, h);
     }
 }
 

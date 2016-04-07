@@ -9,7 +9,14 @@ pub struct TestRenderer {
 }
 
 impl TestRenderer {
+    /// Creates a new `TestRenderer` that will exit the emulator when the given number of frames are
+    /// rendered.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `total_frames` is 0.
     pub fn new(total_frames: u32) -> Self {
+        assert!(total_frames > 0, "total_frames may not be 0");
         TestRenderer {
             last_frame: Vec::new(),
             frames_to_go: total_frames,

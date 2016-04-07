@@ -1,6 +1,6 @@
 //! Render to a window created by Glutin, using Glium's OpenGL functions
 
-// FIXME: Support resizing the window, like the SDL renderer does
+use viewport::*;
 
 use frontend_api::{FrontendAction, Renderer};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
@@ -16,27 +16,23 @@ use glium::vertex::VertexBuffer;
 
 use std::borrow::Cow;
 
-/// Our vertices are extremely simple: There's no need for more than 2 dimensions and the texture
-/// coordinates can be calculated from the position, so we don't need to store them.
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
+    tex_coords: [f32; 2],
 }
 
-impl Vertex {
-    fn new(x: f32, y: f32) -> Self { Vertex { position: [x, y] } }
-}
-
-implement_vertex!(Vertex, position);
+implement_vertex!(Vertex, position, tex_coords);
 
 const VERTEX_SHADER_SRC: &'static str = r#"
     #version 140
 
     in vec2 position;
-    out vec2 tex_coords;
+    in vec2 tex_coords;
+    out vec2 v_tex_coords;
 
     void main() {
-        tex_coords = vec2((position.x + 1) * 0.5, 1 - (position.y + 1) * 0.5);
+        v_tex_coords = tex_coords;
         gl_Position = vec4(position, 0.0, 1.0);
     }
 "#;
@@ -44,13 +40,13 @@ const VERTEX_SHADER_SRC: &'static str = r#"
 const FRAGMENT_SHADER_SRC: &'static str = r#"
     #version 140
 
-    in vec2 tex_coords;
+    in vec2 v_tex_coords;
     out vec4 color;
 
     uniform sampler2D tex;
 
     void main() {
-        color = texture(tex, tex_coords);
+        color = texture(tex, v_tex_coords);
     }
 "#;
 
@@ -70,16 +66,11 @@ impl Default for GliumRenderer {
             .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
             .with_title("breeze".to_owned())
             .build_glium().unwrap();
-        // Create a rectangle spanning the whole viewport/window. This is a triangle strip.
-        let shape = [
-            Vertex::new(-1.0, 1.0),
-            Vertex::new(1.0, 1.0),
-            Vertex::new(-1.0, -1.0),
-            Vertex::new(1.0, -1.0),
-        ];
 
+        let mut vbuf = VertexBuffer::empty_dynamic(&display, 4).unwrap();
+        resize(&mut vbuf, SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3);
         GliumRenderer {
-            vbuf: VertexBuffer::new(&display, &shape).unwrap(),
+            vbuf: vbuf,
             program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
                 .unwrap(),
             texture: SrgbTexture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -99,11 +90,37 @@ impl GliumRenderer {
                     info!("quit event -> exiting");
                     return Some(FrontendAction::Exit)
                 }
+                Resized(w, h) => {
+                    resize(&mut self.vbuf, w, h);
+                }
                 _ => {}
             }
         }
         None
     }
+}
+
+fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
+    let Viewport { x, y, w, h } = viewport_for_window_size(win_w, win_h);
+    let (win_w, win_h) = (win_w as f32, win_h as f32);
+    let (x, y, w, h) = (x as f32 / win_w, y as f32 / win_h, w as f32 / win_w, h as f32 / win_h);
+
+    // Since I can't be bothered to put in a translation matrix, we have to translate the pixel
+    // coords to OpenGL's [-1, 1] system.
+    let vx = (x - 0.5) * 2.0;
+    let vy = (y - 0.5) * 2.0;
+    let rect = make_rect(vx, vy, w * 2.0, h * 2.0);
+    vbuf.write(&rect);
+}
+
+/// Build 4 Vertices spanning up a rectangle. Bottom-Left corner = (-1, -1).
+fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
+    [
+        Vertex { position: [x, y + h], tex_coords: [0.0, 0.0] },
+        Vertex { position: [x + w, y + h], tex_coords: [1.0, 0.0] },
+        Vertex { position: [x, y], tex_coords: [0.0, 1.0] },
+        Vertex { position: [x + w, y], tex_coords: [1.0, 1.0] },
+    ]
 }
 
 impl Renderer for GliumRenderer {
@@ -122,6 +139,7 @@ impl Renderer for GliumRenderer {
         });
 
         let mut target = self.display.draw();
+        target.clear_color_srgb(0.0, 0.0, 0.0, 0.0);
         target.draw(
             &self.vbuf,
             &NoIndices(PrimitiveType::TriangleStrip),
