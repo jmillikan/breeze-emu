@@ -83,9 +83,7 @@ impl RomHeader {
         //  * `0011`: LoROM + SA-1
         //  * `0101`: ExHiROM
         //  * `1010`: HiROM + SPC7110
-        if bytes[21] & 0x10 == 0x10 {
-            debug!("FastROM not yet implemented!");
-        }
+        // (TODO)
 
         let header_rom_type = match bytes[21] & 0x0f {
             0 => RomType::LoRom,

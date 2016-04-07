@@ -65,6 +65,10 @@ pub struct Peripherals {
     htime: u16,
     /// `$4209`/`$420a` - VTIMEL/VTIMEH: V Timer (9-bit value)
     vtime: u16,
+    /// `$420D` - MEMSEL: ROM Access Speed
+    /// `-------f`
+    /// * `f`: FastROM enable
+    memsel: bool,
     /// `$4210` NMI flag and 5A22 Version (the version is constant)
     /// `n---vvvv`
     /// * `n`: `self.nmi`
@@ -81,8 +85,8 @@ pub struct Peripherals {
 }
 
 impl_save_state!(Peripherals {
-    apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime, nmi,
-    irq, cy, input
+    apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime,
+    memsel, nmi, irq, cy, input
 } ignore {});
 
 impl Peripherals {
@@ -93,6 +97,7 @@ impl Peripherals {
             wrdiv: 0xffff,
             htime: 0x1ff,
             vtime: 0x1ff,
+            memsel: false,
             wrio: 0xff,
 
             apu: Spc700::default(),
@@ -130,12 +135,10 @@ impl Peripherals {
             0x80 ... 0xbf => match addr {
                 0x0000 ... 0x1fff | 0x6000 ... 0x7fff => SLOW,
                 0x4000 ... 0x41ff => XSLOW,
-                // FIXME Depends on bit 1 in $420d. Assume slow for now.
-                0x8000 ... 0xffff => SLOW,
+                0x8000 ... 0xffff => if self.memsel { FAST } else { SLOW },
                 _ => FAST
             },
-            // FIXME Depends on bit 1 in $420d. Assume slow for now.
-            0xc0 ... 0xff => SLOW,
+            0xc0 ... 0xff => if self.memsel { FAST } else { SLOW },
             _ => FAST,
         }
     }
@@ -218,7 +221,7 @@ impl Mem for Peripherals {
                     // J: Enable Auto-Joypad-Read
 
                     // Check useless bits
-                    if value & 0x4e != 0 { panic!("Invalid value for NMIEN: ${:02X}", value) }
+                    if value & 0x4e != 0 { once!(warn!("Invalid value for NMIEN: ${:02X}", value)) }
                     self.nmien = value;
                 }
                 0x4201 => {
@@ -249,6 +252,9 @@ impl Mem for Peripherals {
                 0x420b => self.cy += do_dma(self, value),
                 // HDMAEN - HDMA enable
                 0x420c => self.hdmaen = value,
+                // MEMSEL - FastROM select
+                // (FIXME Maybe warn when unused bits are set)
+                0x420d => self.memsel = value & 0x01 != 0,
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => {
                     self.dma[(addr as usize & 0x00f0) >> 4].store(addr as u8 & 0xf, value);
