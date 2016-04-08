@@ -8,10 +8,9 @@ use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
 use glium::index::{NoIndices, PrimitiveType};
-use glium::glutin::WindowBuilder;
+use glium::glutin::{self, WindowBuilder, GlRequest};
 use glium::program::Program;
 use glium::texture::{ClientFormat, RawImage2d, SrgbTexture2d};
-use glium::uniforms::MagnifySamplerFilter;
 use glium::vertex::VertexBuffer;
 
 use std::borrow::Cow;
@@ -25,7 +24,9 @@ struct Vertex {
 implement_vertex!(Vertex, position, tex_coords);
 
 const VERTEX_SHADER_SRC: &'static str = r#"
-    #version 140
+    #version 300 es
+
+    precision mediump float;
 
     in vec2 position;
     in vec2 tex_coords;
@@ -38,7 +39,9 @@ const VERTEX_SHADER_SRC: &'static str = r#"
 "#;
 
 const FRAGMENT_SHADER_SRC: &'static str = r#"
-    #version 140
+    #version 300 es
+
+    precision mediump float;
 
     in vec2 v_tex_coords;
     out vec4 color;
@@ -63,8 +66,9 @@ pub struct GliumRenderer {
 impl Default for GliumRenderer {
     fn default() -> Self {
         let display = WindowBuilder::new()
-            .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
+            //.with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
             .with_title("breeze".to_owned())
+            .with_gl(GlRequest::Specific(glutin::Api::OpenGlEs, (3, 0)))
             .build_glium().unwrap();
 
         let mut vbuf = VertexBuffer::empty_dynamic(&display, 4).unwrap();
@@ -101,6 +105,17 @@ impl GliumRenderer {
 }
 
 fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
+    /// Build 4 Vertices spanning up a rectangle. Bottom-Left corner = (-1, -1).
+    fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
+        info!("GL viewport: {}, {}, {}x{}", x, y, w, h);
+        [
+            Vertex { position: [x, y + h], tex_coords: [0.0, 0.0] },
+            Vertex { position: [x + w, y + h], tex_coords: [1.0, 0.0] },
+            Vertex { position: [x, y], tex_coords: [0.0, 1.0] },
+            Vertex { position: [x + w, y], tex_coords: [1.0, 1.0] },
+        ]
+    }
+
     let Viewport { x, y, w, h } = viewport_for_window_size(win_w, win_h);
     let (win_w, win_h) = (win_w as f32, win_h as f32);
     let (x, y, w, h) = (x as f32 / win_w, y as f32 / win_h, w as f32 / win_w, h as f32 / win_h);
@@ -113,20 +128,17 @@ fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
     vbuf.write(&rect);
 }
 
-/// Build 4 Vertices spanning up a rectangle. Bottom-Left corner = (-1, -1).
-fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
-    [
-        Vertex { position: [x, y + h], tex_coords: [0.0, 0.0] },
-        Vertex { position: [x + w, y + h], tex_coords: [1.0, 0.0] },
-        Vertex { position: [x, y], tex_coords: [0.0, 1.0] },
-        Vertex { position: [x + w, y], tex_coords: [1.0, 1.0] },
-    ]
-}
-
 impl Renderer for GliumRenderer {
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         // upload new texture data
-        self.texture.write(Rect {
+
+        self.texture = SrgbTexture2d::new(&self.display, RawImage2d {
+            data: Cow::Borrowed(frame_data),
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
+            format: ClientFormat::U8U8U8,
+        }).unwrap();
+        /*self.texture.write(Rect {
             left: 0,
             bottom: 0,
             width: SCREEN_WIDTH,
@@ -136,7 +148,7 @@ impl Renderer for GliumRenderer {
             width: SCREEN_WIDTH,
             height: SCREEN_HEIGHT,
             format: ClientFormat::U8U8U8,
-        });
+        });*/
 
         let mut target = self.display.draw();
         target.clear_color_srgb(0.0, 0.0, 0.0, 0.0);
@@ -145,8 +157,7 @@ impl Renderer for GliumRenderer {
             &NoIndices(PrimitiveType::TriangleStrip),
             &self.program,
             &uniform! {
-                tex: self.texture.sampled()
-                    .magnify_filter(MagnifySamplerFilter::Nearest),
+                tex: &self.texture,
             },
             &Default::default()).unwrap();
         target.finish().unwrap();

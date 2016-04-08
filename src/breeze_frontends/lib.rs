@@ -6,9 +6,6 @@
 // TODO We could easily do render tests with a custom `Renderer`, and even supply scripted input
 // with an `InputSource`
 
-#![deny(warnings)]
-#![deny(unused_import_braces, unused_qualifications)]
-
 extern crate breeze_frontend_api as frontend_api;
 
 #[macro_use] #[no_link] extern crate lazy_static;

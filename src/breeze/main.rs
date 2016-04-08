@@ -1,5 +1,9 @@
-#![deny(warnings)]
-#![deny(unused_import_braces, unused_qualifications)]
+//#![deny(warnings)]
+//#![deny(unused_import_braces, unused_qualifications)]
+
+#[cfg(target_os = "android")]
+#[macro_use]
+extern crate android_glue;
 
 #[macro_use] extern crate log;
 extern crate clap;
@@ -20,6 +24,9 @@ use std::env;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
+#[cfg(target_os = "android")]
+android_start!(main);
+
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
@@ -31,12 +38,20 @@ fn attach_default_input(input: &mut Input) {
 #[cfg(not(feature = "sdl"))]
 fn attach_default_input(_: &mut Input) {}
 
-fn main() {
-    if env::var_os("RUST_LOG").is_none() {
-        env::set_var("RUST_LOG", "breeze=INFO");
-    }
-    env_logger::init().unwrap();
 
+#[cfg(target_os = "android")]
+fn os_main() {
+    println!("BREEZE ANDROID STARTING UP");
+    let raw_rom = include_bytes!("/home/jonas/emulation/snes/elix-smashit-pal.sfc");
+    let rom = Rom::from_bytes(raw_rom).unwrap();
+    let mut renderer = frontends::RENDERER_MAP.get("glium").unwrap().unwrap()();
+
+    let mut snes = Snes::new(rom, &mut *renderer);
+    snes.run();
+}
+
+#[cfg(not(target_os = "android"))]
+fn os_main() {
     let mut app = clap::App::new("breeze")
         .version(env!("CARGO_PKG_VERSION"))
         .about("SNES emulator")
@@ -153,4 +168,14 @@ fn main() {
         // Run normally
         snes.run();
     }
+}
+
+fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
+    if env::var_os("RUST_LOG").is_none() {
+        env::set_var("RUST_LOG", "breeze=INFO");
+    }
+    env_logger::init().unwrap();
+
+    os_main();
 }

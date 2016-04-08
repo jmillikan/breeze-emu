@@ -24,6 +24,9 @@ env_logger = "0.3"
 # and command correction)
 clap = { version = "2.0", default-features = false }
 
+[target.arm-linux-androideabi.dependencies.android_glue]
+version = "0.1"
+
 [dev-dependencies]
 rustasm6502 = "0.1"
 term = "0.4"
