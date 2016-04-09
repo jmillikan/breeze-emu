@@ -227,6 +227,9 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Executes a single opcode and returns the number of CPU clock cycles used.
+    ///
+    /// Note that in case a WAI instruction was executed, this will *not* execute anything and
+    /// return 0. An interrupt has to be caused to resume work.
     pub fn dispatch(&mut self) -> u16 {
         // CPU cycles each opcode takes (at the minimum).
         static CYCLE_TABLE: [u8; 256] = [
@@ -248,10 +251,8 @@ impl<M: Mem> Cpu<M> {
             2,5,5,7,5,4,6,6, 2,4,4,2,6,4,7,5,   // $f0 - $ff
         ];
 
-        // Still waiting for interrupt?
-        // GIANT FIXME: This doesn't take cycles, but if we return 0 the emulator freezes, because
-        // it coordinates everything in relation to CPU cycles.
-        if self.wai { return 5; }
+        // Still waiting for interrupt? Don't do any work.
+        if self.wai { return 0; }
 
         let pc = self.pc;
         self.cy = 0;

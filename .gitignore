@@ -2,6 +2,7 @@ target/
 test.out/
 *.sfc
 *.smc
+*.spc
 *.dll
 
 *.sav

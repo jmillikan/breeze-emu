@@ -12,6 +12,7 @@ use cpu::{Cpu, Mem};
 use frontend::{FrontendAction, Renderer};
 use libsavestate::SaveState;
 
+use std::cmp;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -354,8 +355,7 @@ impl<'r> Snes<'r> {
         let working_cy = LogOnPanic::new("cycle count", self.master_cy);
 
         loop {
-            // Store an action we should perform. We might need to load a save state, so we have to
-            // make sure no important local variable is left in its old state.
+            // Store an action we should perform.
             let mut action = None;
             let mut frame_rendered = false;
 
@@ -367,6 +367,12 @@ impl<'r> Snes<'r> {
             // Run a CPU instruction and calculate the master cycles elapsed
             let cpu_master_cy = self.cpu.dispatch() as i32 * CPU_CYCLE + self.cpu.mem.cy as i32;
             self.cpu.mem.cy = 0;
+
+            // In case the CPU did no work, we pretend that it still took a few cycles. This happens
+            // if a WAI instruction was executed and the CPU is doing nothing while waiting for an
+            // interrupt. We need to emulate the rest of the SNES to some degree or everything
+            // freezes. This should probably be fixed in a better way.
+            let cpu_master_cy = cmp::max(3, cpu_master_cy); // HACK: Use at least 3 master cycles
             self.master_cy += cpu_master_cy as u64;
 
             // Now we "owe" the other components a few cycles:
@@ -416,10 +422,11 @@ impl<'r> Snes<'r> {
                         // Auto-Joypad read
                         // "This begins between dots 32.5 and 95.5 of the first V-Blank scanline,
                         // and ends 4224 master cycles later."
+                        // FIXME start this at the right position
+                        // FIXME Set auto read status bit
                         if self.cpu.mem.nmien & 1 != 0 {
                             self.cpu.mem.input.perform_auto_read();
                         }
-                        // FIXME Set auto read status bit
                     }
                     (_, 180) => {
                         // Approximate DRAM refresh (FIXME Probably incorrect, but does it matter?)
