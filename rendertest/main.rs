@@ -8,7 +8,8 @@ extern crate png;
 extern crate breeze_core;
 extern crate breeze_frontends;
 
-use breeze_frontends::frontend_test::TestRenderer;
+use breeze_frontends::frontend::test::TestRenderer;
+use breeze_frontends::frontend::dummy::DummySink;
 use breeze_core::rom::Rom;
 use breeze_core::snes::Snes;
 
@@ -229,7 +230,7 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let mut renderer = TestRenderer::new(test.frames);
 
     {
-        let mut snes = Snes::new(rom, &mut renderer);
+        let mut snes = Snes::new(rom, &mut renderer, Box::new(DummySink::default()));
         snes.run();
     }
 
