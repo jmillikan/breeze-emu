@@ -20,20 +20,17 @@ extern crate sdl2;
 #[cfg(feature = "glium")]
 #[macro_use] extern crate glium;
 
+#[cfg(feature = "cpal")]
+extern crate cpal;
+
 use frontend_api::Renderer;
 
 pub type RendererMap = ::std::collections::BTreeMap<&'static str, Option<fn() -> Box<Renderer>>>;
 
-mod frontend_dummy;
 #[allow(dead_code)]
 mod viewport;
 
-#[doc(hidden)]  // just used by rendertest
-pub mod frontend_test;
-#[cfg(feature = "glium")]
-mod frontend_glium;
-#[cfg(feature = "sdl2")]
-pub mod frontend_sdl;    // FIXME Make private after input handling is better
+pub mod frontend;
 
 lazy_static! {
     pub static ref RENDERER_MAP: RendererMap = {
@@ -41,7 +38,7 @@ lazy_static! {
             ( #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
                 #[cfg($m)]
                 fn $name() -> Box<Renderer> {
-                    Box::new($name::$tyname::default())
+                    Box::new(frontend::$name::$tyname::default())
                 }
 
                 #[cfg(not($m))]
@@ -53,7 +50,7 @@ lazy_static! {
             }};
             ( $name:ident :: $tyname:ident ) => {{
                 fn $name() -> Box<Renderer> {
-                    Box::new($name::$tyname::default())
+                    Box::new(frontend::$name::$tyname::default())
                 }
 
                 Some($name as fn() -> Box<Renderer>)
@@ -61,9 +58,9 @@ lazy_static! {
         }
 
         let mut map = RendererMap::new();
-        map.insert("glium", make_fn!(#[cfg(feature = "glium")] frontend_glium::GliumRenderer));
-        map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] frontend_sdl::SdlRenderer));
-        map.insert("dummy", make_fn!(frontend_dummy::DummyRenderer));
+        map.insert("glium", make_fn!(#[cfg(feature = "glium")] glium::GliumRenderer));
+        map.insert("sdl", make_fn!(#[cfg(feature = "sdl2")] sdl::SdlRenderer));
+        map.insert("dummy", make_fn!(dummy::DummyRenderer));
         map
     };
 

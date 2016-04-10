@@ -24,3 +24,7 @@ default-features = false
 [dependencies.sdl2]
 version = "0.13"
 optional = true
+
+[dependencies.cpal]
+version = "0.2"
+optional = true

@@ -24,7 +24,7 @@ use std::io::{BufReader, Read};
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
     use breeze::input::Peripheral;
-    use frontends::frontend_sdl::KeyboardInput;
+    use frontends::frontend::sdl::KeyboardInput;
 
     input.ports.0 = Some(Peripheral::new_joypad(Box::new(KeyboardInput)));
 }

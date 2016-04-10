@@ -34,9 +34,10 @@ png = { version = "0.4.2", default-features = false }
 
 [features]
 # reexport frontends
-default = ["sdl"]
+default = ["sdl", "cpal"]
 sdl = ["breeze_frontends/sdl2"]
 glium = ["breeze_frontends/glium"]
+cpal = ["breeze_frontends/cpal"]
 
 # Run render tests optimized (the unoptimized emulator is just too slow for that
 # to scale well)
