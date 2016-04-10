@@ -20,18 +20,18 @@ use std::io::BufReader;
 
 const CPU_CYCLE: i32 = 6;
 
-const WRAM_SIZE: usize = 128 * 1024;
-byte_array!(Wram[WRAM_SIZE] with save state please);
+pub const WRAM_SIZE: usize = 128 * 1024;
+byte_array!(pub Wram[WRAM_SIZE] with save state please);
 
 /// Contains everything connected to the CPU via one of the two address buses. All memory accesses
 /// will be directed through this.
 pub struct Peripherals {
-    apu: Spc700,
-    ppu: Ppu,
-    rom: Rom,
+    pub apu: Spc700,
+    pub ppu: Ppu,
+    pub rom: Rom,
     /// The 128 KB of working RAM of the SNES (separate from cartridge RAM)
-    wram: Wram,
-    input: Input,
+    pub wram: Wram,
+    pub input: Input,
 
     pub dma: [DmaChannel; 8],
     /// `$420c` - HDMAEN: HDMA enable flags
@@ -311,14 +311,11 @@ impl<'r> Snes<'r> {
         }
     }
 
-    /// Get a reference to the `Ppu` instance used for PPU emulation
-    pub fn ppu(&self) -> &Ppu { &self.cpu.mem.ppu }
+    /// Get a reference to the `Peripherals` instance
+    pub fn peripherals(&self) -> &Peripherals { &self.cpu.mem }
 
-    /// Get a reference to the `Input` instance
-    pub fn input(&self) -> &Input { &self.cpu.mem.input }
-
-    /// Get a mutable reference to the `Input` instance
-    pub fn input_mut(&mut self) -> &mut Input { &mut self.cpu.mem.input }
+    /// Get a mutable reference to the `Peripherals` instance
+    pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.cpu.mem }
 
     /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
     pub fn handle_action(&mut self, action: FrontendAction) -> bool {

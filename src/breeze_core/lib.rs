@@ -11,7 +11,7 @@ extern crate spc700 as apu;
 extern crate breeze_frontend_api as frontend;
 
 #[macro_use] mod log_util;
-mod dma;
+pub mod dma;
 mod flexvec;
 pub mod record;
 pub mod ppu;

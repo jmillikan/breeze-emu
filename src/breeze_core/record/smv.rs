@@ -38,7 +38,7 @@ impl super::Recorder for Recorder {
         try!(writer.write_u32::<LittleEndian>(0xdeadbeef));  // num. of input samples
 
         // Controller info (for port 1 / port 2)
-        let input = snes.input();
+        let input = &snes.peripherals().input;
         fn get_controller_type(port: &Option<Peripheral>) -> u8 {
             match *port {
                 None => 0,

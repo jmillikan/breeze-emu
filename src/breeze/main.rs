@@ -116,16 +116,16 @@ fn main() {
     }
 
     let mut snes = Snes::new(rom, &mut *renderer);
-    attach_default_input(snes.input_mut());
+    attach_default_input(&mut snes.peripherals_mut().input);
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
         let recorder = create_recorder(RecordingFormat::default(), writer, &snes).unwrap();
-        snes.input_mut().start_recording(recorder);
+        snes.peripherals_mut().input.start_recording(recorder);
     }
     if let Some(replay_file) = args.value_of("replay") {
         let reader = Box::new(BufReader::new(File::open(replay_file).unwrap()));
         let replayer = create_replayer(RecordingFormat::default(), reader, &snes).unwrap();
-        snes.input_mut().start_replay(replayer);
+        snes.peripherals_mut().input.start_replay(replayer);
     }
     if let Some(filename) = args.value_of("savestate") {
         let file = File::open(filename).unwrap();
@@ -135,14 +135,16 @@ fn main() {
     }
 
     if cfg!(debug_assertions) && args.is_present("oneframe") {
-        debug!("PPU H={}, V={}", snes.ppu().h_counter(), snes.ppu().v_counter());
+        debug!("PPU H={}, V={}",
+            snes.peripherals().ppu.h_counter(),
+            snes.peripherals().ppu.v_counter());
         snes.render_frame();
 
         info!("frame rendered. pausing emulation.");
 
         // Keep rendering, but don't run emulation
         // Copy out the frame buffer because the damn borrow checker doesn't like it otherwise
-        let framebuf = snes.ppu().framebuf.clone();
+        let framebuf = snes.peripherals().ppu.framebuf.clone();
         loop {
             let action = snes.renderer.render(&*framebuf);
             if let Some(a) = action {

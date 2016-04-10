@@ -19,13 +19,16 @@ pub const SCREEN_WIDTH: u32 = 256;
 /// (this is the height of a field, or a half-frame)
 pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
 
-const OAM_SIZE: usize = 544;
-const CGRAM_SIZE: usize = 512;
-const VRAM_SIZE: usize = 64 * 1024;
+/// Object Attribute Memory size in Bytes
+pub const OAM_SIZE: usize = 544;
+/// Color RAM size in Bytes
+pub const CGRAM_SIZE: usize = 512;
+/// VRAM size in Bytes
+pub const VRAM_SIZE: usize = 64 * 1024;
 const FRAME_BUF_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize * 3;
-byte_array!(Oam[OAM_SIZE] with u16 indexing, save state please);
-byte_array!(Cgram[CGRAM_SIZE] with u16 indexing, save state please);
-byte_array!(Vram[VRAM_SIZE] with u16 indexing, save state please);
+byte_array!(pub Oam[OAM_SIZE] with u16 indexing, save state please);
+byte_array!(pub Cgram[CGRAM_SIZE] with u16 indexing, save state please);
+byte_array!(pub Vram[VRAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub FrameBuf[FRAME_BUF_SIZE]);
 
 #[derive(Default)]
@@ -58,14 +61,14 @@ pub struct Ppu {
     /// Layout of a byte in the last 32 Bytes of OAM:
     /// `sxsxsxsx` - **S**ize toggle bit and most significant bit of **X** coordinate
     /// The low bits contain the information for sprites with low IDs.
-    oam: Oam,
+    pub oam: Oam,
 
     /// CGRAM - Stores the color palette
     ///
     /// There are 256 colors in the palette, each 15 bits (5 bits per color channel), represented
     /// by 2 Bytes of CGRAM. Layout (16-bit big endian value - high byte and high address first):
     /// `?bbbbbgg` `gggrrrrr` (the `?`-bit is ignored)
-    cgram: Cgram,
+    pub cgram: Cgram,
 
     /// VRAM - Stores background maps and tile/character data
     ///
@@ -76,7 +79,7 @@ pub struct Ppu {
     /// starting number
     ///
     /// Character data locations are set with the registers `$210B` (BG1/2) and `$210C` (BG3/4).
-    vram: Vram,
+    pub vram: Vram,
 
     /// Scanline counter
     ///
