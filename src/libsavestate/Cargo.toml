@@ -4,6 +4,8 @@ description = "A crate for easy implementation of emulator save states"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
+documentation = "https://jonas-schievink.github.io/breeze-emu/libsavestate/"
+repository = "https://github.com/jonas-schievink/breeze-emu"
 
 [lib]
 path = "lib.rs"

@@ -3,6 +3,10 @@ name = "breeze"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
+repository = "https://github.com/jonas-schievink/breeze-emu"
+homepage = "https://github.com/jonas-schievink/breeze-emu"
+# (not techincally correct, but...)
+documentation = "https://jonas-schievink.github.io/breeze-emu/breeze_core/"
 
 [[bin]]
 name = "breeze"
@@ -14,10 +18,10 @@ path = "rendertest/main.rs"
 harness = false
 
 [dependencies]
-breeze_core = { path = "src/breeze_core" }
-breeze_frontends = { path = "src/breeze_frontends" }
-breeze_frontend_api = { path = "src/breeze_frontend_api" }
-libsavestate = { path = "src/libsavestate" }
+breeze_core = { version = "0.1", path = "src/breeze_core" }
+breeze_frontends = { version = "0.1", path = "src/breeze_frontends" }
+breeze_frontend_api = { version = "0.1", path = "src/breeze_frontend_api" }
+libsavestate = { version = "0.1", path = "src/libsavestate" }
 log = "0.3"
 env_logger = "0.3"
 # clap comes with a few optional features we don't really need (colored output

@@ -4,15 +4,17 @@ description = "The Breeze emulator core"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
+documentation = "https://jonas-schievink.github.io/breeze-emu/breeze_core/"
+repository = "https://github.com/jonas-schievink/breeze-emu"
 
 [lib]
 path = "lib.rs"
 
 [dependencies]
-breeze_frontend_api = { path = "../breeze_frontend_api" }
-wdc65816 = { path = "../wdc65816" }
-spc700 = { path = "../spc700" }
-byte_array = { path = "../byte_array" }
-libsavestate = { path = "../libsavestate" }
+breeze_frontend_api = { version = "0.1", path = "../breeze_frontend_api" }
+wdc65816 = { version = "0.1", path = "../wdc65816" }
+spc700 = { version = "0.1", path = "../spc700" }
+byte_array = { version = "0.1", path = "../byte_array" }
+libsavestate = { version = "0.1", path = "../libsavestate" }
 log = "0.3"
 byteorder = "0.5"

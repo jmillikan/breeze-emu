@@ -4,12 +4,13 @@ description = "Breeze Emulator Frontend implementations"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
+repository = "https://github.com/jonas-schievink/breeze-emu"
 
 [lib]
 path = "lib.rs"
 
 [dependencies]
-breeze_frontend_api = { path = "../breeze_frontend_api" }
+breeze_frontend_api = { version = "0.1", path = "../breeze_frontend_api" }
 log = "0.3"
 lazy_static = "0.1"
 

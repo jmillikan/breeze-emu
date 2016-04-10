@@ -4,11 +4,13 @@ description = "An (incomplete) emulator for the Super Nintendo's APU"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
+documentation = "https://jonas-schievink.github.io/breeze-emu/spc700/"
+repository = "https://github.com/jonas-schievink/breeze-emu"
 
 [lib]
 path = "lib.rs"
 
 [dependencies]
-byte_array = { path = "../byte_array" }
-libsavestate = { path = "../libsavestate" }
+byte_array = { version = "0.1", path = "../byte_array" }
+libsavestate = { version = "0.1", path = "../libsavestate" }
 log = "0.3"
