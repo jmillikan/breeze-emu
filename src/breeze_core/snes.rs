@@ -9,7 +9,7 @@ use save::SaveStateFormat;
 
 use apu::Spc700;
 use cpu::{Cpu, Mem};
-use frontend::{FrontendAction, Renderer};
+use frontend::{FrontendAction, Renderer, AudioSink};
 use libsavestate::SaveState;
 
 use std::cmp;
@@ -275,6 +275,7 @@ impl Mem for Peripherals {
 pub struct Snes<'r> {
     /// Reference to the renderer this emulator instance uses to display the screen
     pub renderer: &'r mut Renderer,
+    pub audio: Box<AudioSink>,
     cpu: Cpu<Peripherals>,
     master_cy: u64,
     /// Master clock cycles for the APU not yet accounted for (can be negative)
@@ -288,14 +289,14 @@ pub struct Snes<'r> {
 
 impl<'a> SaveState for Snes<'a> {
     impl_save_state_fns!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
-        ignore { renderer, trace_start });
+        ignore { renderer, audio, trace_start });
 }
 
 impl<'r> Snes<'r> {
     /// Creates a new emulator instance from a loaded ROM and a renderer.
     ///
     /// This will also create a default `Input` instance without any attached peripherals.
-    pub fn new(rom: Rom, renderer: &'r mut Renderer) -> Snes {
+    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Snes<'r> {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
         let trace_start = env::var("BREEZE_TRACE")
             .map(|string| string.parse().expect("invalid value for BREEZE_TRACE"))
@@ -304,6 +305,7 @@ impl<'r> Snes<'r> {
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
             renderer: renderer,
+            audio: audio,
             master_cy: 0,
             apu_master_cy_debt: 0,
             ppu_master_cy_debt: 0,

@@ -6,3 +6,5 @@ pub mod test;
 pub mod glium;
 #[cfg(feature = "sdl2")]
 pub mod sdl;    // FIXME Make private after input handling is better
+#[cfg(feature = "cpal")]
+pub mod cpal;

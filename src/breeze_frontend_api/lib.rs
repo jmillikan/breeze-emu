@@ -54,3 +54,11 @@ impl<T: Renderer + ?Sized> Renderer for Box<T> {
         (**self).set_rom_title(title)
     }
 }
+
+/// Trait for audio frontends. Provides methods for writing to a stereo audio channel.
+pub trait AudioSink {
+    /// Write 32 kHz 16-bit data to the device.
+    ///
+    /// The data contains 16-bit samples for the left and right channel.
+    fn write(&mut self, data: &[(i16, i16)]);
+}

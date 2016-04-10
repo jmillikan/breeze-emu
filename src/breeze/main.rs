@@ -50,6 +50,11 @@ fn main() {
             .long("renderer")
             .takes_value(true)
             .help("The renderer to use"))
+        .arg(clap::Arg::with_name("audio")
+            .short("A")
+            .long("audio")
+            .takes_value(true)
+            .help("The audio frontend to use"))
         .arg(clap::Arg::with_name("savestate")
             .long("savestate")
             .takes_value(true)
@@ -104,6 +109,32 @@ fn main() {
         }
     };
 
+    let audio_name = args.value_of("audio").unwrap_or(&*frontends::DEFAULT_AUDIO);
+    let audio_fn = match frontends::AUDIO_MAP.get(audio_name) {
+        None => {
+            println!("error: unknown audio sink: {}", audio_name);
+            println!("{} audio sinks known:", frontends::AUDIO_MAP.len());
+            for (name, opt_fn) in frontends::AUDIO_MAP.iter() {
+                println!("\t{}\t{}", name, match *opt_fn {
+                    Some(_) => "available",
+                    None => "not compiled in",
+                });
+            }
+
+            return
+        }
+        Some(&None) => {
+            println!("error: audio frontend '{}' not compiled in", audio_name);
+            println!("(compile with `cargo build --features {}` to enable)", audio_name);
+            // NOTE: Make sure that renderer name always matches feature name!
+            return
+        }
+        Some(&Some(audio_fn)) => {
+            info!("using {} audio sink", audio_name);
+            audio_fn
+        }
+    };
+
     let filename = args.value_of("rom").unwrap();
     let mut file = File::open(&filename).unwrap();
     let mut buf = Vec::new();
@@ -115,7 +146,7 @@ fn main() {
         renderer.set_rom_title(title);
     }
 
-    let mut snes = Snes::new(rom, &mut *renderer);
+    let mut snes = Snes::new(rom, &mut *renderer, audio_fn());
     attach_default_input(&mut snes.peripherals_mut().input);
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
