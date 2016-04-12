@@ -4,6 +4,7 @@ use std::cmp;
 use std::str;
 
 /// The (decoded) SNES header
+#[derive(Clone)]
 pub struct RomHeader {
     /// ASCII title, filled with spaces to 21 Bytes
     #[allow(dead_code)] // FIXME Use this or drop this
@@ -14,7 +15,7 @@ pub struct RomHeader {
     rom_type: RomType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum RomType {
     LoRom,
     HiRom,
@@ -128,6 +129,7 @@ impl RomHeader {
 }
 
 /// A ROM image
+#[derive(Clone)]
 pub struct Rom {
     header: RomHeader,
     ram: Vec<u8>,
