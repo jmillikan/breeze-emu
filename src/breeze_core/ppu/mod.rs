@@ -7,10 +7,12 @@
 //! http://wiki.superfamicom.org/
 
 mod bg;
+mod oam;
 mod rendering;
 mod sprites;
 
 use self::sprites::SpriteRenderState;
+use self::oam::Oam;
 
 /// Physical screen width
 /// (this is the width of a field, or a half-frame)
@@ -19,14 +21,11 @@ pub const SCREEN_WIDTH: u32 = 256;
 /// (this is the height of a field, or a half-frame)
 pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
 
-/// Object Attribute Memory size in Bytes
-pub const OAM_SIZE: usize = 544;
 /// Color RAM size in Bytes
 pub const CGRAM_SIZE: usize = 512;
 /// VRAM size in Bytes
 pub const VRAM_SIZE: usize = 64 * 1024;
 const FRAME_BUF_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize * 3;
-byte_array!(pub Oam[OAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub Cgram[CGRAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub Vram[VRAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub FrameBuf[FRAME_BUF_SIZE]);

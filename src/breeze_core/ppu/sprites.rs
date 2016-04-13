@@ -1,6 +1,7 @@
 //! Sprite rendering
 
 use super::{Ppu, Rgb};
+use super::oam::OamEntry;
 
 use flexvec::FlexVec;
 
@@ -19,26 +20,6 @@ impl Default for SpriteRenderState {
             sprite_scanline: [None; super::SCREEN_WIDTH as usize],
         }
     }
-}
-
-/// Unpacked OAM entry for internal use.
-#[derive(Copy, Clone, Default)]
-struct OamEntry {
-    /// First tile (0-255), needs to take name table selection bit into account
-    tile: u8,
-    /// Sprite's name table (0 or 1).
-    name_table: u8,
-    /// 9 bits, considered signed (-256 - 255)
-    x: i16,
-    y: u8,
-    /// 0-3
-    priority: u8,
-    /// 0-7. The first palette entry is `128+ppp*16`.
-    palette: u8,
-    hflip: bool,
-    #[allow(dead_code)] // FIXME up-down flipping not implemented
-    vflip: bool,
-    size_toggle: bool,
 }
 
 /// Informations about a single tile of a sprite, needed for drawing.
@@ -66,48 +47,6 @@ impl<'a> SpriteTile<'a> {
 }
 
 impl Ppu {
-    /// Returns the OAM entry of the given sprite. Always returns a valid entry if `index` is valid
-    /// (0...127), panics otherwise.
-    fn get_oam_entry(&self, index: u8) -> OamEntry {
-        debug_assert!(index <= 127, "attempted to access sprite #{}", index);
-
-        // OAM entry start address (low table)
-        let start = index as u16 * 4;
-        let mut x = self.oam[start] as u16;
-
-        // vhoopppN
-        let byte4 = self.oam[start + 3];
-        let vflip = byte4 & 0x80 != 0;
-        let hflip = byte4 & 0x40 != 0;
-        let priority = (byte4 & 0x30) >> 4;
-        let palette = (byte4 & 0x0e) >> 1;
-
-        // Read the second table. Each byte contains information of 4 sprites (2 bits per sprite):
-        // Bits 1/3/5/6 is the size-toggle bit, bits 0/2/4/6 is the MSb of the x coord
-        let byte = self.oam[512 + index as u16 / 4];
-        let index_in_byte = index & 0b11;
-        let msb_mask = 1 << (index_in_byte * 2);
-        let size_mask = 2 << (index_in_byte * 2);
-        let size_toggle = byte & size_mask != 0;
-        if byte & msb_mask != 0 {
-            // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
-            // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
-            x = 0xff00 | x;
-        }
-
-        OamEntry {
-            tile: self.oam[start + 2],
-            name_table: byte4 & 1,
-            x: x as i16,
-            y: self.oam[start + 1],
-            priority: priority,
-            palette: palette,
-            hflip: hflip,
-            vflip: vflip,
-            size_toggle: size_toggle,
-        }
-    }
-
     /// Collects visible sprites and sprite tiles for the current scanline.
     ///
     /// Called when rendering the first pixel on a scanline.
@@ -125,7 +64,7 @@ impl Ppu {
         let mut visible_sprites = FlexVec::new(&mut visible_sprites);
         for i in first_sprite..first_sprite+128 {
             let index = (i & 0x7f) as u8;   // limit to 127 and wrap back around
-            let entry = self.get_oam_entry(index);
+            let entry = self.oam.get_sprite(index);
             if self.sprite_on_scanline(&entry) {
                 if visible_sprites.push(entry).is_err() {
                     // FIXME: Sprite overflow. Set bit 6 of $213e.
