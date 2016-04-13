@@ -2,6 +2,11 @@
 
 use std::cmp;
 use std::str;
+use std::io;
+
+fn invalid_data(err: String) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, err)
+}
 
 /// The (decoded) SNES header
 #[derive(Clone)]
@@ -141,10 +146,17 @@ impl_save_state!(Rom { ram } ignore { header, rom });
 
 impl Rom {
     /// Loads a ROM from raw data.
-    pub fn from_bytes(mut bytes: &[u8]) -> Result<Rom, ()> {
-        // FIXME Return a proper error!
+    pub fn from_bytes(mut bytes: &[u8]) -> io::Result<Rom> {
+        // Would it be useful if we returned the warnings somehow?
 
         debug!("raw size: {} bytes (${:X})", bytes.len(), bytes.len());
+
+        // Is the ROM even large enough to contain the headers?
+        if bytes.len() < 0xFFFF + 1 {
+            // Technically, we could get away with only requiring the lowest header, but does it
+            // matter?
+            return Err(invalid_data(String::from("ROM too small (doesn't contain a header)")));
+        }
 
         // ROMs may begin with a 512 Bytes SMC header. It needs to go.
         match bytes.len() % 1024 {
@@ -154,8 +166,9 @@ impl Rom {
             }
             0 => {},
             n => {
-                error!("len() % 1024 == {} (expected 512 or 0)", n);
-                return Err(());
+                let fmt = format!("len() % 1024 == {} (expected 512 or 0)", n);
+                error!("{}", fmt);
+                return Err(invalid_data(fmt));
             }
         }
 
