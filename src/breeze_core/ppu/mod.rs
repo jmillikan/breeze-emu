@@ -7,7 +7,7 @@
 //! http://wiki.superfamicom.org/
 
 mod bg;
-mod oam;
+pub mod oam;
 mod rendering;
 mod sprites;
 
