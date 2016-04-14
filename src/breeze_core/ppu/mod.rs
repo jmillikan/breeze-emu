@@ -9,6 +9,7 @@
 mod bg;
 pub mod oam;
 mod rendering;
+mod regs;
 mod sprites;
 
 use self::sprites::SpriteRenderState;
@@ -226,7 +227,7 @@ pub struct Ppu {
     vmaddr: u16,
     /// `$211a` Mode 7 Settings
     /// `rc----xy`
-    /// * `r`: Placing field size (`0` = 1024x1024, `1` = uhh... larger?)
+    /// * `r`: Playing field size (`0` = 1024x1024, `1` = uhh... larger?)
     /// * `c`: 0 = Empty space is transparent, 1 = Fill empty space with character 0
     /// * `x`: Horizontal mirroring
     /// * `y`: Vertical mirroring
