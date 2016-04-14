@@ -30,9 +30,7 @@ impl Cgram {
     /// the color range to full RGB.
     pub fn get_color_unadjusted(&self, color: u8) -> (u8, u8, u8) {
         // -bbbbbgg gggrrrrr (16-bit big endian value! (high byte, high address first))
-        let lo = self[color as u16 * 2] as u16;
-        let hi = self[color as u16 * 2 + 1] as u16;
-        let val = (hi << 8) | lo;
+        let val = self.get_color_raw(color);
 
         // Extract components
         let b = (val & 0x7c00) >> 10;
@@ -40,5 +38,15 @@ impl Cgram {
         let r = val & 0x001f;
 
         (r as u8, g as u8, b as u8)
+    }
+
+    /// Gets the raw, 16-bit (technically 15), big endian color value stored at the given color
+    /// index
+    pub fn get_color_raw(&self, color: u8) -> u16 {
+        // -bbbbbgg gggrrrrr (16-bit big endian value! (high byte, high address first))
+        let lo = self[color as u16 * 2] as u16;
+        let hi = self[color as u16 * 2 + 1] as u16;
+        let val = (hi << 8) | lo;
+        val
     }
 }
