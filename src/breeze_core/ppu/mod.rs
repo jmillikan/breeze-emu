@@ -380,9 +380,9 @@ impl_save_state!(Ppu {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Rgb {
-    r: u8,
-    g: u8,
-    b: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
 impl Ppu {
