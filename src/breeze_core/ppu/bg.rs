@@ -239,7 +239,7 @@ impl Ppu {
 
         match palette_index {
             0 => None,
-            _ => Some(self.lookup_color(palette_base + palette_index)),
+            _ => Some(self.cgram.get_color(palette_base + palette_index)),
         }
     }
 }

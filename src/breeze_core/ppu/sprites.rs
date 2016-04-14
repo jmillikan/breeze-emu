@@ -214,7 +214,7 @@ impl Ppu {
 
         let abs_color = 128 + tile.sprite().palette * 16 + rel_color;
         // FIXME Color math
-        let rgb = self.lookup_color(abs_color);
+        let rgb = self.cgram.get_color(abs_color);
 
         Some(rgb)
     }
