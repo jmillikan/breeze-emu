@@ -49,4 +49,12 @@ impl Cgram {
         let val = (hi << 8) | lo;
         val
     }
+
+    /// Set a raw color value
+    ///
+    /// `-bbbbbgg gggrrrrr` (16-bit big endian value! (high byte, high address first))
+    pub fn set_color_raw(&mut self, index: u8, raw: u16) {
+        self[index as u16 * 2] = raw as u8;
+        self[index as u16 * 2 + 1] = (raw >> 8) as u8;
+    }
 }
