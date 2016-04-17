@@ -91,15 +91,21 @@ impl Ppu {
         let name_select: u16 = (self.obsel as u16 >> 3) & 0b11;
 
         // TIME: Start at the last sprite found, load up to 34 8x8 tiles (for each sprite from left
-        // to right, after taking flip bits of the sprite into account)
+        // to right, after taking flip bits of the sprite into account [FIXME Flip bits are ignored
+        // I think])
         'collect_tiles: for sprite in visible_sprites.iter().rev() {
             // How many tiles are there?
-            let (sprite_w, _) = self.obj_size(sprite.size_toggle);
+            let (sprite_w, sprite_h) = self.obj_size(sprite.size_toggle);
             let sprite_w_tiles = sprite_w / 8;
+            //let sprite_h_tiles = sprite_h / 8;
             // Offset into the sprite
             let sprite_y_off = self.scanline - sprite.y as u16;
             // Tile Y coordinate of the tile row we're interested in (tiles on the scanline)
-            let y_tile = sprite_y_off / 8;
+            let y_tile = if sprite.vflip {
+                (sprite_h as u16 - sprite_y_off - 1) / 8
+            } else {
+                sprite_y_off / 8
+            };
             // Y offset into the tile row
             let tile_y_off = (sprite_y_off % 8) as u8;
 
@@ -189,7 +195,7 @@ impl Ppu {
         // A sprite moved past the right edge of the screen will wrap to `-256`, which is handled
         // by this check.
         if -w < x {
-            if y <= self.scanline && y + h >= self.scanline {
+            if y <= self.scanline && y + h > self.scanline {
                 // Sprite is on scanline
                 true
             } else {
