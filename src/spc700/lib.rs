@@ -429,6 +429,9 @@ impl Spc700 {
             0x7e => instr!(_ cmp direct y),
             0x74 => instr!(_ cmp direct_indexed_x a),
             0x69 => instr!(_ cmp direct direct),
+            0x66 => instr!(_ cmp indirect_x a),
+            0x77 => instr!(_ cmp indirect_indexed_y a), // cmp a, [d]+Y
+            0x67 => instr!(_ cmp indexed_x_indirect a), // cmp a, [d+X]
             0x68 => instr!(_ cmp immediate a),
             0xc8 => instr!(_ cmp immediate x),
             0xad => instr!(_ cmp immediate y),
