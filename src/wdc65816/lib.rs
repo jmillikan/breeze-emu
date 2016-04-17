@@ -810,30 +810,51 @@ impl<M: Mem> Cpu<M> {
     /// Add With Carry
     fn adc(&mut self, am: AddressingMode) {
         // Sets N, V, C and Z
-        let c = if self.p.carry() { 1 } else { 0 };
+        let c: u16 = if self.p.carry() { 1 } else { 0 };
 
-        if self.p.decimal() {
-            panic!("NYI: decimal adc");
-        } else {
-            if self.p.small_acc() {
-                let a = self.a as u8;
-                let val = am.loadb(self);
-                let res = a as u16 + val as u16 + c;
-                self.p.set_carry(res > 255);
-                let res = res as u8;
-                self.p.set_overflow((a ^ val) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
+        if self.p.small_acc() {
+            let a = self.a & 0xff;
+            let val = am.loadb(self) as u16;
+            let mut res = if self.p.decimal() {
+                let mut low = (a & 0xf) + (val & 0xf) + c;
+                if low > 9 { low += 6; }
 
-                self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
+                (a & 0xf0) + (val & 0xf0) + (low & 0x0f) + if low > 0x0f { 0x10 } else { 0 }
             } else {
-                let val = am.loadw(self);
-                let res = self.a as u32 + val as u32 + c as u32;
-                self.p.set_carry(res > 65535);
-                let res = res as u16;
-                self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
+                a + val + c
+            };
+            self.p.set_overflow((a as u8 ^ val as u8) & 0x80 == 0 &&
+                                (a as u8 ^ res as u8) & 0x80 == 0x80);
+            if self.p.decimal() && res > 0x9f { res += 0x60; }
+            self.p.set_carry(res > 255);
 
-                self.a = self.p.set_nz(res);
-                self.cy += 1;
-            }
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+        } else {
+            let val = am.loadw(self);
+            let mut res = if self.p.decimal() {
+                let mut res0 = (self.a & 0x000f) + (val & 0x000f) + c;
+                if res0 > 0x0009 { res0 += 0x0006; }
+
+                let mut res1 = (self.a & 0x00f0) + (val & 0x00f0) + (res0 & 0x000f) +
+                               if res0 > 0x000f { 0x0010 } else { 0x0000 };
+                if res1 > 0x009f { res1 += 0x0060; }
+
+                let mut res2 = (self.a & 0x0f00) + (val & 0x0f00) + (res1 & 0x00ff) +
+                               if res1 > 0x00ff { 0x0100 } else { 0x0000 };
+                if res2 > 0x09ff { res2 += 0x0600; }
+
+                (self.a as u32 & 0xf000) + (val as u32 & 0xf000) + (res2 as u32 & 0x0fff) +
+                    if res2 > 0x0fff { 0x1000 } else { 0x0000 }
+            } else {
+                self.a as u32 + val as u32 + c as u32
+            };
+            self.p.set_overflow((self.a ^ val) & 0x8000 == 0 &&
+                                (self.a ^ res as u16) & 0x8000 == 0x8000);
+            if self.p.decimal() && res > 0x9fff { res += 0x6000; }
+            self.p.set_carry(res > 65535);
+
+            self.a = self.p.set_nz(res as u16);
+            self.cy += 1;
         }
     }
 
