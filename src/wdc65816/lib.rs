@@ -548,6 +548,9 @@ impl<M: Mem> Cpu<M> {
         let p = self.p.0;
         self.pushb(p);
 
+        // Interrupts clear the decimal flag (http://www.6502.org/tutorials/decimal_mode.html)
+        self.p.set_decimal(false);
+
         let handler = self.loadw(0, vector);
         self.pc = handler;
     }
@@ -806,55 +809,61 @@ impl<M: Mem> Cpu<M> {
 
     /// Add With Carry
     fn adc(&mut self, am: AddressingMode) {
-        assert!(!self.p.decimal(), "NYI: decimal adc");
-
         // Sets N, V, C and Z
-        // FIXME is this correct? double-check this!
         let c = if self.p.carry() { 1 } else { 0 };
-        if self.p.small_acc() {
-            let a = self.a as u8;
-            let val = am.loadb(self);
-            let res = a as u16 + val as u16 + c;
-            self.p.set_carry(res > 255);
-            let res = res as u8;
-            self.p.set_overflow((a ^ val) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
 
-            self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
+        if self.p.decimal() {
+            panic!("NYI: decimal adc");
         } else {
-            let val = am.loadw(self);
-            let res = self.a as u32 + val as u32 + c as u32;
-            self.p.set_carry(res > 65535);
-            let res = res as u16;
-            self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
+            if self.p.small_acc() {
+                let a = self.a as u8;
+                let val = am.loadb(self);
+                let res = a as u16 + val as u16 + c;
+                self.p.set_carry(res > 255);
+                let res = res as u8;
+                self.p.set_overflow((a ^ val) & 0x80 == 0 && (a ^ res) & 0x80 == 0x80);
 
-            self.a = self.p.set_nz(res);
-            self.cy += 1;
+                self.a = (self.a & 0xff00) | self.p.set_nz_8(res) as u16;
+            } else {
+                let val = am.loadw(self);
+                let res = self.a as u32 + val as u32 + c as u32;
+                self.p.set_carry(res > 65535);
+                let res = res as u16;
+                self.p.set_overflow((self.a ^ val) & 0x8000 == 0 && (self.a ^ res) & 0x8000 == 0x8000);
+
+                self.a = self.p.set_nz(res);
+                self.cy += 1;
+            }
         }
     }
 
     /// Subtract with Borrow from Accumulator
     fn sbc(&mut self, am: AddressingMode) {
-        assert!(!self.p.decimal(), "NYI: decimal sbc");
-
-        // Changes N, Z, C and V
+        // Sets N, Z, C and V
         let c = if self.p.carry() { 0 } else { 1 };
-        if self.p.small_acc() {
-            let a = self.a as u8;
-            let v = am.loadb(self);
-            let res = a as i16 - v as i16 - c;
-            self.p.set_carry(res >= 0);
-            self.p.set_overflow((a ^ res as u8) & 0x80 != 0 && (a ^ v) & 0x80 == 0x80);
 
-            self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+        if self.p.decimal() {
+            panic!("NYI: decimal sbc");
         } else {
-            let v = am.loadw(self);
-            let res = self.a as i32 - v as i32 - c as i32;
-            self.p.set_carry(res >= 0);
-            self.p.set_overflow((self.a ^ res as u16) & 0x80 != 0 && (self.a ^ v) & 0x80 == 0x80);
+            if self.p.small_acc() {
+                let a = self.a as u8;
+                let v = am.loadb(self);
+                let res = a as i16 - v as i16 - c;
+                self.p.set_carry(res >= 0);
+                self.p.set_overflow((a ^ res as u8) & 0x80 != 0 && (a ^ v) & 0x80 == 0x80);
 
-            self.a = self.p.set_nz(res as u16);
-            self.cy += 1;
+                self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+            } else {
+                let v = am.loadw(self);
+                let res = self.a as i32 - v as i32 - c as i32;
+                self.p.set_carry(res >= 0);
+                self.p.set_overflow((self.a ^ res as u16) & 0x80 != 0 && (self.a ^ v) & 0x80 == 0x80);
+
+                self.a = self.p.set_nz(res as u16);
+                self.cy += 1;
+            }
         }
+
     }
 
     /// Shift accumulator left by 1 bit
