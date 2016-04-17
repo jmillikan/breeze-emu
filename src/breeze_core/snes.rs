@@ -33,6 +33,13 @@ pub struct Peripherals {
     pub wram: Wram,
     pub input: Input,
 
+    /// `$2181` - WMADDL: WRAM Address low byte
+    wmaddl: u8,
+    /// `$2182` - WMADDM: WRAM Address middle byte
+    wmaddm: u8,
+    /// `$2183` - WMADDH: WRAM Address high byte
+    wmaddh: u8,
+    /// `$4300 - $438A`
     pub dma: [DmaChannel; 8],
     /// `$420c` - HDMAEN: HDMA enable flags
     /// (Note that general DMA doesn't have a register here, since all transactions are started
@@ -87,7 +94,7 @@ pub struct Peripherals {
 
 impl_save_state!(Peripherals {
     apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime,
-    memsel, nmi, irq, cy, input
+    memsel, nmi, irq, cy, input, wmaddl, wmaddm, wmaddh
 } ignore {});
 
 impl Peripherals {
@@ -95,6 +102,9 @@ impl Peripherals {
         Peripherals {
             rom: rom,
             input: input,
+            wmaddl: 0,
+            wmaddm: 0,
+            wmaddh: 0,
             wrdiv: 0xffff,
             htime: 0x1ff,
             vtime: 0x1ff,
@@ -143,6 +153,18 @@ impl Peripherals {
             _ => FAST,
         }
     }
+
+    fn get_and_inc_wram_addr(&mut self) -> usize {
+        let addr = (self.wmaddh as usize) << 16 |
+                   (self.wmaddm as usize) << 8 |
+                   (self.wmaddl as usize);
+
+        let new_addr = addr + 1;
+        self.wmaddl = new_addr as u8;
+        self.wmaddm = (new_addr >> 8) as u8;
+        self.wmaddh = (new_addr >> 16) as u8 & 1;
+        addr
+    }
 }
 
 impl Mem for Peripherals {
@@ -157,6 +179,14 @@ impl Mem for Peripherals {
                 0x2134 ... 0x213f => self.ppu.load(addr),
                 // APU IO registers
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
+                0x2180 => {
+                    let addr = self.get_and_inc_wram_addr();
+                    self.wram[addr]
+                }
+                0x2181 ... 0x2183 => {
+                    once!(warn!("open-bus load from WRAM register ${:02X}", addr));
+                    0   // FIXME Emulate open-bus
+                }
                 0x4016 | 0x4017 => self.input.load(addr),
                 0x4210 => {
                     const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
@@ -209,7 +239,13 @@ impl Mem for Peripherals {
                 0x2134 ... 0x213f => once!(warn!("store to read-only PPU register ${:04X}", addr)),
                 // APU IO registers.
                 0x2140 ... 0x217f => self.apu.store_port((addr & 0b11) as u8, value),
-                0x2180 ... 0x2183 => once!(warn!("NYI: WRAM registers")),
+                0x2180 => {
+                    let addr = self.get_and_inc_wram_addr();
+                    self.wram[addr] = value;
+                }
+                0x2181 => self.wmaddl = value,
+                0x2182 => self.wmaddm = value,
+                0x2183 => self.wmaddh = value & 1,
                 0x2184 ... 0x21ff => once!(warn!("invalid store: ${:02X} to ${:02X}:{:04X}", value,
                     bank, addr)),
                 0x4016 => self.input.store(addr, value),
