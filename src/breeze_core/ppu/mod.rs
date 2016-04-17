@@ -365,6 +365,19 @@ pub struct Ppu {
     /// * `I`: OBJ interlace
     /// * `i`: Screen interlace. Doubles the effective screen height.
     setini: u8,
+
+    /// `$213e`: STAT77 - PPU status flags and version
+    /// `trm-vvvv`
+    /// * `t`: Time Over Flag
+    /// * `r`: Range Over Flag
+    /// * `m`: Master/slave mode select
+    /// * `-`: PPU1 open bus
+    /// * `vvvv`: 5c77 chip version number. So far, we've only encountered version 1.
+    ///
+    /// Note that `time_over` and `range_over` are set even if the OBJ layer is disabled.
+    time_over: bool,
+    /// `r` flag of STAT77 / `time_over`
+    range_over: bool,
 }
 
 impl_save_state!(Ppu {
@@ -373,7 +386,7 @@ impl_save_state!(Ppu {
     bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7b_last,
     m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog,
     wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline,
-    x
+    x, time_over, range_over
 } ignore {
     framebuf, sprite_render_state
 });
@@ -398,7 +411,12 @@ impl Ppu {
             0x2136 => ((self.m7a as u32 * self.m7b_last as u32) >> 16) as u8,
             // RDOAM
             0x2138 => self.oam_load(),
-            _ => panic!("invalid PPU load from ${:04X}", addr),
+            0x213e => {
+                (if self.time_over { 0x80 } else { 0x00 })
+                | (if self.range_over { 0x40 } else { 0x00 })
+                | 0x01
+            }
+            _ => panic!("invalid/unimplemented PPU load from ${:04X}", addr),
         }
     }
 

@@ -64,6 +64,11 @@ impl Ppu {
         }
 
         if self.x == 0 && self.scanline == 0 {
+            // Sprite overflow flags are reset "at the end of VBlank"
+            // FIXME Is this correct or is the time wrong?
+            self.range_over = false;
+            self.time_over = false;
+
             trace!("New frame. BG mode {}, layers enabled: {:05b}, sprites are {:?} or {:?}",
                 self.bg_mode(),
                 self.tm & 0x1f,

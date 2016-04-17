@@ -67,7 +67,7 @@ impl Ppu {
             let entry = self.oam.get_sprite(index);
             if self.sprite_on_scanline(&entry) {
                 if visible_sprites.push(entry).is_err() {
-                    // FIXME: Sprite overflow. Set bit 6 of $213e.
+                    self.range_over = true;
                     break;
                 }
             }
@@ -143,7 +143,7 @@ impl Ppu {
                 };
 
                 if visible_tiles.push(tile).is_err() {
-                    // FIXME Set sprite tile overflow flag
+                    self.time_over = true;
                     break 'collect_tiles
                 }
             }
