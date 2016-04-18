@@ -275,8 +275,8 @@ impl Rom {
                 &mut self.rom[(bank as usize & 0x3f) << 16 | addr]
             }
             0x20 ... 0x3f | 0xa0 ... 0xbf if addr >= 0x6000 && addr <= 0x7fff => {
-                let a = ((bank as usize & 0x3f) - 0x20) * 0x2000 + (addr - 0x6000);
-                &mut self.ram[a]
+                // `addr` is masked with `0x1fff` since HiROM seems to have up to 8K mirrored RAM
+                &mut self.ram[addr & 0x1fff]
             }
             0x40 ... 0x7d | 0xc0 ... 0xfd => {
                 &mut self.rom[((bank as usize & 0x7f) - 0x40) << 16 | addr]

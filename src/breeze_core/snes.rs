@@ -219,7 +219,7 @@ impl Mem for Peripherals {
                 0x4218 ... 0x421f => self.input.load(addr),
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
-                0x8000 ... 0xffff => self.rom.load(bank, addr),
+                0x6000 ... 0xffff => self.rom.load(bank, addr),
                 _ => panic!("invalid/unimplemented load from ${:02X}:{:04X}", bank, addr)
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
