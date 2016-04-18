@@ -352,6 +352,7 @@ impl<M: Mem> Cpu<M> {
             0x5f => instr!(eor absolute_long_indexed_x),
             0x65 => instr!(adc direct),
             0x75 => instr!(adc direct_indexed_x),
+            0x67 => instr!(adc direct_indirect_long),
             0x69 => instr!(adc immediate_acc),
             0x6d => instr!(adc absolute),
             0x7d => instr!(adc absolute_indexed_x),
