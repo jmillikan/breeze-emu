@@ -340,6 +340,8 @@ impl Spc700 {
             0x60 => instr!(_ clrc),
             0x80 => instr!(_ setc),
             0xed => instr!(_ notc),
+            0xc0 => instr!(_ di),
+            0xa0 => instr!(_ ei),
 
             // Arithmetic
             0x9c => instr!(_ dec a),
@@ -355,6 +357,7 @@ impl Spc700 {
             0xbb => instr!(_ inc direct_indexed_x),
             0xac => instr!(_ inc abs),
             0x3a => instr!(_ incw direct),
+            0x1a => instr!(_ decw direct),
             0x28 => instr!(_ and immediate a),
             0x26 => instr!(_ and indirect_x a),
             0x37 => instr!(_ and indirect_indexed_y a),
@@ -655,6 +658,13 @@ impl Spc700 {
         self.psw.set_carry(!c);
     }
 
+    fn di(&mut self) {
+        self.psw.set_interrupt_enable(false);
+    }
+    fn ei(&mut self) {
+        self.psw.set_interrupt_enable(true);
+    }
+
     /// `cmp b, a` - Set N, Z, C according to `b - a`
     fn cmp(&mut self, a: AddressingMode, b: AddressingMode) {
         // Sets N, Z and C
@@ -949,6 +959,15 @@ impl Spc700 {
         // Sets N and Z
         let val = am.clone().loadw(self);
         let res = val.wrapping_add(1);
+        // FIXME Are the flags set right?
+        self.psw.set_negative(res & 0x8000 != 0);
+        self.psw.set_zero(res == 0);
+        am.storew(self, res);
+    }
+    fn decw(&mut self, am: AddressingMode) {
+        // Sets N and Z
+        let val = am.clone().loadw(self);
+        let res = val.wrapping_sub(1);
         // FIXME Are the flags set right?
         self.psw.set_negative(res & 0x8000 != 0);
         self.psw.set_zero(res == 0);

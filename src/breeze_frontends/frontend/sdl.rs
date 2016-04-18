@@ -147,18 +147,6 @@ impl SdlRenderer {
 #[allow(dead_code)]
 pub struct KeyboardInput;
 
-macro_rules! impl_fn {
-    ( $btn:ident = $key:ident ) => {
-        fn $btn(&mut self) -> bool {
-            SDL.with(|sdl_cell| {
-                let sdl = sdl_cell.borrow();
-                let state = sdl.event_pump.keyboard_state();
-                state.is_scancode_pressed(::sdl2::keyboard::Scancode::$key)
-            })
-        }
-    };
-}
-
 impl JoypadImpl for KeyboardInput {
     fn update_state(&mut self) -> JoypadState {
         use sdl2::keyboard::Scancode::*;
