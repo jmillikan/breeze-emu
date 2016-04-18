@@ -385,6 +385,7 @@ impl<M: Mem> Cpu<M> {
 
             // Register and memory transfers
             0x5b => instr!(tcd),
+            0x7b => instr!(tdc),
             0x1b => instr!(tcs),
             0x3b => instr!(tsc),
             0xba => instr!(tsx),
@@ -1554,6 +1555,10 @@ impl<M: Mem> Cpu<M> {
     /// Transfer 16-bit Accumulator to Direct Page Register
     fn tcd(&mut self) {
         self.d = self.p.set_nz(self.a);
+    }
+    /// Transfer Direct Page Register to 16-bit Accumulator
+    fn tdc(&mut self) {
+        self.a = self.p.set_nz(self.d);
     }
     /// Transfer 16-bit Accumulator to Stack Pointer
     fn tcs(&mut self) {
