@@ -861,28 +861,33 @@ impl<M: Mem> Cpu<M> {
     /// Subtract with Borrow from Accumulator
     fn sbc(&mut self, am: AddressingMode) {
         // Sets N, Z, C and V
-        let c: u16 = if self.p.carry() { 1 } else { 0 };
+        let c: i16 = if self.p.carry() { 1 } else { 0 };
 
-        if self.p.decimal() {
-            panic!("NYI: decimal sbc");
-        } else {
-            if self.p.small_acc() {
-                let a = self.a & 0xff;
-                let v = am.loadb(self) as u16 ^ 0xff;
-                let res = a + v + c;
-                self.p.set_carry(res > 255);
-                self.p.set_overflow((a & 0x80) == (v & 0x80) && (a & 0x80) != (res & 0x80));
+        if self.p.small_acc() {
+            let a = self.a as i16 & 0xff;
+            let v = am.loadb(self) as i16 ^ 0xff;
+            let mut res: i16 = if self.p.decimal() {
+                let mut low: i16 = (a & 0x0f) + (v & 0x0f) + c;
+                if low < 0x10 { low -= 6; }
 
-                self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+                (a & 0xf0) + (v & 0xf0) + (low & 0x0f) + if low > 0x0f { 0x10 } else { 0x00 }
             } else {
-                let v = am.loadw(self) ^ 0xffff;
-                let res = self.a as u32 + v as u32 + c as u32;
-                self.p.set_carry(res > 65535);
-                self.p.set_overflow((self.a ^ res as u16) & 0x8000 != 0 && (self.a ^ v) & 0x8000 == 0);
+                a + v + c
+            };
+            self.p.set_overflow((a & 0x80) == (v & 0x80) && (a & 0x80) != (res & 0x80));
+            if self.p.decimal() && res < 0x100 { res -= 0x60; }
+            self.p.set_carry(res > 255);
 
-                self.a = self.p.set_nz(res as u16);
-                self.cy += 1;
-            }
+            self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
+        } else {
+            assert!(!self.p.decimal());
+            let v = am.loadw(self) ^ 0xffff;
+            let res = self.a as u32 + v as u32 + c as u32;
+            self.p.set_carry(res > 65535);
+            self.p.set_overflow((self.a ^ res as u16) & 0x8000 != 0 && (self.a ^ v) & 0x8000 == 0);
+
+            self.a = self.p.set_nz(res as u16);
+            self.cy += 1;
         }
     }
 
