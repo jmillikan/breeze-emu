@@ -334,9 +334,20 @@ impl<'r> Snes<'r> {
     /// This will also create a default `Input` instance without any attached peripherals.
     pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Snes<'r> {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
-        let trace_start = env::var("BREEZE_TRACE")
-            .map(|string| string.parse().expect("invalid value for BREEZE_TRACE"))
-            .unwrap_or(!0);
+        let trace_start: u64 = match env::var("BREEZE_TRACE") {
+            Ok(string) => match string.parse() {
+                Ok(trace) => {
+                    info!("BREEZE_TRACE env var: starting trace after {} master cycles (make sure \
+                           that the `trace` log level is enabled for the `wdc65816` crate)", trace);
+                    trace
+                },
+                Err(_) => {
+                    panic!("invalid value for BREEZE_TRACE: {}", string);
+                },
+            },
+            Err(env::VarError::NotPresent) => !0,
+            Err(env::VarError::NotUnicode(_)) => panic!("BREEZE_TRACE value isn't valid unicode"),
+        };
 
         Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
