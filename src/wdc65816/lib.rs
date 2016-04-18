@@ -831,7 +831,7 @@ impl<M: Mem> Cpu<M> {
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
         } else {
             let val = am.loadw(self);
-            let mut res = if self.p.decimal() {
+            let mut res: u32 = if self.p.decimal() {
                 let mut res0 = (self.a & 0x000f) + (val & 0x000f) + c;
                 if res0 > 0x0009 { res0 += 0x0006; }
 
@@ -880,11 +880,28 @@ impl<M: Mem> Cpu<M> {
 
             self.a = (self.a & 0xff00) | self.p.set_nz_8(res as u8) as u16;
         } else {
-            assert!(!self.p.decimal());
-            let v = am.loadw(self) ^ 0xffff;
-            let res = self.a as u32 + v as u32 + c as u32;
+            let a = self.a as i32;
+            let v = am.loadw(self) as i32 ^ 0xffff;
+            let mut res: i32 = if self.p.decimal() {
+                let mut res0 = (a & 0x000f) + (v & 0x000f) + c as i32;
+                if res0 < 0x0010 { res0 -= 0x0006; }
+
+                let mut res1 = (a & 0x00f0) + (v & 0x00f0) + (res0 & 0x000f) +
+                    if res0 > 0x000f { 0x10 } else { 0x00 };
+                if res1 < 0x0100 { res1 -= 0x0060; }
+
+                let mut res2 = (a & 0x0f00) + (v & 0x0f00) + (res1 & 0x00ff) +
+                    if res1 > 0x00ff { 0x100 } else { 0x000 };
+                if res2 < 0x1000 { res2 -= 0x0600; }
+
+                (a as i32 & 0xf000) + (v as i32 & 0xf000) + (res2 as i32 & 0x0fff) +
+                    if res2 > 0x0fff { 0x1000 } else { 0x0000 }
+            } else {
+                self.a as i32 + v as i32 + c as i32
+            };
+            self.p.set_overflow((self.a ^ res as u16) & 0x8000 != 0 && (self.a ^ v as u16) & 0x8000 == 0);
+            if self.p.decimal() && res < 0x10000 { res -= 0x6000; }
             self.p.set_carry(res > 65535);
-            self.p.set_overflow((self.a ^ res as u16) & 0x8000 != 0 && (self.a ^ v) & 0x8000 == 0);
 
             self.a = self.p.set_nz(res as u16);
             self.cy += 1;
