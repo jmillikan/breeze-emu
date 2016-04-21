@@ -2,6 +2,16 @@
 
 use super::{Ppu, Rgb};
 
+/// BG layer scanline cache.
+///
+/// This cache stores a prerendered scanline of all background layers. The cache is created lazily
+/// (when BG layer pixels are looked up), so we will not waste time caching a disabled BG layer.
+///
+/// TODO: Unimplemented
+#[derive(Default)]
+pub struct BgCache {
+}
+
 /// Collected background settings
 struct BgSettings {
     /// Mosaic pixel size (1-16). 1 = Normal pixels.
@@ -179,11 +189,13 @@ impl Ppu {
     }
 
 
+    /// Main entry point into the BG layer renderer.
+    ///
     /// Lookup the color of the given background layer (1-4) at the current pixel, using the given
-    /// priority (0-1) only. This will also scroll backgrounds accordingly and apply color math.
+    /// priority (0-1) only. This will also scroll backgrounds accordingly.
     ///
     /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
-    pub fn lookup_bg_color(&self, bg_num: u8, prio: u8) -> Option<Rgb> {
+    pub fn lookup_bg_color(&mut self, bg_num: u8, prio: u8) -> Option<Rgb> {
         debug_assert!(bg_num >= 1 && bg_num <= 4);
         debug_assert!(prio == 0 || prio == 1);
         if !self.bg_enabled(bg_num) { return None }

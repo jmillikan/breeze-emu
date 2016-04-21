@@ -14,6 +14,7 @@ mod regs;
 mod sprites;
 
 use self::sprites::SpriteRenderState;
+use self::bg::BgCache;
 use self::oam::Oam;
 use self::cgram::Cgram;
 
@@ -44,6 +45,9 @@ pub struct Ppu {
     /// Opaque state object used by the render code. This value may change between frames/scanlines
     /// and is used as a cache between pixels.
     sprite_render_state: SpriteRenderState,
+
+    /// Cache for faster background rendering
+    bg_cache: BgCache,
 
     /// Object Attribute Memory
     ///
@@ -388,7 +392,7 @@ impl_save_state!(Ppu {
     wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline,
     x, time_over, range_over
 } ignore {
-    framebuf, sprite_render_state
+    framebuf, sprite_render_state, bg_cache
 });
 
 #[derive(Debug, Copy, Clone)]
