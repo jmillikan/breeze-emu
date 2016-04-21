@@ -9,6 +9,7 @@ extern crate test;
 use breeze_core::snes::Snes;
 use breeze_core::rom::Rom;
 use breeze_frontends::RENDERER_MAP;
+use breeze_frontends::frontend::dummy::DummySink;
 
 use test::Bencher;
 use std::iter;
@@ -88,7 +89,7 @@ fn dumb(b: &mut Bencher) {
 
     // FIXME: Just use DummyRenderer directly
     let mut renderer = RENDERER_MAP.get("dummy").unwrap().unwrap()();
-    let mut snes = Snes::new(rom, &mut *renderer);
+    let mut snes = Snes::new(rom, &mut *renderer, Box::new(DummySink));
     b.iter(|| {
         snes.render_frame();
     });
