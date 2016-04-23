@@ -227,8 +227,12 @@ impl Ppu {
 
     /// Returns the value of the current pixel on the sprite layer if it has the given priority
     /// (and `None` otherwise).
-    pub fn maybe_draw_sprite_pixel(&self, prio: u8) -> Option<Rgb> {
-        if self.tm & 0x10 == 0 { return None }  // OBJ layer disabled
+    pub fn maybe_draw_sprite_pixel(&self, prio: u8, subscreen: bool) -> Option<Rgb> {
+        let enable_reg = if subscreen { self.ts } else { self.tm };
+        if enable_reg & 0x10 == 0 {
+            // OBJ layer disabled
+            return None;
+        }
 
         match self.sprite_render_state.sprite_scanline[self.x as usize] {
             None => None,   // No pixel or transparent pixel on OBJ layer

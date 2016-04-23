@@ -67,9 +67,7 @@ impl Ppu {
     /// from.
     ///
     /// If `sub` is true, fetches the pixel from the subscreen. Otherwise, the main screen is used.
-    fn get_raw_pixel(&mut self, sub: bool) -> (Rgb, Layer) {
-        assert!(!sub, "NYI: subscreen");
-
+    fn get_raw_pixel(&mut self, subscreen: bool) -> (Rgb, Layer) {
         macro_rules! e {
             ( $e:expr ) => ( $e );
         }
@@ -87,12 +85,12 @@ impl Ppu {
         // executed).
         macro_rules! try_layer {
             ( Sprites with priority $prio:tt ) => {
-                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio)) {
+                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio), subscreen) {
                     return (rgb, Layer::Obj);
                 }
             };
             ( BG $bg:tt tiles with priority $prio:tt ) => {
-                if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio)) {
+                if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio), subscreen) {
                     return (rgb, bglayer!($bg));
                 }
             };

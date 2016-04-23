@@ -102,7 +102,10 @@ struct TilemapEntry {
 
 impl Ppu {
     /// Determines whether the given BG layer (1-4) is enabled
-    fn bg_enabled(&self, bg: u8) -> bool { self.tm & (1 << (bg - 1)) != 0 }
+    fn bg_enabled(&self, bg: u8, subscreen: bool) -> bool {
+        let reg = if subscreen { self.ts } else { self.tm };
+        reg & (1 << (bg - 1)) != 0
+    }
 
     /// Reads the tilemap entry at the given VRAM word address.
     ///     vhopppcc cccccccc (high, low)
@@ -241,10 +244,13 @@ impl Ppu {
     /// priority (0-1) only. This will also scroll backgrounds accordingly.
     ///
     /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
-    pub fn lookup_bg_color(&mut self, bg_num: u8, prio: u8) -> Option<Rgb> {
+    pub fn lookup_bg_color(&mut self, bg_num: u8, prio: u8, subscreen: bool) -> Option<Rgb> {
         debug_assert!(bg_num >= 1 && bg_num <= 4);
         debug_assert!(prio == 0 || prio == 1);
-        if !self.bg_enabled(bg_num) { return None }
+
+        if !self.bg_enabled(bg_num, subscreen) {
+            return None;
+        }
 
         if self.x == 0 {
             // Before we draw the first pixel, make sure that we invalidate the cache so it is
