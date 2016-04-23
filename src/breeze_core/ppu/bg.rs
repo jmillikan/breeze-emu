@@ -6,10 +6,61 @@ use super::{Ppu, Rgb};
 ///
 /// This cache stores a prerendered scanline of all background layers. The cache is created lazily
 /// (when BG layer pixels are looked up), so we will not waste time caching a disabled BG layer.
-///
-/// TODO: Unimplemented
 #[derive(Default)]
 pub struct BgCache {
+    layers: [BgLayerCache; 4],
+}
+
+/// Data that's stored in the BG layer caches for a single pixel
+#[derive(Copy, Clone, Default)]
+struct CachedPixel {
+    // These are just copied from `TilemapEntry`.
+
+    /// Tile priority bit (0-1)
+    priority: u8,
+    /// Tile palette (0-7)
+    palette: u8,
+    /// Index into the character/tile data, where the actual tile character data is stored in
+    /// bitplanes (10 bits)
+    tile_number: u16,
+    /// Precalculated color of the pixel (15-bit RGB). `None` = transparent.
+    color: Option<Rgb>,
+}
+
+/// BG cache for a single layer
+struct BgLayerCache {
+    /// Whether this cache contains valid data. If `false`, the cache will be refreshed on next
+    /// access.
+    valid: bool,
+    /// Stores the prerendered scanline
+    scanline: [CachedPixel; super::SCREEN_WIDTH as usize],
+}
+
+impl Default for BgLayerCache {
+    fn default() -> Self {
+        BgLayerCache {
+            valid: false,
+            scanline: [CachedPixel::default(); super::SCREEN_WIDTH as usize],
+        }
+    }
+}
+
+impl BgLayerCache {
+    /// Invalidates the cache of this layer, causing it to be rebuilt on next access.
+    #[allow(dead_code)] // FIXME Use in the right locations
+    fn invalidate(&mut self) {
+        self.valid = false;
+    }
+}
+
+impl BgCache {
+    /// Invalidates the BG cache of all layers
+    fn invalidate_all(&mut self) {
+        self.layers[0].valid = false;
+        self.layers[1].valid = false;
+        self.layers[2].valid = false;
+        self.layers[3].valid = false;
+    }
 }
 
 /// Collected background settings
@@ -200,58 +251,100 @@ impl Ppu {
         debug_assert!(prio == 0 || prio == 1);
         if !self.bg_enabled(bg_num) { return None }
 
-        // Apply BG scrolling and get the tile coordinates
-        // FIXME Apply mosaic filter
-        // FIXME Fix this: "Note that many games will set their vertical scroll values to -1 rather
-        // than 0. This is because the SNES loads OBJ data for each scanline during the previous
-        // scanline. The very first line, though, wouldn’t have any OBJ data loaded! So the SNES
-        // doesn’t actually output scanline 0, although it does everything to render it. These
-        // games want the first line of their tilemap to be the first line output, so they set
-        // their VOFS registers in this manner. Note that an interlace screen needs -2 rather than
-        // -1 to properly correct for the missing line 0 (and an emulator would need to add 2
-        // instead of 1 to account for this)."
-        let x = self.x;
-        let y = self.scanline;
-        let bg = self.bg_settings(bg_num);
-        let tile_size = if bg.tile_size_16 { 16 } else { 8 };
-        let (hofs, vofs) = (bg.hofs, bg.vofs);
-        let tile_x = x.wrapping_add(hofs) / tile_size as u16;
-        let tile_y = y.wrapping_add(vofs) / tile_size as u16;
-        let off_x = (x.wrapping_add(hofs) % tile_size as u16) as u8;
-        let off_y = (y.wrapping_add(vofs) % tile_size as u16) as u8;
-        let (sx, sy) = (!bg.tilemap_mirror_h, !bg.tilemap_mirror_v);
-
-        // Calculate the VRAM word address, where the tilemap entry for our tile is stored
-        // FIXME Check if this really is correct
-        let tilemap_entry_word_address =
-            bg.tilemap_word_addr |
-            ((tile_y & 0x1f) << 5) |
-            (tile_x & 0x1f) |
-            if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} |
-            if sx {(tile_x & 0x20) << 5} else {0};
-        let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
-        if tilemap_entry.priority != prio { return None }
-
-        let color_bits = self.color_bits_for_bg(bg_num);
-        if color_bits == 8 {
-            // can use direct color mode
-            debug_assert!(self.cgwsel & 0x01 == 0, "NYI: direct color mode");
+        if self.x == 0 {
+            // Before we draw the first pixel, make sure that we invalidate the cache so it is
+            // rebuilt first.
+            self.bg_cache.invalidate_all();
         }
 
-        let bitplane_start_addr =
-            (bg.chr_addr << 1) +
-            (tilemap_entry.tile_number * 8 * color_bits as u16);   // 8 bytes per bitplane
+        if !self.bg_cache.layers[bg_num as usize - 1].valid {
+            // Render the current scanline of this BG layer into the cache.
+            // We render starting at `self.x` (the pixel we actually need) until the end of the
+            // scanline. Note that this means that the `valid` flag is only relevant for the
+            // leftover part of the scanline, not the entire cached scanline.
 
-        let palette_base = self.palette_base_for_bg_tile(bg_num, tilemap_entry.palette);
-        let palette_index = self.read_chr_entry(color_bits,
-                                                bitplane_start_addr,
-                                                tile_size,
-                                                (off_x, off_y),
-                                                (tilemap_entry.vflip, tilemap_entry.hflip));
+            // Apply BG scrolling and get the tile coordinates
+            // FIXME Apply mosaic filter
+            // FIXME Fix this: "Note that many games will set their vertical scroll values to -1 rather
+            // than 0. This is because the SNES loads OBJ data for each scanline during the previous
+            // scanline. The very first line, though, wouldn’t have any OBJ data loaded! So the SNES
+            // doesn’t actually output scanline 0, although it does everything to render it. These
+            // games want the first line of their tilemap to be the first line output, so they set
+            // their VOFS registers in this manner. Note that an interlace screen needs -2 rather than
+            // -1 to properly correct for the missing line 0 (and an emulator would need to add 2
+            // instead of 1 to account for this)."
+            let mut x = self.x;
+            let y = self.scanline;
+            let bg = self.bg_settings(bg_num);
+            let tile_size = if bg.tile_size_16 { 16 } else { 8 };
+            let (hofs, vofs) = (bg.hofs, bg.vofs);
+            let (sx, sy) = (!bg.tilemap_mirror_h, !bg.tilemap_mirror_v);
 
-        match palette_index {
-            0 => None,
-            _ => Some(self.cgram.get_color(palette_base + palette_index)),
+            let color_bits = self.color_bits_for_bg(bg_num);
+            if color_bits == 8 {
+                // can use direct color mode
+                debug_assert!(self.cgwsel & 0x01 == 0, "NYI: direct color mode");
+            }
+
+            let mut tile_x = x.wrapping_add(hofs) / tile_size as u16;
+            let tile_y = y.wrapping_add(vofs) / tile_size as u16;
+            let mut off_x = (x.wrapping_add(hofs) % tile_size as u16) as u8;
+            let off_y = (y.wrapping_add(vofs) % tile_size as u16) as u8;
+
+            while x < super::SCREEN_WIDTH as u16 {
+                // Render current tile (`tile_x`) starting at `off_x` until the end of the tile,
+                // then go to next tile and set `off_x = 0`
+
+                // Calculate the VRAM word address, where the tilemap entry for our tile is stored
+                let tilemap_entry_word_address =
+                    bg.tilemap_word_addr |
+                    ((tile_y & 0x1f) << 5) |
+                    (tile_x & 0x1f) |
+                    if sy {(tile_y & 0x20) << if sx {6} else {5}} else {0} |
+                    if sx {(tile_x & 0x20) << 5} else {0};
+                let tilemap_entry = self.tilemap_entry(tilemap_entry_word_address);
+
+                let bitplane_start_addr =
+                    (bg.chr_addr << 1) +
+                    (tilemap_entry.tile_number * 8 * color_bits as u16);   // 8 bytes per bitplane
+
+                let palette_base = self.palette_base_for_bg_tile(bg_num, tilemap_entry.palette);
+
+                while off_x < tile_size && x < super::SCREEN_WIDTH as u16 {
+                    let palette_index = self.read_chr_entry(color_bits,
+                                                            bitplane_start_addr,
+                                                            tile_size,
+                                                            (off_x, off_y),
+                                                            (tilemap_entry.vflip, tilemap_entry.hflip));
+
+                    let rgb = match palette_index {
+                        0 => None,
+                        _ => Some(self.cgram.get_color(palette_base + palette_index)),
+                    };
+
+                    self.bg_cache.layers[bg_num as usize - 1].scanline[x as usize] = CachedPixel {
+                        priority: tilemap_entry.priority,
+                        palette: tilemap_entry.palette,
+                        tile_number: tilemap_entry.tile_number,
+                        color: rgb,
+                    };
+                    x += 1;
+                    off_x += 1;
+                }
+
+                tile_x += 1;
+                off_x = 0;
+            }
+
+            self.bg_cache.layers[bg_num as usize - 1].valid = true;
+        }
+
+        // Cache must be valid now, so we can access the pixel we need:
+        let pixel = &self.bg_cache.layers[bg_num as usize - 1].scanline[self.x as usize];
+        if pixel.priority == prio {
+            return pixel.color;
+        } else {
+            return None;
         }
     }
 }
