@@ -27,12 +27,12 @@ use super::{Ppu, Rgb};
 
 /// An enum of all layers a pixel can come from
 enum Layer {
-    Bg1,
-    Bg2,
-    Bg3,
-    Bg4,
-    Obj,
-    Backdrop,
+    Bg1 = 0,
+    Bg2 = 1,
+    Bg3 = 2,
+    Bg4 = 3,
+    Obj = 4,
+    Backdrop = 5,
 }
 
 /// Rendering
@@ -151,6 +151,11 @@ impl Ppu {
         (self.backdrop_color(), Layer::Backdrop)
     }
 
+    fn color_math_enabled(&self, layer: Layer) -> bool {
+        // FIXME Take color window and CGWSEL into account
+        self.cgadsub & (1 << layer as u8) != 0
+    }
+
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
     /// the current pixel is on the screen.
     pub fn render_pixel(&mut self) -> Rgb {
@@ -179,7 +184,42 @@ impl Ppu {
             self.collect_sprite_data_for_scanline();
         }
 
-        self.get_raw_pixel(false).0
+        let (main_pix_color, main_pix_layer) = self.get_raw_pixel(false);
+        if self.color_math_enabled(main_pix_layer) {
+            let math_color = if self.cgwsel & 0x02 == 0 {
+                // Fixed color
+                // FIXME: This is 5-bit RGB, which is totally wrong. Is it enough to do the normal
+                // adjustment?
+                Rgb {
+                    r: self.coldata_r,
+                    g: self.coldata_g,
+                    b: self.coldata_b,
+                }
+            } else {
+                // Subscreen
+                self.get_raw_pixel(true).0
+            };
+
+            if self.cgadsub & 0x80 == 0 {
+                // Add
+                // FIXME impl Add/Sub for Rgb ?
+                Rgb {
+                    r: main_pix_color.r + math_color.r,
+                    g: main_pix_color.g + math_color.g,
+                    b: main_pix_color.b + math_color.b,
+                }
+            } else {
+                // Subtract
+                Rgb {
+                    r: main_pix_color.r - math_color.r,
+                    g: main_pix_color.g - math_color.g,
+                    b: main_pix_color.b - math_color.b,
+                }
+            }
+        } else {
+            // No color math
+            main_pix_color
+        }
     }
 
     /// Reads character data for a pixel and returns the palette index stored in the bitplanes.
