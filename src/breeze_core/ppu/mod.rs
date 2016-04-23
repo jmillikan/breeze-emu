@@ -228,6 +228,9 @@ pub struct Ppu {
     vmain: u8,
     /// `$2116`/`$2117` Low/High byte of VRAM word address
     vmaddr: u16,
+    /// VRAM read prefetch register
+    vram_prefetch: u16,
+
     /// `$211a` Mode 7 Settings
     /// `rc----xy`
     /// * `r`: Playing field size (`0` = 1024x1024, `1` = uhh... larger?)
@@ -264,7 +267,6 @@ pub struct Ppu {
     cgadd: u8,
     /// Store the low byte to write to the current CGRAM position after the high byte is written by
     /// the CPU (writes are always done in pairs - like the low 512 bytes of OAM).
-    /// FIXME: Is this correct?
     cg_low_buf: Option<u8>,
 
     /// `$2123` Window Mask Settings for BG1 and BG2
@@ -387,10 +389,10 @@ pub struct Ppu {
 impl_save_state!(Ppu {
     oam, cgram, vram, inidisp, obsel, oamaddl, oamaddh, oamaddr, oam_lsb, bgmode, mosaic, bg1sc,
     bg2sc, bg3sc, bg4sc, bg12nba, bg34nba, bg1hofs, m7hofs, bg1vofs, m7vofs, bg2hofs, bg2vofs,
-    bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, m7sel, m7a, m7b, m7b_last,
-    m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2, wh3, wbglog,
-    wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b, setini, scanline,
-    x, time_over, range_over
+    bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, vram_prefetch, m7sel, m7a,
+    m7b, m7b_last, m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2,
+    wh3, wbglog, wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b,
+    setini, scanline, x, time_over, range_over
 } ignore {
     framebuf, sprite_render_state, bg_cache
 });
@@ -415,6 +417,8 @@ impl Ppu {
             0x2136 => ((self.m7a as u32 * self.m7b_last as u32) >> 16) as u8,
             // RDOAM
             0x2138 => self.oam_load(),
+            0x2139 => self.vram_load_low(),
+            0x213a => self.vram_load_high(),
             0x213e => {
                 (if self.time_over { 0x80 } else { 0x00 })
                 | (if self.range_over { 0x40 } else { 0x00 })
@@ -460,7 +464,7 @@ impl Ppu {
             0x211b ... 0x2120 => self.m7_store(addr, value),
             0x2121 => {
                 self.cgadd = value;
-                self.cg_low_buf = None; // < FIXME: Is this correct?
+                self.cg_low_buf = None;
             }
             0x2122 => match self.cg_low_buf {
                 None => self.cg_low_buf = Some(value),
@@ -643,6 +647,16 @@ impl Ppu {
         byte
     }
 
+    /// Performs VRAM prefetch, loading 16 bits of data into `self.vram_prefetch`.
+    ///
+    /// VRAM prefetch occurs after changing the VRAM address by writing $2116/$2117, or *before*
+    /// incrementing the VRAM address after a read from $2139/$213A.
+    fn vram_prefetch(&mut self) {
+        let addr = self.vram_translate_addr(self.vmaddr * 2);
+        // FIXME is the endianness correct?
+        self.vram_prefetch = (self.vram[addr + 1] as u16) << 8 | self.vram[addr] as u16;
+    }
+
     /// Get the value to increment the VRAM word address by
     fn vram_addr_increment(&self) -> u16 {
         match self.vmain & 0b11 {
@@ -684,5 +698,25 @@ impl Ppu {
         let addr = self.vram_translate_addr(self.vmaddr * 2 + 1);
         self.vram[addr] = data;
         self.vmaddr += inc;
+    }
+    fn vram_load_low(&mut self) -> u8 {
+        let inc = if self.vmain & 0x80 == 0 { 0 } else { self.vram_addr_increment() };
+        let val = self.vram_prefetch as u8;
+        if inc != 0 {
+            // FIXME maybe only VMAIN bit 7 is responsible for prefetch?
+            self.vram_prefetch();
+            self.vmaddr += inc;
+        }
+        val
+    }
+    fn vram_load_high(&mut self) -> u8 {
+        let inc = if self.vmain & 0x80 == 0 { 0 } else { self.vram_addr_increment() };
+        let val = (self.vram_prefetch >> 8) as u8;
+        if inc != 0 {
+            // FIXME maybe only VMAIN bit 7 is responsible for prefetch?
+            self.vram_prefetch();
+            self.vmaddr += inc;
+        }
+        val
     }
 }
