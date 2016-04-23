@@ -337,6 +337,7 @@ impl<M: Mem> Cpu<M> {
             0x09 => instr!(ora immediate_acc),
             0x12 => instr!(ora direct_indirect),
             0x07 => instr!(ora direct_indirect_long),
+            0x17 => instr!(ora direct_indirect_long_idx),
             0x0d => instr!(ora absolute),
             0x1d => instr!(ora absolute_indexed_x),
             0x19 => instr!(ora absolute_indexed_y),
