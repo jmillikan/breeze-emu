@@ -25,6 +25,16 @@
 
 use super::{Ppu, Rgb};
 
+/// An enum of all layers a pixel can come from
+enum Layer {
+    Bg1,
+    Bg2,
+    Bg3,
+    Bg4,
+    Obj,
+    Backdrop,
+}
+
 /// Rendering
 impl Ppu {
     /// Get the configured sprite size in pixels. If `size_toggle` is `false`, gets the size of
@@ -51,6 +61,96 @@ impl Ppu {
     fn backdrop_color(&self) -> Rgb {
         // TODO: Color math
         self.cgram.get_color(0)
+    }
+
+    /// Renders a "raw" pixel (not doing color math), and returns the color and the layer it came
+    /// from.
+    ///
+    /// If `sub` is true, fetches the pixel from the subscreen. Otherwise, the main screen is used.
+    fn get_raw_pixel(&mut self, sub: bool) -> (Rgb, Layer) {
+        assert!(!sub, "NYI: subscreen");
+
+        macro_rules! e {
+            ( $e:expr ) => ( $e );
+        }
+
+        macro_rules! bglayer {
+            ( 1 ) => { Layer::Bg1 };
+            ( 2 ) => { Layer::Bg2 };
+            ( 3 ) => { Layer::Bg3 };
+            ( 4 ) => { Layer::Bg4 };
+        }
+
+        // This macro gets the current pixel from a tile with given priority in the given layer.
+        // If the pixel is non-transparent, it will return its RGB value (after applying color
+        // math). If it is transparent, it will do nothing (ie. the code following this macro is
+        // executed).
+        macro_rules! try_layer {
+            ( Sprites with priority $prio:tt ) => {
+                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio)) {
+                    return (rgb, Layer::Obj);
+                }
+            };
+            ( BG $bg:tt tiles with priority $prio:tt ) => {
+                if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio)) {
+                    return (rgb, bglayer!($bg));
+                }
+            };
+        }
+
+        match self.bg_mode() {
+            0 => {
+                // I love macros <3
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 3 tiles with priority 1);
+                try_layer!(BG 4 tiles with priority 1);
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 3 tiles with priority 0);
+                try_layer!(BG 4 tiles with priority 0);
+            }
+            1 => {
+                if self.bgmode & 0x08 != 0 { try_layer!(BG 3 tiles with priority 1); }
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+                try_layer!(Sprites with priority 1);
+                if self.bgmode & 0x08 == 0 { try_layer!(BG 3 tiles with priority 1); }
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 3 tiles with priority 0);
+            }
+            2 ... 5 => {
+                // FIXME Do the background priorities differ here?
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(BG 2 tiles with priority 1);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(Sprites with priority 0);
+                try_layer!(BG 2 tiles with priority 0);
+            }
+            6 => {
+                try_layer!(Sprites with priority 3);
+                try_layer!(BG 1 tiles with priority 1);
+                try_layer!(Sprites with priority 2);
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 1 tiles with priority 0);
+                try_layer!(Sprites with priority 0);
+            }
+            7 => panic!("NYI: BG mode 7"),
+            _ => unreachable!(),
+        }
+
+        (self.backdrop_color(), Layer::Backdrop)
     }
 
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
@@ -81,82 +181,7 @@ impl Ppu {
             self.collect_sprite_data_for_scanline();
         }
 
-        macro_rules! e {
-            ( $e:expr ) => ( $e );
-        }
-
-        // This macro gets the current pixel from a tile with given priority in the given layer.
-        // If the pixel is non-transparent, it will return its RGB value (after applying color
-        // math). If it is transparent, it will do nothing (ie. the code following this macro is
-        // executed).
-        macro_rules! try_layer {
-            ( Sprites with priority $prio:tt ) => {
-                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio)) {
-                    return rgb
-                }
-            };
-            ( BG $bg:tt tiles with priority $prio:tt ) => {
-                if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio)) {
-                    return rgb
-                }
-            };
-        }
-
-        match self.bg_mode() {
-            0 => {
-                // I love macros <3
-                try_layer!(Sprites with priority 3);
-                try_layer!(BG 1 tiles with priority 1);
-                try_layer!(BG 2 tiles with priority 1);
-                try_layer!(Sprites with priority 2);
-                try_layer!(BG 1 tiles with priority 0);
-                try_layer!(BG 2 tiles with priority 0);
-                try_layer!(Sprites with priority 1);
-                try_layer!(BG 3 tiles with priority 1);
-                try_layer!(BG 4 tiles with priority 1);
-                try_layer!(Sprites with priority 0);
-                try_layer!(BG 3 tiles with priority 0);
-                try_layer!(BG 4 tiles with priority 0);
-                self.backdrop_color()
-            }
-            1 => {
-                if self.bgmode & 0x08 != 0 { try_layer!(BG 3 tiles with priority 1) }
-                try_layer!(Sprites with priority 3);
-                try_layer!(BG 1 tiles with priority 1);
-                try_layer!(BG 2 tiles with priority 1);
-                try_layer!(Sprites with priority 2);
-                try_layer!(BG 1 tiles with priority 0);
-                try_layer!(BG 2 tiles with priority 0);
-                try_layer!(Sprites with priority 1);
-                if self.bgmode & 0x08 == 0 { try_layer!(BG 3 tiles with priority 1) }
-                try_layer!(Sprites with priority 0);
-                try_layer!(BG 3 tiles with priority 0);
-                self.backdrop_color()
-            }
-            2 ... 5 => {
-                // FIXME Do the background priorities differ here?
-                try_layer!(Sprites with priority 3);
-                try_layer!(BG 1 tiles with priority 1);
-                try_layer!(Sprites with priority 2);
-                try_layer!(BG 2 tiles with priority 1);
-                try_layer!(Sprites with priority 1);
-                try_layer!(BG 1 tiles with priority 0);
-                try_layer!(Sprites with priority 0);
-                try_layer!(BG 2 tiles with priority 0);
-                self.backdrop_color()
-            }
-            6 => {
-                try_layer!(Sprites with priority 3);
-                try_layer!(BG 1 tiles with priority 1);
-                try_layer!(Sprites with priority 2);
-                try_layer!(Sprites with priority 1);
-                try_layer!(BG 1 tiles with priority 0);
-                try_layer!(Sprites with priority 0);
-                self.backdrop_color()
-            }
-            7 => panic!("NYI: BG mode 7"),
-            _ => unreachable!(),
-        }
+        self.get_raw_pixel(false).0
     }
 
     /// Reads character data for a pixel and returns the palette index stored in the bitplanes.

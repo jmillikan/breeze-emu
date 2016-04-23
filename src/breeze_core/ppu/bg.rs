@@ -18,11 +18,6 @@ struct CachedPixel {
 
     /// Tile priority bit (0-1)
     priority: u8,
-    /// Tile palette (0-7)
-    palette: u8,
-    /// Index into the character/tile data, where the actual tile character data is stored in
-    /// bitplanes (10 bits)
-    tile_number: u16,
     /// Precalculated color of the pixel (15-bit RGB). `None` = transparent.
     color: Option<Rgb>,
 }
@@ -324,8 +319,6 @@ impl Ppu {
 
                     self.bg_cache.layers[bg_num as usize - 1].scanline[x as usize] = CachedPixel {
                         priority: tilemap_entry.priority,
-                        palette: tilemap_entry.palette,
-                        tile_number: tilemap_entry.tile_number,
                         color: rgb,
                     };
                     x += 1;
