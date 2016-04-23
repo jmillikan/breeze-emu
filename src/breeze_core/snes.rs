@@ -456,8 +456,10 @@ impl<'r> Snes<'r> {
                     (225, 0) => {
                         // First V-Blank pixel
                         self.cpu.mem.input.new_frame();
+
+                        // FIXME This timing is wrong, the NMI flag is set later
+                        self.cpu.mem.nmi = true;
                         if self.cpu.mem.nmi_enabled() {
-                            self.cpu.mem.nmi = true;
                             self.cpu.trigger_nmi();
                             // XXX Break to handle the NMI immediately. Let's hope we don't owe the PPU
                             // too many cycles.
