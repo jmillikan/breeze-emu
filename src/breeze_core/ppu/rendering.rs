@@ -186,15 +186,11 @@ impl Ppu {
 
         let (main_pix_color, main_pix_layer) = self.get_raw_pixel(false);
         if self.color_math_enabled(main_pix_layer) {
+            // FIXME Is color math done on 5-bit RGB? (We use adjusted 24-bit RGB, which is most
+            // likely wrong!)
             let math_color = if self.cgwsel & 0x02 == 0 {
                 // Fixed color
-                // FIXME: This is 5-bit RGB, which is totally wrong. Is it enough to do the normal
-                // adjustment?
-                Rgb {
-                    r: self.coldata_r,
-                    g: self.coldata_g,
-                    b: self.coldata_b,
-                }
+                panic!("NYI: Fixed color math");
             } else {
                 // Subscreen
                 self.get_raw_pixel(true).0
