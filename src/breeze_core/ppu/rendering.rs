@@ -27,12 +27,15 @@ use super::{Ppu, Rgb};
 
 /// An enum of all layers a pixel can come from
 enum Layer {
-    Bg1 = 0,
-    Bg2 = 1,
-    Bg3 = 2,
-    Bg4 = 3,
-    Obj = 4,
-    Backdrop = 5,
+    Bg1,
+    Bg2,
+    Bg3,
+    Bg4,
+    Obj {
+        /// Sprites with a palette 0-3 are opaque and cannot participate in color math
+        opaque: bool,
+    },
+    Backdrop,
 }
 
 /// Rendering
@@ -85,8 +88,8 @@ impl Ppu {
         // executed).
         macro_rules! try_layer {
             ( Sprites with priority $prio:tt ) => {
-                if let Some(rgb) = self.maybe_draw_sprite_pixel(e!($prio), subscreen) {
-                    return (rgb, Layer::Obj);
+                if let Some((rgb, opaque)) = self.maybe_draw_sprite_pixel(e!($prio), subscreen) {
+                    return (rgb, Layer::Obj { opaque: opaque });
                 }
             };
             ( BG $bg:tt tiles with priority $prio:tt ) => {
@@ -153,7 +156,17 @@ impl Ppu {
 
     fn color_math_enabled(&self, layer: Layer) -> bool {
         // FIXME Take color window and CGWSEL into account
-        self.cgadsub & (1 << layer as u8) != 0
+        let bit = match layer {
+            Layer::Bg1 => 0,
+            Layer::Bg2 => 1,
+            Layer::Bg3 => 2,
+            Layer::Bg4 => 3,
+            Layer::Obj { opaque: false } => 4,
+            Layer::Obj { opaque: true } => return false,    // No color math for you!
+            Layer::Backdrop => 5,
+        };
+
+        self.cgadsub & (1 << bit) != 0
     }
 
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
@@ -193,6 +206,7 @@ impl Ppu {
                 panic!("NYI: Fixed color math");
             } else {
                 // Subscreen
+                // FIXME: I think subscreen backdrop should use COLDATA instead of the backdrop col?
                 self.get_raw_pixel(true).0
             };
 
@@ -200,16 +214,16 @@ impl Ppu {
                 // Add
                 // FIXME impl Add/Sub for Rgb ?
                 Rgb {
-                    r: main_pix_color.r.wrapping_add(math_color.r),
-                    g: main_pix_color.g.wrapping_add(math_color.g),
-                    b: main_pix_color.b.wrapping_add(math_color.b),
+                    r: main_pix_color.r.saturating_add(math_color.r),
+                    g: main_pix_color.g.saturating_add(math_color.g),
+                    b: main_pix_color.b.saturating_add(math_color.b),
                 }
             } else {
                 // Subtract
                 Rgb {
-                    r: main_pix_color.r.wrapping_sub(math_color.r),
-                    g: main_pix_color.g.wrapping_sub(math_color.g),
-                    b: main_pix_color.b.wrapping_sub(math_color.b),
+                    r: main_pix_color.r.saturating_sub(math_color.r),
+                    g: main_pix_color.g.saturating_sub(math_color.g),
+                    b: main_pix_color.b.saturating_sub(math_color.b),
                 }
             }
         } else {

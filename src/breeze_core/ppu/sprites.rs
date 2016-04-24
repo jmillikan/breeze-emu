@@ -5,13 +5,22 @@ use super::oam::OamEntry;
 
 use flexvec::FlexVec;
 
+/// Information saved about individual sprite layer pixels. Prerendered into the scanline cache.
+#[derive(Copy, Clone)]
+struct SpritePixel {
+    rgb: Rgb,
+    prio: u8,
+    /// Set for palettes 0-3. Prevents color math even if enabled.
+    opaque: bool,
+}
+
 /// Render state stored inside the `Ppu`. We use this to cache the visible sprites for each
 /// scanline, just like the real PPU would.
 pub struct SpriteRenderState {
     /// Caches a prerendered scanline of sprite pixels. This is rendered at the start of each
     /// scanline and contains, for each pixel on the scanline, the color of the OBJ (= sprite) layer
     /// and the priority of that pixel (`None` in case there's no opaque sprite pixel there).
-    sprite_scanline: [(Option<(Rgb, u8)>); super::SCREEN_WIDTH as usize],
+    sprite_scanline: [(Option<SpritePixel>); super::SCREEN_WIDTH as usize],
 }
 
 impl Default for SpriteRenderState {
@@ -168,7 +177,12 @@ impl Ppu {
                     let buffer = &mut self.sprite_render_state.sprite_scanline;
                     match color {
                         Some(rgb) => {
-                            buffer[screen_x as usize] = Some((rgb, tile.sprite().priority));
+                            buffer[screen_x as usize] = Some(SpritePixel {
+                                rgb: rgb,
+                                prio: tile.sprite().priority,
+                                // Sprites with palettes 0-3 are opaque
+                                opaque: tile.sprite().palette <= 3,
+                            });
                         }
                         None => {
                             // do nothing (don't overwrite visible pixels with transparent ones)
@@ -227,7 +241,10 @@ impl Ppu {
 
     /// Returns the value of the current pixel on the sprite layer if it has the given priority
     /// (and `None` otherwise).
-    pub fn maybe_draw_sprite_pixel(&self, prio: u8, subscreen: bool) -> Option<Rgb> {
+    ///
+    /// Returns the pixel's color and whether the sprite uses palette 0-3 (if this is the case, the
+    /// sprite can not participate in color math - it is fixed to opaque).
+    pub fn maybe_draw_sprite_pixel(&self, prio: u8, subscreen: bool) -> Option<(Rgb, bool)> {
         let enable_reg = if subscreen { self.ts } else { self.tm };
         if enable_reg & 0x10 == 0 {
             // OBJ layer disabled
@@ -235,12 +252,10 @@ impl Ppu {
         }
 
         match self.sprite_render_state.sprite_scanline[self.x as usize] {
-            None => None,   // No pixel or transparent pixel on OBJ layer
-            Some((rgb, obj_prio)) => if obj_prio == prio {
-                Some(rgb)
-            } else {
-                None
+            Some(ref pix) if pix.prio == prio => {
+                Some((pix.rgb, pix.opaque))
             },
+            _ => None,
         }
     }
 }
