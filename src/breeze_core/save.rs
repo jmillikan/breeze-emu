@@ -1,6 +1,6 @@
 //! Savestate writing and reading
 
-use snes::Snes;
+use snes::Emulator;
 
 use libsavestate::SaveState;
 
@@ -21,7 +21,7 @@ impl Default for SaveStateFormat {
     }
 }
 
-impl<'a> Snes<'a> {
+impl<'a> Emulator<'a> {
     /// Saves the current emulator state
     pub fn create_save_state(&self, format: SaveStateFormat, w: &mut Write) -> io::Result<()> {
         // Wrap the writer in a `BufWriter` so the caller can't forget it :)

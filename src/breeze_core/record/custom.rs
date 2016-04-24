@@ -16,7 +16,7 @@
 
 use super::WriteSeek;
 use input::Ports;
-use snes::Snes;
+use snes::Emulator;
 
 use std::io::{self, BufRead};
 
@@ -26,7 +26,7 @@ pub struct Recorder {
 }
 
 impl super::Recorder for Recorder {
-    fn new(writer: Box<WriteSeek>, _snes: &Snes) -> io::Result<Self> {
+    fn new(writer: Box<WriteSeek>, _snes: &Emulator) -> io::Result<Self> {
         Ok(Recorder {
             writer: writer,
         })
@@ -42,7 +42,7 @@ pub struct Replayer {
 }
 
 impl super::Replayer for Replayer {
-    fn new(reader: Box<BufRead>, _snes: &Snes) -> io::Result<Self> {
+    fn new(reader: Box<BufRead>, _snes: &Emulator) -> io::Result<Self> {
         Ok(Replayer {
             reader: reader,
         })

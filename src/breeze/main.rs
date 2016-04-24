@@ -10,7 +10,7 @@ extern crate breeze_frontends as frontends;
 extern crate breeze_frontend_api as frontend_api;
 
 use breeze::rom::Rom;
-use breeze::snes::Snes;
+use breeze::snes::Emulator;
 use breeze::input::Input;
 use breeze::save::SaveStateFormat;
 use breeze::record::{RecordingFormat, create_recorder, create_replayer};
@@ -146,7 +146,7 @@ fn main() {
         renderer.set_rom_title(title);
     }
 
-    let mut snes = Snes::new(rom, &mut *renderer, audio_fn());
+    let mut snes = Emulator::new(rom, &mut *renderer, audio_fn());
     attach_default_input(&mut snes.peripherals_mut().input);
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());

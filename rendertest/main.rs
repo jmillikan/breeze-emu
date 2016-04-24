@@ -11,7 +11,7 @@ extern crate breeze_frontends;
 use breeze_frontends::frontend::test::TestRenderer;
 use breeze_frontends::frontend::dummy::DummySink;
 use breeze_core::rom::Rom;
-use breeze_core::snes::Snes;
+use breeze_core::snes::Emulator;
 
 use term::stdout as term_stdout;
 use term::color;
@@ -230,7 +230,7 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let mut renderer = TestRenderer::new(test.frames);
 
     {
-        let mut snes = Snes::new(rom, &mut renderer, Box::new(DummySink::default()));
+        let mut snes = Emulator::new(rom, &mut renderer, Box::new(DummySink::default()));
         snes.run();
     }
 

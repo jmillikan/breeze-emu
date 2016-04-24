@@ -309,7 +309,7 @@ impl Mem for Peripherals {
 }
 
 /// The emulator.
-pub struct Snes<'r> {
+pub struct Emulator<'r> {
     /// Reference to the renderer this emulator instance uses to display the screen
     pub renderer: &'r mut Renderer,
     pub audio: Box<AudioSink>,
@@ -324,16 +324,16 @@ pub struct Snes<'r> {
     trace_start: u64,
 }
 
-impl<'a> SaveState for Snes<'a> {
-    impl_save_state_fns!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
+impl<'a> SaveState for Emulator<'a> {
+    impl_save_state_fns!(Emulator { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
         ignore { renderer, audio, trace_start });
 }
 
-impl<'r> Snes<'r> {
+impl<'r> Emulator<'r> {
     /// Creates a new emulator instance from a loaded ROM and a renderer.
     ///
     /// This will also create a default `Input` instance without any attached peripherals.
-    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Snes<'r> {
+    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Self {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
         let trace_start: u64 = match env::var("BREEZE_TRACE") {
             Ok(string) => match string.parse() {
@@ -350,7 +350,7 @@ impl<'r> Snes<'r> {
             Err(env::VarError::NotUnicode(_)) => panic!("BREEZE_TRACE value isn't valid unicode"),
         };
 
-        Snes {
+        Emulator {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
             renderer: renderer,
             audio: audio,
