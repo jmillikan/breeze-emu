@@ -382,8 +382,22 @@ pub struct Ppu {
     ///
     /// Note that `time_over` and `range_over` are set even if the OBJ layer is disabled.
     time_over: bool,
-    /// `r` flag of STAT77 / `time_over`
+    /// `r` flag of STAT77 / `$213e` (see `time_over`)
     range_over: bool,
+
+    /// `$213f`: STAT78 - PPU status flag and version
+    /// `fl-pvvvv`
+    /// * `f`: Interlace Field. Toggles every V-Blank (FIXME: When exactly?)
+    /// * `l`: External latch flag.
+    /// * `p`: PAL Mode (0=NTSC).
+    /// * `vvvv`: 5C78 chip version number. We've encountered at least 2 and 3. Possibly 1 as well.
+    interlace_field: bool,
+    /// `l` flag of STAT78 / `$213f` (see `interlace_field`).
+    ///
+    /// Reset on read if `$4201` bit 7 is set.
+    ///
+    /// FIXME: Don't forget to set this when latching the PPU counters
+    ext_latch: bool,
 }
 
 impl_save_state!(Ppu {
@@ -392,7 +406,7 @@ impl_save_state!(Ppu {
     bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, vram_prefetch, m7sel, m7a,
     m7b, m7b_last, m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2,
     wh3, wbglog, wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b,
-    setini, scanline, x, time_over, range_over
+    setini, scanline, x, time_over, range_over, interlace_field, ext_latch
 } ignore {
     framebuf, sprite_render_state, bg_cache
 });
@@ -423,6 +437,13 @@ impl Ppu {
                 (if self.time_over { 0x80 } else { 0x00 })
                 | (if self.range_over { 0x40 } else { 0x00 })
                 | 0x01
+            }
+            0x213f => {
+                let interlace = if self.interlace_field { 0x80 } else { 0x00 };
+                let latch = if self.ext_latch { 0x40 } else { 0x00 };
+
+                // FIXME Does PAL/NTSC have significance? Or the version we return?
+                interlace | latch | 0x02
             }
             _ => panic!("invalid/unimplemented PPU load from ${:04X}", addr),
         }
@@ -545,6 +566,10 @@ impl Ppu {
                 // V-Blank ends now. The next `update` call will render the first visible pixel of
                 // a new frame.
                 self.scanline = 0;
+
+                // FIXME The timing is probably wrong, but we toggle `$213f` "Interlace Field" flag
+                // here:
+                self.interlace_field = !self.interlace_field;
             }
         }
 
