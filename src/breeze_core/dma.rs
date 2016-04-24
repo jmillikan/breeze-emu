@@ -18,7 +18,7 @@ use cpu::Mem;
 /// The configuration of a DMA channel
 #[derive(Clone, Copy)]
 pub struct DmaChannel {
-    /// $43x0 - DMA parameters
+    /// `$43x0`: DMAPx - DMA parameters
     /// ```
     /// da-ssttt
     /// d: Direction (0: A->B, 1: B->A)
@@ -27,23 +27,23 @@ pub struct DmaChannel {
     /// t: See `TransferMode`
     /// ```
     params: u8,
-    /// $43x2/$43x3 - Bus A address
-    a_addr: u16,
-    /// $43x4 - Bus A bank
-    a_addr_bank: u8,
-    /// $43x1 - The bus B ("PPU bus") address to access
+    /// `$43x1`: BBADx - The bus B ("PPU bus") address to access
     b_addr: u8,
-    /// $43x5/43x6 - DMA size/HDMA indirect address
+    /// `$43x2/$43x3`: A1TxL/A1TxH - Bus A address
+    a_addr: u16,
+    /// `$43x4`: A1Bx - Bus A bank
+    a_addr_bank: u8,
+    /// `$43x5/$43x6`: DASxL/DASxH - DMA size/HDMA indirect address
     ///
     /// DMA transfer size in bytes. A size of 0 will result in a transfer of 65536 Bytes. This is a
     /// hard limit: If the transfer mode would transfer more bytes, the transfer is stopped before.
     /// This value is decremented during DMA and will end up at 0 when DMA is complete.
     dma_size: u16,
-    /// $43x7 - HDMA indirect address bank
+    /// `$43x7`: DASBx - HDMA indirect address bank
     hdma_indirect_bank: u8,
-    /// $43x8/$43x9
+    /// `$43x8/$43x9`: A2AxL/A2AxH
     hdma_addr: u16,
-    /// $43xA
+    /// `$43xA`: NTRLx
     /// `rlllllll`
     /// * `r`: Repeat (1: write every scanline, 0: write once)
     /// * `l`: Line counter
@@ -235,6 +235,8 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
     // FIXME: "Now, after the pause, wait 2-8 master cycles to reach a whole multiple of 8 master
     // cycles since reset."
     // (Since this is pretty unpredictable behaviour, nothing should rely on it - I hope)
+    // FIXME: do_io_cycle is interfering badly with (H)DMA, we should save and restore p.cy
+    // (I think?). also do this in init_hdma.
 
     let mut dma_cy = 8; // 8 cycles overhead for any DMA transaction
 
@@ -302,6 +304,8 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 /// registers for all active channels.
 ///
 /// See http://wiki.superfamicom.org/snes/show/DMA+%26+HDMA for more info.
+///
+/// Returns the number of cycles the setup needed.
 pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
     // "Overhead is ~18 master cycles, plus 8 master cycles for each channel set for direct HDMA and
     // 24 master cycles for each channel set for indirect HDMA."
@@ -314,10 +318,10 @@ pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
             chan.hdma_do_transfer = true;
             if chan.params & 0x40 != 0 {
                 // indirect HDMA
-                cy += 24
+                cy += 24;
             } else {
                 // direct HDMA
-                cy += 8
+                cy += 8;
             }
 
             // FIXME Do correct setup (this isn't everything)
