@@ -37,20 +37,20 @@ const BRK_VEC16: u16 = 0xFFE6;
 const COP_VEC16: u16 = 0xFFE4;
 
 pub struct Cpu<M: Mem> {
-    a: u16,
-    x: u16,
-    y: u16,
+    pub a: u16,
+    pub x: u16,
+    pub y: u16,
     /// Stack pointer
-    s: u16,
+    pub s: u16,
     /// Data bank register. Bank for all memory accesses.
-    dbr: u8,
+    pub dbr: u8,
     /// Program bank register. Opcodes are fetched from this bank.
-    pbr: u8,
+    pub pbr: u8,
     /// Direct (page) register. Address offset for all instruction using "direct addressing" mode.
-    d: u16,
+    pub d: u16,
     /// Program counter. Note that PBR is not changed on pc overflow, so code can not span
     /// multiple banks (without `jml` or `jsr`).
-    pc: u16,
+    pub pc: u16,
     p: StatusReg,
     emulation: bool,
     /// Set to true when executing a WAI instruction. Stops the processor from dispatching further
