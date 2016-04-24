@@ -37,6 +37,10 @@ pub enum AddressingMode {
     AbsIndexedX(u16),
     /// Address = `!abcd+Y`
     AbsIndexedY(u16),
+    /// Special addressing mode corresponding to `m.b` in the spc700.txt doc: The 16-bit operand
+    /// specifies a 13-bit absolute address in its low bits, and specifies a bit number in its high
+    /// 3 bits.
+    AbsBits(u16),
     /// Used for branch instructions
     /// Branch Target Address = `PC + $ab`
     Rel(i8),
@@ -155,6 +159,7 @@ impl AddressingMode {
             Abs(addr) => addr,
             AbsIndexedX(addr) => addr + spc.x as u16,
             AbsIndexedY(addr) => addr + spc.y as u16,
+            AbsBits(addr) => addr & 0x1fff,
             Rel(rel) => (spc.pc as i32 + rel as i32) as u16,
         }
     }
@@ -165,20 +170,21 @@ impl fmt::Display for AddressingMode {
         use self::AddressingMode::*;
 
         match *self {
-            A =>                       write!(f, "a"),
-            X =>                       write!(f, "x"),
-            Y =>                       write!(f, "y"),
-            Immediate(val) =>          write!(f, "#${:02X}", val),
-            Direct(offset) =>          write!(f, "${:02X}", offset),
-            DirectIndexedX(offset) =>  write!(f, "${:02X}+X", offset),
-            IndirectX =>               write!(f, "(X)"),
+            A =>                        write!(f, "a"),
+            X =>                        write!(f, "x"),
+            Y =>                        write!(f, "y"),
+            Immediate(val) =>           write!(f, "#${:02X}", val),
+            Direct(offset) =>           write!(f, "${:02X}", offset),
+            DirectIndexedX(offset) =>   write!(f, "${:02X}+X", offset),
+            IndirectX =>                write!(f, "(X)"),
             IndirectIndexedY(offset) => write!(f, "[${:02X}]+Y", offset),
             IndexedXIndirect(offset) => write!(f, "[${:02X}+X]", offset),
             AbsIndexedXIndirect(abs) => write!(f, "[!{:04X}+X]", abs),
-            Abs(addr) =>               write!(f, "!{:04X}", addr),
-            AbsIndexedX(addr) =>       write!(f, "!{:04X}+X", addr),
-            AbsIndexedY(addr) =>       write!(f, "!{:04X}+Y", addr),
-            Rel(rel) =>                write!(f, "{:+}", rel),
+            Abs(addr) =>                write!(f, "!{:04X}", addr),
+            AbsIndexedX(addr) =>        write!(f, "!{:04X}+X", addr),
+            AbsIndexedY(addr) =>        write!(f, "!{:04X}+Y", addr),
+            AbsBits(addr) =>            write!(f, "!{:04X},{}", addr & 0x1fff, addr >> 13),
+            Rel(rel) =>                 write!(f, "{:+}", rel),
         }
     }
 }
