@@ -159,7 +159,6 @@ impl Ppu {
             } else {
                 ((self.mosaic & 0xf0) >> 4) + 1
             },
-            // FIXME: This looks more like the byte address to me!
             tilemap_word_addr: ((bgsc as u16 & 0xfc) >> 2) << 10,
             tilemap_mirror_h: bgsc & 0b01 == 0, // inverted bit value
             tilemap_mirror_v: bgsc & 0b10 == 0, // inverted bit value

@@ -39,7 +39,6 @@ struct SpriteTile<'a> {
     /// X position of the tile on the screen. Can be negative if the tile starts outside the screen.
     x: i16,
     /// Y position of the scanline inside the tile (0-7)
-    /// FIXME Can we just store the pixel row that's on the scanline? (for each priority)
     y_off: u8,
     /// Reference to the sprite this tile is a part of. Note that tiles can be shared, but that
     /// doesn't matter for this.

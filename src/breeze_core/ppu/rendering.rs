@@ -62,7 +62,6 @@ impl Ppu {
 
     /// Returns the backdrop color used as a default color (with color math applied, if enabled).
     fn backdrop_color(&self) -> SnesRgb {
-        // TODO: Color math
         self.cgram.get_color(0)
     }
 
@@ -199,8 +198,6 @@ impl Ppu {
 
         let (main_pix_color, main_pix_layer) = self.get_raw_pixel(false);
         let final_color = if self.color_math_enabled(main_pix_layer) {
-            // FIXME Is color math done on 5-bit RGB? (We use adjusted 24-bit RGB, which is most
-            // likely wrong!)
             let math_color = if self.cgwsel & 0x02 == 0 {
                 // Fixed color. Note that the fixed color is also used as the subscreen's backdrop
                 // color.
