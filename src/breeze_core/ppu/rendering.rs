@@ -23,7 +23,7 @@
 //!   stores data for a 16x16 tile consisting of 4 8x8 tiles: `TILE`, `TILE+1`, `TILE+16` and
 //!   `TILE+17`, where `TILE` is the stored tile number.
 
-use super::{Ppu, Rgb};
+use super::{Ppu, Rgb, SnesRgb};
 
 /// An enum of all layers a pixel can come from
 enum Layer {
@@ -61,7 +61,7 @@ impl Ppu {
     pub fn bg_mode(&self) -> u8 { self.bgmode & 0b111 }
 
     /// Returns the backdrop color used as a default color (with color math applied, if enabled).
-    fn backdrop_color(&self) -> Rgb {
+    fn backdrop_color(&self) -> SnesRgb {
         // TODO: Color math
         self.cgram.get_color(0)
     }
@@ -70,7 +70,7 @@ impl Ppu {
     /// from.
     ///
     /// If `sub` is true, fetches the pixel from the subscreen. Otherwise, the main screen is used.
-    fn get_raw_pixel(&mut self, subscreen: bool) -> (Rgb, Layer) {
+    fn get_raw_pixel(&mut self, subscreen: bool) -> (SnesRgb, Layer) {
         macro_rules! e {
             ( $e:expr ) => ( $e );
         }
@@ -198,38 +198,38 @@ impl Ppu {
         }
 
         let (main_pix_color, main_pix_layer) = self.get_raw_pixel(false);
-        if self.color_math_enabled(main_pix_layer) {
+        let final_color = if self.color_math_enabled(main_pix_layer) {
             // FIXME Is color math done on 5-bit RGB? (We use adjusted 24-bit RGB, which is most
             // likely wrong!)
             let math_color = if self.cgwsel & 0x02 == 0 {
-                // Fixed color
-                panic!("NYI: Fixed color math");
+                // Fixed color. Note that the fixed color is also used as the subscreen's backdrop
+                // color.
+                SnesRgb::new(self.coldata_r, self.coldata_g, self.coldata_b)
             } else {
                 // Subscreen
-                // FIXME: I think subscreen backdrop should use COLDATA instead of the backdrop col?
-                self.get_raw_pixel(true).0
+                let (sub_color, sub_layer) = self.get_raw_pixel(true);
+                match sub_layer {
+                    Layer::Backdrop => {
+                        // Use COLDATA color as backdrop (FIXME a bit hacky, but is it too bad?)
+                        SnesRgb::new(self.coldata_r, self.coldata_g, self.coldata_b)
+                    }
+                    _ => sub_color,
+                }
             };
 
             if self.cgadsub & 0x80 == 0 {
                 // Add
-                // FIXME impl Add/Sub for Rgb ?
-                Rgb {
-                    r: main_pix_color.r.saturating_add(math_color.r),
-                    g: main_pix_color.g.saturating_add(math_color.g),
-                    b: main_pix_color.b.saturating_add(math_color.b),
-                }
+                main_pix_color.saturating_add(&math_color)
             } else {
                 // Subtract
-                Rgb {
-                    r: main_pix_color.r.saturating_sub(math_color.r),
-                    g: main_pix_color.g.saturating_sub(math_color.g),
-                    b: main_pix_color.b.saturating_sub(math_color.b),
-                }
+                main_pix_color.saturating_sub(&math_color)
             }
         } else {
             // No color math
             main_pix_color
-        }
+        };
+
+        final_color.to_adjusted_rgb()
     }
 
     /// Reads character data for a pixel and returns the palette index stored in the bitplanes.

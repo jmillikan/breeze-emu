@@ -1,6 +1,6 @@
 //! Background layer rendering
 
-use super::{Ppu, Rgb};
+use super::{Ppu, SnesRgb};
 
 /// BG layer scanline cache.
 ///
@@ -19,7 +19,7 @@ struct CachedPixel {
     /// Tile priority bit (0-1)
     priority: u8,
     /// Precalculated color of the pixel (15-bit RGB). `None` = transparent.
-    color: Option<Rgb>,
+    color: Option<SnesRgb>,
 }
 
 /// BG cache for a single layer
@@ -243,8 +243,8 @@ impl Ppu {
     /// Lookup the color of the given background layer (1-4) at the current pixel, using the given
     /// priority (0-1) only. This will also scroll backgrounds accordingly.
     ///
-    /// Returns `None` if the pixel is transparent, `Some(Rgb)` otherwise.
-    pub fn lookup_bg_color(&mut self, bg_num: u8, prio: u8, subscreen: bool) -> Option<Rgb> {
+    /// Returns `None` if the pixel is transparent, `Some(SnesRgb)` otherwise.
+    pub fn lookup_bg_color(&mut self, bg_num: u8, prio: u8, subscreen: bool) -> Option<SnesRgb> {
         debug_assert!(bg_num >= 1 && bg_num <= 4);
         debug_assert!(prio == 0 || prio == 1);
 

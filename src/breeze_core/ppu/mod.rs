@@ -11,7 +11,10 @@ mod bg;
 pub mod oam;
 mod rendering;
 mod regs;
+mod rgb;
 mod sprites;
+
+pub use self::rgb::{Rgb, SnesRgb};
 
 use self::sprites::SpriteRenderState;
 use self::bg::BgCache;
@@ -410,13 +413,6 @@ impl_save_state!(Ppu {
 } ignore {
     framebuf, sprite_render_state, bg_cache
 });
-
-#[derive(Debug, Copy, Clone)]
-pub struct Rgb {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
 
 impl Ppu {
     /// Load a PPU register (addresses `$2134` to `$213f`)

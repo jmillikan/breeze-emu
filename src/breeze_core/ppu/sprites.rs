@@ -1,6 +1,6 @@
 //! Sprite rendering
 
-use super::{Ppu, Rgb};
+use super::{Ppu, SnesRgb};
 use super::oam::OamEntry;
 
 use flexvec::FlexVec;
@@ -8,7 +8,7 @@ use flexvec::FlexVec;
 /// Information saved about individual sprite layer pixels. Prerendered into the scanline cache.
 #[derive(Copy, Clone)]
 struct SpritePixel {
-    rgb: Rgb,
+    color: SnesRgb,
     prio: u8,
     /// Set for palettes 0-3. Prevents color math even if enabled.
     opaque: bool,
@@ -178,7 +178,7 @@ impl Ppu {
                     match color {
                         Some(rgb) => {
                             buffer[screen_x as usize] = Some(SpritePixel {
-                                rgb: rgb,
+                                color: rgb,
                                 prio: tile.sprite().priority,
                                 // Sprites with palettes 0-3 are opaque
                                 opaque: tile.sprite().palette <= 3,
@@ -220,7 +220,7 @@ impl Ppu {
         }
     }
 
-    fn read_sprite_tile_pixel(&self, tile: &SpriteTile, x_offset: u8) -> Option<Rgb> {
+    fn read_sprite_tile_pixel(&self, tile: &SpriteTile, x_offset: u8) -> Option<SnesRgb> {
         debug_assert!(x_offset < 8);
         let rel_color = self.read_chr_entry(4,  // 16 colors
                                             tile.chr_addr,
@@ -233,7 +233,6 @@ impl Ppu {
         if rel_color == 0 { return None }
 
         let abs_color = 128 + tile.sprite().palette * 16 + rel_color;
-        // FIXME Color math
         let rgb = self.cgram.get_color(abs_color);
 
         Some(rgb)
@@ -244,7 +243,7 @@ impl Ppu {
     ///
     /// Returns the pixel's color and whether the sprite uses palette 0-3 (if this is the case, the
     /// sprite can not participate in color math - it is fixed to opaque).
-    pub fn maybe_draw_sprite_pixel(&self, prio: u8, subscreen: bool) -> Option<(Rgb, bool)> {
+    pub fn maybe_draw_sprite_pixel(&self, prio: u8, subscreen: bool) -> Option<(SnesRgb, bool)> {
         let enable_reg = if subscreen { self.ts } else { self.tm };
         if enable_reg & 0x10 == 0 {
             // OBJ layer disabled
@@ -253,7 +252,7 @@ impl Ppu {
 
         match self.sprite_render_state.sprite_scanline[self.x as usize] {
             Some(ref pix) if pix.prio == prio => {
-                Some((pix.rgb, pix.opaque))
+                Some((pix.color, pix.opaque))
             },
             _ => None,
         }
