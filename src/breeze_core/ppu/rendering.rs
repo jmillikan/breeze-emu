@@ -204,16 +204,16 @@ impl Ppu {
                 // Add
                 // FIXME impl Add/Sub for Rgb ?
                 Rgb {
-                    r: main_pix_color.r + math_color.r,
-                    g: main_pix_color.g + math_color.g,
-                    b: main_pix_color.b + math_color.b,
+                    r: main_pix_color.r.wrapping_add(math_color.r),
+                    g: main_pix_color.g.wrapping_add(math_color.g),
+                    b: main_pix_color.b.wrapping_add(math_color.b),
                 }
             } else {
                 // Subtract
                 Rgb {
-                    r: main_pix_color.r - math_color.r,
-                    g: main_pix_color.g - math_color.g,
-                    b: main_pix_color.b - math_color.b,
+                    r: main_pix_color.r.wrapping_sub(math_color.r),
+                    g: main_pix_color.g.wrapping_sub(math_color.g),
+                    b: main_pix_color.b.wrapping_sub(math_color.b),
                 }
             }
         } else {
