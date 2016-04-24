@@ -263,7 +263,8 @@ impl Mem for Peripherals {
                 }
                 0x4201 => {
                     // FIXME: Propagate to controller ports and the I/O read port
-                    self.wrio = value
+                    self.wrio = value;
+                    self.ppu.can_latch_counters = value & 0x80 != 0;
                 }
                 0x4202 => self.wrmpya = value,
                 // WRMPYB: Performs multiplication on write

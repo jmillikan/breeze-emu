@@ -375,6 +375,23 @@ pub struct Ppu {
     /// * `i`: Screen interlace. Doubles the effective screen height.
     setini: u8,
 
+    /// `$213c` Latched H-Counter value
+    ///
+    /// FIXME: I'm pretty sure that our notion of H/V position heavily diverges from what the SNES
+    /// actually does, so these are probably always a bit off
+    /// FIXME: There might also be a delay involved when latching
+    ophct: u16,
+    /// If `true`, the next read of `$213c`/OPHCT will return the high byte/bit. If `false`, the low
+    /// byte will be read.
+    ophct_high: bool,
+    /// `$213d` Latched V-Counter value
+    opvct: u16,
+    /// If `true`, the next read of `$213d`/OPVCT will return the high byte/bit. If `false`, the low
+    /// byte will be read.
+    opvct_high: bool,
+    /// Set by the emulator on writes to `$4201`: When bit 7 of `$4201` is 0, no latching can occur
+    pub can_latch_counters: bool,
+
     /// `$213e`: STAT77 - PPU status flags and version
     /// `trm-vvvv`
     /// * `t`: Time Over Flag
@@ -398,8 +415,6 @@ pub struct Ppu {
     /// `l` flag of STAT78 / `$213f` (see `interlace_field`).
     ///
     /// Reset on read if `$4201` bit 7 is set.
-    ///
-    /// FIXME: Don't forget to set this when latching the PPU counters
     ext_latch: bool,
 }
 
@@ -409,7 +424,8 @@ impl_save_state!(Ppu {
     bg3hofs, bg3vofs, bg4hofs, bg4vofs, bg_old, m7_old, vmain, vmaddr, vram_prefetch, m7sel, m7a,
     m7b, m7b_last, m7c, m7d, m7x, m7y, cgadd, cg_low_buf, w12sel, w34sel, wobjsel, wh0, wh1, wh2,
     wh3, wbglog, wobjlog, tm, ts, tmw, tsw, cgwsel, cgadsub, coldata_r, coldata_g, coldata_b,
-    setini, scanline, x, time_over, range_over, interlace_field, ext_latch
+    setini, ophct, ophct_high, opvct, opvct_high, can_latch_counters, scanline, x, time_over,
+    range_over, interlace_field, ext_latch
 } ignore {
     framebuf, sprite_render_state, bg_cache
 });
@@ -425,10 +441,26 @@ impl Ppu {
             0x2135 => ((self.m7a as u32 * self.m7b_last as u32) >> 8) as u8,
             // MPYH - High Byte
             0x2136 => ((self.m7a as u32 * self.m7b_last as u32) >> 16) as u8,
+            0x2137 => {
+                self.latch_counters();
+                0   // FIXME The data read is open bus, which isn't yet emulated
+            }
             // RDOAM
             0x2138 => self.oam_load(),
             0x2139 => self.vram_load_low(),
             0x213a => self.vram_load_high(),
+            // OPHCT
+            0x213c => {
+                let value = if self.ophct_high { (self.ophct >> 8) as u8 } else { self.ophct as u8};
+                self.ophct_high = !self.ophct_high;
+                value
+            }
+            // OPVCT
+            0x213d => {
+                let value = if self.opvct_high { (self.opvct >> 8) as u8 } else { self.opvct as u8};
+                self.opvct_high = !self.opvct_high;
+                value
+            }
             0x213e => {
                 (if self.time_over { 0x80 } else { 0x00 })
                 | (if self.range_over { 0x40 } else { 0x00 })
@@ -437,6 +469,9 @@ impl Ppu {
             0x213f => {
                 let interlace = if self.interlace_field { 0x80 } else { 0x00 };
                 let latch = if self.ext_latch { 0x40 } else { 0x00 };
+
+                self.ophct_high = false;
+                self.opvct_high = false;
 
                 // FIXME Does PAL/NTSC have significance? Or the version we return?
                 interlace | latch | 0x02
@@ -540,6 +575,17 @@ impl Ppu {
         }
     }
 
+    /// Latches the H/V counters if `$4201` bit 7 is set (otherwise, no latching can occur)
+    pub fn latch_counters(&mut self) {
+        // FIXME Call this when the port 2 peripheral wants to latch
+        if self.can_latch_counters {
+            // Note that this does not change the high/low byte flags of OP[HV]CT
+            self.ophct = self.x;
+            self.opvct = self.scanline;
+            self.ext_latch = true;
+        }
+    }
+
     /// Runs the PPU for a bit.
     ///
     /// This will render exactly one pixel (when in H/V-Blank, the pixel counter will be
@@ -578,6 +624,7 @@ impl Ppu {
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     #[allow(dead_code)] // FIXME: Take this into account
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
+
     /// Returns the current X position
     pub fn h_counter(&self) -> u16 { self.x }
     /// Returns the current Y position (scanline)
