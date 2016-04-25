@@ -62,3 +62,9 @@ pub trait AudioSink {
     /// The data contains 16-bit samples for the left and right channel.
     fn write(&mut self, data: &[(i16, i16)]);
 }
+
+impl<T: AudioSink + ?Sized> AudioSink for Box<T> {
+    fn write(&mut self, data: &[(i16, i16)]) {
+        (**self).write(data);
+    }
+}

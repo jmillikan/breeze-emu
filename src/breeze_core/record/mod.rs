@@ -6,7 +6,7 @@ mod custom;
 mod smv;
 
 use input::Ports;
-use snes::Emulator;
+use snes::Snes;
 
 use std::io::{self, Write, BufRead, Seek};
 
@@ -42,7 +42,7 @@ impl<T: Write + Seek> WriteSeek for T {}
 /// Trait for input recorders
 pub trait Recorder {
     /// Create a new recorder, writing to the given writer
-    fn new(writer: Box<WriteSeek>, snes: &Emulator) -> io::Result<Self> where Self: Sized;
+    fn new(writer: Box<WriteSeek>, snes: &Snes) -> io::Result<Self> where Self: Sized;
 
     /// Record the state of the peripherals attached to `ports`.
     ///
@@ -54,7 +54,7 @@ pub trait Recorder {
 /// Trait for record replayers
 pub trait Replayer {
     /// Create a new replayer, reading from the given buffered reader.
-    fn new(reader: Box<BufRead>, snes: &Emulator) -> io::Result<Self> where Self: Sized;
+    fn new(reader: Box<BufRead>, snes: &Snes) -> io::Result<Self> where Self: Sized;
 
     /// Replay the next frame, updating the state of `ports`.
     ///
@@ -66,7 +66,7 @@ pub trait Replayer {
 /// Create a recorder for a specified format.
 pub fn create_recorder(format: RecordingFormat,
                        writer: Box<WriteSeek>,
-                       snes: &Emulator)
+                       snes: &Snes)
                        -> io::Result<Box<Recorder>> {
     debug!("creating recorder for {:?} format", format);
     Ok(match format {
@@ -77,7 +77,7 @@ pub fn create_recorder(format: RecordingFormat,
 
 pub fn create_replayer(format: RecordingFormat,
                        reader: Box<BufRead>,
-                       snes: &Emulator)
+                       snes: &Snes)
                        -> io::Result<Box<Replayer>> {
     debug!("creating replayer for {:?} format", format);
     Ok(match format {

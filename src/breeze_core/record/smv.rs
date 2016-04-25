@@ -7,7 +7,7 @@
 
 use super::WriteSeek;
 use input::{Ports, Peripheral};
-use snes::Emulator;
+use snes::Snes;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -19,7 +19,7 @@ pub struct Recorder {
 }
 
 impl super::Recorder for Recorder {
-    fn new(mut writer: Box<WriteSeek>, snes: &Emulator) -> io::Result<Self> {
+    fn new(mut writer: Box<WriteSeek>, snes: &Snes) -> io::Result<Self> {
         // Write SMV header
         try!(write!(writer, "SMV\x1A"));
         try!(writer.write_u32::<LittleEndian>(4));  // SMV Version
@@ -94,7 +94,7 @@ pub struct Replayer {
 }
 
 impl super::Replayer for Replayer {
-    fn new(reader: Box<BufRead>, _snes: &Emulator) -> io::Result<Self> {
+    fn new(reader: Box<BufRead>, _snes: &Snes) -> io::Result<Self> {
         Ok(Replayer {
             reader: reader,
         })

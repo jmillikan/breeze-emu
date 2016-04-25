@@ -337,6 +337,12 @@ impl Snes {
         }
     }
 
+    /// Get a reference to the `Peripherals` instance
+    pub fn peripherals(&self) -> &Peripherals { &self.cpu.mem }
+
+    /// Get a mutable reference to the `Peripherals` instance
+    pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.cpu.mem }
+
     /// Runs emulation until the next frame is completed.
     pub fn render_frame<F>(&mut self, mut render: F) -> Option<FrontendAction>
     where F: FnMut(&FrameBuf) -> Option<FrontendAction> {
@@ -455,20 +461,21 @@ impl Snes {
 }
 
 /// The emulator.
-pub struct Emulator<'r> {
-    /// Reference to the renderer this emulator instance uses to display the screen
-    pub renderer: &'r mut Renderer,
-    pub audio: Box<AudioSink>,
+pub struct Emulator<R: Renderer, A: AudioSink> {
+    /// The renderer this emulator instance uses to display the screen
+    pub renderer: R,
+    /// The audio sink to be used for APU output
+    pub audio: A,
     pub snes: Snes,
     #[allow(dead_code)]
     priv_: (),
 }
 
-impl<'r> Emulator<'r> {
+impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     /// Creates a new emulator instance from a loaded ROM and a renderer.
     ///
     /// This will also create a default `Input` instance without any attached peripherals.
-    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Self {
+    pub fn new(rom: Rom, renderer: R, audio: A) -> Self {
         // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
         let trace_start: u64 = match env::var("BREEZE_TRACE") {
             Ok(string) => match string.parse() {

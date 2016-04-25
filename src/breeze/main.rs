@@ -146,16 +146,16 @@ fn main() {
         renderer.set_rom_title(title);
     }
 
-    let mut emu = Emulator::new(rom, &mut *renderer, audio_fn());
+    let mut emu = Emulator::new(rom, renderer, audio_fn());
     attach_default_input(&mut emu.peripherals_mut().input);
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
-        let recorder = create_recorder(RecordingFormat::default(), writer, &emu).unwrap();
+        let recorder = create_recorder(RecordingFormat::default(), writer, &emu.snes).unwrap();
         emu.peripherals_mut().input.start_recording(recorder);
     }
     if let Some(replay_file) = args.value_of("replay") {
         let reader = Box::new(BufReader::new(File::open(replay_file).unwrap()));
-        let replayer = create_replayer(RecordingFormat::default(), reader, &emu).unwrap();
+        let replayer = create_replayer(RecordingFormat::default(), reader, &emu.snes).unwrap();
         emu.peripherals_mut().input.start_replay(replayer);
     }
     if let Some(filename) = args.value_of("savestate") {

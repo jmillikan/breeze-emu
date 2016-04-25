@@ -227,12 +227,10 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let rom = build_rom(name, test);
 
     let rom = Rom::from_bytes(&rom).unwrap();
-    let mut renderer = TestRenderer::new(test.frames);
+    let renderer = TestRenderer::new(test.frames);
 
-    {
-        let mut snes = Emulator::new(rom, &mut renderer, Box::new(DummySink::default()));
-        snes.run();
-    }
+    let mut emu = Emulator::new(rom, renderer, Box::new(DummySink::default()));
+    emu.run();
 
     let mut exp_data = Vec::new();
     let mut exp_file = File::open(format!("rendertest/tests/{}/expected.png", name)).unwrap();
@@ -250,7 +248,7 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let mut exp_frame = vec![0; info.buffer_size()];
     reader.next_frame(&mut exp_frame).unwrap();
 
-    let got_frame = renderer.last_frame();
+    let got_frame = emu.renderer.last_frame();
     // we assert that the lengths match, since that's an issue with the expected image file
     assert_eq!(got_frame.len(), exp_frame.len());
 
