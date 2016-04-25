@@ -536,7 +536,9 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
 
     /// Runs emulation until a frame is completed, renders the frame and handles an action dictated
     /// by the frontend.
-    pub fn render_frame(&mut self) {
+    ///
+    /// Returns `true` if the frontend requested an exit, `false` otherwise.
+    pub fn render_frame(&mut self) -> bool {
         let action;
         {
             let renderer = &mut self.renderer;
@@ -544,8 +546,10 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
         }
 
         if let Some(a) = action {
-            if self.handle_action(a) { return }
+            if self.handle_action(a) { return true; }
         }
+
+        false
     }
 
     /// Runs the emulator in a loop
@@ -553,8 +557,6 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     /// This will emulate the system and render frames until the frontend signals that the emulator
     /// should exit.
     pub fn run(&mut self) {
-        loop {
-            self.render_frame();
-        }
+        while !self.render_frame() {}
     }
 }
