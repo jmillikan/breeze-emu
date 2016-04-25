@@ -146,44 +146,43 @@ fn main() {
         renderer.set_rom_title(title);
     }
 
-    let mut snes = Emulator::new(rom, &mut *renderer, audio_fn());
-    attach_default_input(&mut snes.peripherals_mut().input);
+    let mut emu = Emulator::new(rom, &mut *renderer, audio_fn());
+    attach_default_input(&mut emu.peripherals_mut().input);
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
-        let recorder = create_recorder(RecordingFormat::default(), writer, &snes).unwrap();
-        snes.peripherals_mut().input.start_recording(recorder);
+        let recorder = create_recorder(RecordingFormat::default(), writer, &emu).unwrap();
+        emu.peripherals_mut().input.start_recording(recorder);
     }
     if let Some(replay_file) = args.value_of("replay") {
         let reader = Box::new(BufReader::new(File::open(replay_file).unwrap()));
-        let replayer = create_replayer(RecordingFormat::default(), reader, &snes).unwrap();
-        snes.peripherals_mut().input.start_replay(replayer);
+        let replayer = create_replayer(RecordingFormat::default(), reader, &emu).unwrap();
+        emu.peripherals_mut().input.start_replay(replayer);
     }
     if let Some(filename) = args.value_of("savestate") {
         let file = File::open(filename).unwrap();
         let mut bufrd = BufReader::new(file);
-        snes.restore_save_state(SaveStateFormat::default(),
-            &mut bufrd).unwrap()
+        emu.snes.restore_save_state(SaveStateFormat::default(), &mut bufrd).unwrap()
     }
 
     if cfg!(debug_assertions) && args.is_present("oneframe") {
         debug!("PPU H={}, V={}",
-            snes.peripherals().ppu.h_counter(),
-            snes.peripherals().ppu.v_counter());
-        snes.render_frame();
+            emu.peripherals().ppu.h_counter(),
+            emu.peripherals().ppu.v_counter());
+        emu.snes.render_frame(|_framebuf| None);
 
         info!("frame rendered. pausing emulation.");
 
         // Keep rendering, but don't run emulation
         // Copy out the frame buffer because the damn borrow checker doesn't like it otherwise
-        let framebuf = snes.peripherals().ppu.framebuf.clone();
+        let framebuf = emu.peripherals().ppu.framebuf.clone();
         loop {
-            let action = snes.renderer.render(&*framebuf);
+            let action = emu.renderer.render(&*framebuf);
             if let Some(a) = action {
-                if snes.handle_action(a) { break }
+                if emu.handle_action(a) { break }
             }
         }
     } else {
         // Run normally
-        snes.run();
+        emu.run();
     }
 }

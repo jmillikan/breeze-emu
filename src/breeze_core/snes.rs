@@ -3,7 +3,7 @@
 use dma::*;
 use input::Input;
 use log_util::LogOnPanic;
-use ppu::Ppu;
+use ppu::{FrameBuf, Ppu};
 use rom::Rom;
 use save::SaveStateFormat;
 
@@ -308,11 +308,10 @@ impl Mem for Peripherals {
     }
 }
 
-/// The emulator.
-pub struct Emulator<'r> {
-    /// Reference to the renderer this emulator instance uses to display the screen
-    pub renderer: &'r mut Renderer,
-    pub audio: Box<AudioSink>,
+/// SNES system state
+///
+/// Contains all registers, RAMs, cartridge memory, timing information, latches, flip-flops, etc.
+pub struct Snes {
     cpu: Cpu<Peripherals>,
     master_cy: u64,
     /// Master clock cycles for the APU not yet accounted for (can be negative)
@@ -324,76 +323,23 @@ pub struct Emulator<'r> {
     trace_start: u64,
 }
 
-impl<'a> SaveState for Emulator<'a> {
-    impl_save_state_fns!(Emulator { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
-        ignore { renderer, audio, trace_start });
-}
+impl_save_state!(Snes { cpu, master_cy, apu_master_cy_debt, ppu_master_cy_debt }
+    ignore { trace_start });
 
-impl<'r> Emulator<'r> {
-    /// Creates a new emulator instance from a loaded ROM and a renderer.
-    ///
-    /// This will also create a default `Input` instance without any attached peripherals.
-    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Self {
-        // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
-        let trace_start: u64 = match env::var("BREEZE_TRACE") {
-            Ok(string) => match string.parse() {
-                Ok(trace) => {
-                    info!("BREEZE_TRACE env var: starting trace after {} master cycles (make sure \
-                           that the `trace` log level is enabled for the `wdc65816` crate)", trace);
-                    trace
-                },
-                Err(_) => {
-                    panic!("invalid value for BREEZE_TRACE: {}", string);
-                },
-            },
-            Err(env::VarError::NotPresent) => !0,
-            Err(env::VarError::NotUnicode(_)) => panic!("BREEZE_TRACE value isn't valid unicode"),
-        };
-
-        Emulator {
+impl Snes {
+    pub fn new(rom: Rom) -> Self {
+        Snes {
             cpu: Cpu::new(Peripherals::new(rom, Input::default())),
-            renderer: renderer,
-            audio: audio,
             master_cy: 0,
             apu_master_cy_debt: 0,
             ppu_master_cy_debt: 0,
-            trace_start: trace_start,
+            trace_start: !0,
         }
-    }
-
-    /// Get a reference to the `Peripherals` instance
-    pub fn peripherals(&self) -> &Peripherals { &self.cpu.mem }
-
-    /// Get a mutable reference to the `Peripherals` instance
-    pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.cpu.mem }
-
-    /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
-    pub fn handle_action(&mut self, action: FrontendAction) -> bool {
-        match action {
-            FrontendAction::Exit => return true,
-            FrontendAction::SaveState => {
-                let path = "breeze.sav";
-                let mut file = File::create(path).unwrap();
-                self.create_save_state(SaveStateFormat::default(), &mut file).unwrap();
-                info!("created a save state in '{}'", path);
-            }
-            FrontendAction::LoadState => {
-                if self.cpu.mem.input.is_recording() || self.cpu.mem.input.is_replaying() {
-                    error!("cannot load a save state while recording or replaying input!");
-                } else {
-                    let file = File::open("breeze.sav").unwrap();
-                    let mut bufrd = BufReader::new(file);
-                    self.restore_save_state(SaveStateFormat::default(), &mut bufrd).unwrap();
-                    info!("restored save state");
-                }
-            }
-        }
-
-        false
     }
 
     /// Runs emulation until the next frame is completed.
-    pub fn render_frame(&mut self) -> Option<FrontendAction> {
+    pub fn render_frame<F>(&mut self, mut render: F) -> Option<FrontendAction>
+    where F: FnMut(&FrameBuf) -> Option<FrontendAction> {
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
@@ -449,7 +395,7 @@ impl<'r> Emulator<'r> {
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
-                        if let Some(a) = self.renderer.render(&*self.cpu.mem.ppu.framebuf) {
+                        if let Some(a) = render(&self.cpu.mem.ppu.framebuf) {
                             if action.is_none() { action = Some(a); }
                         }
                         frame_rendered = true;
@@ -506,10 +452,92 @@ impl<'r> Emulator<'r> {
             working_cy.set(self.master_cy);
         }
     }
+}
 
+/// The emulator.
+pub struct Emulator<'r> {
+    /// Reference to the renderer this emulator instance uses to display the screen
+    pub renderer: &'r mut Renderer,
+    pub audio: Box<AudioSink>,
+    pub snes: Snes,
+    #[allow(dead_code)]
+    priv_: (),
+}
+
+impl<'r> Emulator<'r> {
+    /// Creates a new emulator instance from a loaded ROM and a renderer.
+    ///
+    /// This will also create a default `Input` instance without any attached peripherals.
+    pub fn new(rom: Rom, renderer: &'r mut Renderer, audio: Box<AudioSink>) -> Self {
+        // Start tracing at this master cycle (`!0` by default, which practically disables tracing)
+        let trace_start: u64 = match env::var("BREEZE_TRACE") {
+            Ok(string) => match string.parse() {
+                Ok(trace) => {
+                    info!("BREEZE_TRACE env var: starting trace after {} master cycles (make sure \
+                           that the `trace` log level is enabled for the `wdc65816` crate)", trace);
+                    trace
+                },
+                Err(_) => {
+                    panic!("invalid value for BREEZE_TRACE: {}", string);
+                },
+            },
+            Err(env::VarError::NotPresent) => !0,
+            Err(env::VarError::NotUnicode(_)) => panic!("BREEZE_TRACE value isn't valid unicode"),
+        };
+
+        let mut snes = Snes::new(rom);
+        snes.trace_start = trace_start;
+
+        Emulator {
+            renderer: renderer,
+            audio: audio,
+            snes: snes,
+            priv_: (),
+        }
+    }
+
+    /// Get a reference to the `Peripherals` instance
+    pub fn peripherals(&self) -> &Peripherals { &self.snes.cpu.mem }
+
+    /// Get a mutable reference to the `Peripherals` instance
+    pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.snes.cpu.mem }
+
+    /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
+    pub fn handle_action(&mut self, action: FrontendAction) -> bool {
+        match action {
+            FrontendAction::Exit => return true,
+            FrontendAction::SaveState => {
+                let path = "breeze.sav";
+                let mut file = File::create(path).unwrap();
+                self.snes.create_save_state(SaveStateFormat::default(), &mut file).unwrap();
+                info!("created a save state in '{}'", path);
+            }
+            FrontendAction::LoadState => {
+                if self.snes.cpu.mem.input.is_recording() || self.snes.cpu.mem.input.is_replaying() {
+                    error!("cannot load a save state while recording or replaying input!");
+                } else {
+                    let file = File::open("breeze.sav").unwrap();
+                    let mut bufrd = BufReader::new(file);
+                    self.snes.restore_save_state(SaveStateFormat::default(), &mut bufrd).unwrap();
+                    info!("restored save state");
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Runs the emulator in a loop
+    ///
+    /// This will emulate the system and render frames until the frontend signals that the emulator
+    /// should exit.
     pub fn run(&mut self) {
         loop {
-            let action = self.render_frame();
+            let action;
+            {
+                let renderer = &mut self.renderer;
+                action = self.snes.render_frame(|framebuf| renderer.render(&**framebuf));
+            }
 
             if let Some(a) = action {
                 if self.handle_action(a) { return }

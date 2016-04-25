@@ -89,8 +89,8 @@ fn dumb(b: &mut Bencher) {
 
     // FIXME: Just use DummyRenderer directly
     let mut renderer = RENDERER_MAP.get("dummy").unwrap().unwrap()();
-    let mut snes = Emulator::new(rom, &mut *renderer, Box::new(DummySink));
+    let mut emu = Emulator::new(rom, &mut *renderer, Box::new(DummySink));
     b.iter(|| {
-        snes.render_frame();
+        emu.snes.render_frame(|_| None);
     });
 }
