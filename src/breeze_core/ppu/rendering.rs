@@ -197,7 +197,7 @@ impl Ppu {
         }
 
         let (main_pix_color, main_pix_layer) = self.get_raw_pixel(false);
-        let final_color = if self.color_math_enabled(main_pix_layer) {
+        let post_math_color = if self.color_math_enabled(main_pix_layer) {
             let math_color = if self.cgwsel & 0x02 == 0 {
                 // Fixed color. Note that the fixed color is also used as the subscreen's backdrop
                 // color.
@@ -224,6 +224,19 @@ impl Ppu {
         } else {
             // No color math
             main_pix_color
+        };
+
+        let brightness = self.brightness() as u16;
+        let final_color = if brightness == 0 {
+            // This isn't actually correct: The image is still (barely) visible. So barely that this
+            // makes basically no difference.
+            SnesRgb::new(0, 0, 0)
+        } else {
+            SnesRgb::new(
+                (post_math_color.r() as u16 * (brightness + 1) / 16) as u8,
+                (post_math_color.g() as u16 * (brightness + 1) / 16) as u8,
+                (post_math_color.b() as u16 * (brightness + 1) / 16) as u8,
+            )
         };
 
         final_color.to_adjusted_rgb()
