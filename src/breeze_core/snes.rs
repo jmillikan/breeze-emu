@@ -534,21 +534,27 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
         false
     }
 
+    /// Runs emulation until a frame is completed, renders the frame and handles an action dictated
+    /// by the frontend.
+    pub fn render_frame(&mut self) {
+        let action;
+        {
+            let renderer = &mut self.renderer;
+            action = self.snes.render_frame(|framebuf| renderer.render(&**framebuf));
+        }
+
+        if let Some(a) = action {
+            if self.handle_action(a) { return }
+        }
+    }
+
     /// Runs the emulator in a loop
     ///
     /// This will emulate the system and render frames until the frontend signals that the emulator
     /// should exit.
     pub fn run(&mut self) {
         loop {
-            let action;
-            {
-                let renderer = &mut self.renderer;
-                action = self.snes.render_frame(|framebuf| renderer.render(&**framebuf));
-            }
-
-            if let Some(a) = action {
-                if self.handle_action(a) { return }
-            }
+            self.render_frame();
         }
     }
 }

@@ -37,10 +37,9 @@ fn build_rom() -> Vec<u8> {
     let mut header = Vec::with_capacity(32);
 
     // First 21 Bytes: Title (ASCII)
-    let name = "BENCHROM";
-    header.extend(name.chars()
-                      .map(|c| c as u8)
-                      .chain(iter::repeat(' ' as u8))
+    let name = b"BENCHROM";
+    header.extend(name.into_iter()
+                      .chain(iter::repeat(&b' '))
                       .take(21));
 
     header.push(0);     // ROM makeup Byte - LoROM, no FastROM
@@ -86,7 +85,7 @@ fn dumb(b: &mut Bencher) {
     let rom = build_rom();
     let rom = Rom::from_bytes(&rom).unwrap();
 
-    let mut emu = Emulator::new(rom, Box::new(DummyRenderer::default()), Box::new(DummySink));
+    let mut emu = Emulator::new(rom, DummyRenderer::default(), DummySink);
     b.iter(|| {
         emu.snes.render_frame(|_| None);
     });

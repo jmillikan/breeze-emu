@@ -8,8 +8,7 @@ extern crate png;
 extern crate breeze_core;
 extern crate breeze_frontends;
 
-use breeze_frontends::frontend::test::TestRenderer;
-use breeze_frontends::frontend::dummy::DummySink;
+use breeze_frontends::frontend::dummy::{DummyRenderer, DummySink};
 use breeze_core::rom::Rom;
 use breeze_core::snes::Emulator;
 
@@ -227,10 +226,11 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     let rom = build_rom(name, test);
 
     let rom = Rom::from_bytes(&rom).unwrap();
-    let renderer = TestRenderer::new(test.frames);
 
-    let mut emu = Emulator::new(rom, renderer, Box::new(DummySink::default()));
-    emu.run();
+    let mut emu = Emulator::new(rom, DummyRenderer::default(), DummySink::default());
+    for _ in 0..test.frames {
+        emu.render_frame();
+    }
 
     let mut exp_data = Vec::new();
     let mut exp_file = File::open(format!("rendertest/tests/{}/expected.png", name)).unwrap();
