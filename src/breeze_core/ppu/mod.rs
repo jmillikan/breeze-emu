@@ -58,11 +58,11 @@ pub struct Ppu {
     /// sprites). The remaining 32 Bytes contain additional 2 bits per sprite.
     ///
     /// Layout of an OAM entry (4 Bytes) in the first 512 Bytes:
-    /// `xxxxxxxx` - Low 8 bits of **X** coordinate of the sprite (top left corner?)
-    /// `yyyyyyyy` - **Y** coordinate
-    /// `tttttttt` - Starting **t**ile/character number (low 8 bits)
-    /// `vhoopppt` - **V**ertical/**H**orizontal flip, Pri**o**rity bits, **P**alette number,
-    ///     Bit 9 (most significant bit) of starting **t**ile number.
+    /// * `xxxxxxxx` - Low 8 bits of **X** coordinate of the sprite (top left corner?)
+    /// * `yyyyyyyy` - **Y** coordinate
+    /// * `tttttttt` - Starting **t**ile/character number (low 8 bits)
+    /// * `vhoopppt` - **V**ertical/**H**orizontal flip, Pri**o**rity bits, **P**alette number,
+    ///   Bit 9 (most significant bit) of starting **t**ile number.
     ///
     /// Layout of a byte in the last 32 Bytes of OAM:
     /// `sxsxsxsx` - **S**ize toggle bit and most significant bit of **X** coordinate
@@ -80,9 +80,12 @@ pub struct Ppu {
     ///
     /// The location of background maps can be selected with the registers `$2107-$210A`. An entry
     /// in these maps looks like this:
+    ///
     /// `vhopppcc` `cccccccc`
-    /// **V**ertical/**H**orizontal flip, Pri**o**rity bit, **P**alette number, **C**haracter/Tile
-    /// starting number
+    /// * **V**ertical/**H**orizontal flip
+    /// * Pri**o**rity bit
+    /// * **P**alette number
+    /// * **C**haracter/Tile starting number
     ///
     /// Character data locations are set with the registers `$210B` (BG1/2) and `$210C` (BG3/4).
     pub vram: Vram,
