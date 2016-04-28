@@ -187,6 +187,7 @@ impl<M: Mem> Cpu<M> {
 
     /// Enters/exits emulation mode
     fn set_emulation(&mut self, value: bool) {
+        // FIXME Should this set the DBR/PBR?
         if !self.emulation && value {
             // Enter emulation mode
 
@@ -541,6 +542,7 @@ impl<M: Mem> Cpu<M> {
     /// stack, sets the PBR to 0, loads the handler address from the given vector, and jumps to the
     /// handler.
     fn interrupt(&mut self, vector: u16) {
+        // FIXME: Does this need to set DBR/PBR?
         self.wai = false;
 
         if !self.emulation {

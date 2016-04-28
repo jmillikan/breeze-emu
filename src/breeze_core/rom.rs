@@ -2,6 +2,7 @@
 
 use std::cmp;
 use std::str;
+use std::i16;
 use std::io;
 
 fn invalid_data(err: String) -> io::Error {
@@ -12,7 +13,6 @@ fn invalid_data(err: String) -> io::Error {
 #[derive(Clone)]
 pub struct RomHeader {
     /// ASCII title, filled with spaces to 21 Bytes
-    #[allow(dead_code)] // FIXME Use this or drop this
     title: [u8; 21],
     rom_size: u32,
     ram_size: u32,
@@ -32,12 +32,41 @@ impl RomHeader {
         info!("{} KB ROM / {} KB Cartridge RAM", self.rom_size / 1024, self.ram_size / 1024);
     }
 
-    /// Loads the ROM header from the given byte slice (must be exactly 64 bytes large).
-    /// `rom_type` is the expected type of the ROM header, based on its location.
+    /// Loads the ROM header from the given ROM byte slice.
+    ///
+    /// `rom_type` is the expected type of the ROM header, based on its location. This method
+    /// decides where to look for the header based on this value.
     ///
     /// Returns the decoded `RomHeader` and a scoring value. The higher the score, the more likely
     /// the header matches the `RomType`.
+    ///
+    /// In case `bytes` is too small for the expected ROM type, a dummy header and the maximum
+    /// negative score will be returned.
     fn load(bytes: &[u8], rom_type: RomType) -> (RomHeader, i16) {
+        fn dummy_result() -> (RomHeader, i16) {
+            (RomHeader {
+                title: [0; 21],
+                rom_size: 0,
+                ram_size: 0,
+                checksum: 0,
+                rom_type: RomType::LoRom,
+            }, i16::MIN)
+        }
+
+        // Extract header slice
+        let bytes = match rom_type {
+            RomType::LoRom => if bytes.len() < 0x8000 {
+                return dummy_result();
+            } else {
+                &bytes[0x7FFF - 63..0x7FFF + 1]
+            },
+            RomType::HiRom => if bytes.len() < 0x10000 {
+                return dummy_result();
+            } else {
+                &bytes[0xFFFF - 63..0xFFFF + 1]
+            }
+        };
+
         // The header size must be correct (the ROM loader won't pass a wrong size)
         assert_eq!(bytes.len(), 64);
 
@@ -151,13 +180,6 @@ impl Rom {
 
         debug!("raw size: {} bytes (${:X})", bytes.len(), bytes.len());
 
-        // Is the ROM even large enough to contain the headers?
-        if bytes.len() < 0xFFFF + 1 {
-            // Technically, we could get away with only requiring the lowest header, but does it
-            // matter?
-            return Err(invalid_data(String::from("ROM too small (doesn't contain a header)")));
-        }
-
         // ROMs may begin with a 512 Bytes SMC header. It needs to go.
         match bytes.len() % 1024 {
             512 => {
@@ -172,13 +194,12 @@ impl Rom {
             }
         }
 
-        // Read the SNES header. It is located in a really stupid location which depends on whether
-        // the ROM is HiROM or LoROM, so we must check both locations and pick the right one.
-        // LoROM header is at 0x7FFF - 63, HiROM is at 0xFFFF - 63 (it is 64 Bytes large)
-
-        let (lo_header, lo_score) = RomHeader::load(&bytes[0x7FFF - 63..0x7FFF + 1],
+        // Try all header locations and pick the one that's probably right.
+        // Oh how much I wish there was a real standard for this.
+        // FIXME: We might want to... like... not play *literally every file* but warn instead :)
+        let (lo_header, lo_score) = RomHeader::load(bytes,
                                                     RomType::LoRom);
-        let (hi_header, hi_score) = RomHeader::load(&bytes[0xFFFF - 63..0xFFFF + 1],
+        let (hi_header, hi_score) = RomHeader::load(bytes,
                                                     RomType::HiRom);
 
         info!("LoROM/HiROM scores: {}, {}", lo_score, hi_score);
