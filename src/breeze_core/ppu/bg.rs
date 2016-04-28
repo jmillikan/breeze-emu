@@ -236,6 +236,74 @@ impl Ppu {
         }
     }
 
+    fn render_mode7_scanline(&mut self) {
+        // TODO Figure out how to integrate EXTBG
+        assert!(self.setini & 0x40 == 0, "NYI: Mode 7 EXTBG");
+
+        // FIXME consider changing the type of `Ppu.m7a,...` to `i16`
+
+        let vflip = self.m7sel & 0x02 != 0;
+        let hflip = self.m7sel & 0x01 != 0;
+        // 0/1: Wrap
+        // 2: Transparent
+        // 3: Fill with tile 0
+        let screen_over = self.m7sel >> 6;
+
+        let mut x = self.x;
+        let y = self.scanline;
+
+        while x < super::SCREEN_WIDTH as u16 {
+            // Code taken from http://problemkaputt.de/fullsnes.htm
+            // FIXME: The above source also has a much faster way to render whole scanlines!
+            let screen_x = x ^ if hflip { 0xff } else { 0x00 };
+            let screen_y = y ^ if vflip { 0xff } else { 0x00 };
+
+            let mut org_x = (self.m7hofs as i16 - self.m7x as i16) & !0x1c00;
+            if org_x < 0 { org_x |= 0x1c00; }
+            let mut org_y = (self.m7vofs as i16 - self.m7y as i16) & !0x1c00;
+            if org_y < 0 { org_y |= 0x1c00; }
+
+            let mut vram_x: i32 = ((self.m7a as i16 as i32 * org_x as i32) & !0x3f) + ((self.m7b as i16 as i32 * org_y as i32) & !0x3f) + self.m7x as i16 as i32 * 0x100;
+            let mut vram_y: i32 = ((self.m7c as i16 as i32 * org_x as i32) & !0x3f) + ((self.m7d as i16 as i32 * org_y as i32) & !0x3f) + self.m7y as i16 as i32 * 0x100;
+            vram_x += ((self.m7b as i16 as i32 * screen_y as i32) & !0x3f) + self.m7a as i16 as i32 * screen_x as i32;
+            vram_y += ((self.m7d as i16 as i32 * screen_y as i32) & !0x3f) + self.m7c as i16 as i32 * screen_x as i32;
+
+            if vram_x & (1 << 18) != 0 || vram_y & (1 << 18) != 0 {
+                // FIXME
+                assert!(screen_over < 2, "NYI: mode7 screen_over handling");
+            }
+
+            let tile_x: u16 = ((vram_x as u32 >> 11) & 0x7f) as u16;
+            let tile_y: u16 = ((vram_y as u32 >> 11) & 0x7f) as u16;
+            let off_x: u16 = (vram_x as u16 >> 8) & 0x07;
+            let off_y: u16 = (vram_y as u16 >> 8) & 0x07;
+
+            // Tilemap address for (7-bit) tile X/Y coordinates (BG1 is 128x128 tiles):
+            // `0yyyyyyy xxxxxxx0`
+            let tilemap_addr: u16 = (tile_y << 8) | (tile_x << 1);
+            // The "tilemap" in mode 7 just consists of "tile numbers" (or pixel addresses)
+            let tile_number = self.vram[tilemap_addr] as u16;
+
+            // The CHR address is calculated like this (where `t` is `tile_number` and `x` and `y`
+            // are pixel offsets inside the tile):
+            // `tttttttt tyyyxxx1`
+            let chr_addr = (tile_number << 7) | (off_y << 4) | (off_x << 1) | 1;
+            let palette_index = self.vram[chr_addr];
+
+            let rgb = match palette_index {
+                0 => None,
+                _ => Some(self.cgram.get_color(palette_index)),
+            };
+
+            self.bg_cache.layers[0].scanline[x as usize] = CachedPixel {
+                priority: 0,    // Ignored anyways
+                color: rgb,
+            };
+
+            x += 1;
+        }
+    }
+
     /// Render the current scanline of the given BG layer into its cache.
     ///
     /// We render starting at `self.x` (the pixel we actually need) until the end of the
@@ -253,6 +321,12 @@ impl Ppu {
         // -1 to properly correct for the missing line 0 (and an emulator would need to add 2
         // instead of 1 to account for this)."
         // -> I guess we should just decrement the physical screen height by 1
+
+        if self.bg_mode() == 7 {
+            self.render_mode7_scanline();
+            return;
+        }
+
         let mut x = self.x;
         let y = self.scanline;
         let bg = self.bg_settings(bg_num);

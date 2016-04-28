@@ -63,6 +63,10 @@ pub struct Peripherals {
     wrio: u8,
     /// `$4202` - WRMPYA: Multiplicand 1
     wrmpya: u8,
+    /// `$4203` - WRMPYB: Multiplicand 2
+    ///
+    /// Writing here will trigger the multiplication
+    wrmpyb: u8,
     /// `$4204`/`$4205` - WRDIVH/WRDIVL: Dividend
     wrdiv: u16,
     /// `$4216`/`$4217` - RDDIVH/RDDIVL: Unsigned Division Result (Quotient)
@@ -93,8 +97,8 @@ pub struct Peripherals {
 }
 
 impl_save_state!(Peripherals {
-    apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrdiv, rddiv, rdmpy, htime, vtime,
-    memsel, nmi, irq, cy, input, wmaddl, wmaddm, wmaddh
+    apu, ppu, rom, wram, dma, hdmaen, nmien, wrio, wrmpya, wrmpyb, wrdiv, rddiv, rdmpy, htime,
+    vtime, memsel, nmi, irq, cy, input, wmaddl, wmaddm, wmaddh
 } ignore {});
 
 impl Peripherals {
@@ -117,7 +121,8 @@ impl Peripherals {
             dma: [DmaChannel::default(); 8],
             hdmaen: 0x00,
             nmien: 0x00,
-            wrmpya: 0,
+            wrmpya: 0xff,
+            wrmpyb: 0,
             rddiv: 0,
             rdmpy: 0,
             nmi: false,
@@ -188,6 +193,8 @@ impl Mem for Peripherals {
                     0   // FIXME Emulate open-bus
                 }
                 0x4016 | 0x4017 => self.input.load(addr),
+                0x4202 => self.wrmpya,
+                0x4203 => self.wrmpyb,
                 0x4210 => {
                     const CPU_VERSION: u8 = 2;  // FIXME Is 2 okay in all cases? Does anyone care?
                     let nmi = if self.nmi { 0x80 } else { 0 };
@@ -268,7 +275,10 @@ impl Mem for Peripherals {
                 }
                 0x4202 => self.wrmpya = value,
                 // WRMPYB: Performs multiplication on write
-                0x4203 => self.rdmpy = self.wrmpya as u16 * value as u16,
+                0x4203 => {
+                    self.wrmpyb = value;
+                    self.rdmpy = self.wrmpya as u16 * value as u16;
+                }
                 0x4204 => self.wrdiv = (self.wrdiv & 0xff00) | value as u16,
                 0x4205 => self.wrdiv = ((value as u16) << 8) | (self.wrdiv & 0xff),
                 // WRDIVB: Performs division on write

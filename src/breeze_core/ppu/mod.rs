@@ -539,23 +539,23 @@ impl Ppu {
             0x2129 => self.wh3 = value,
             0x212a => self.wbglog = value,
             0x212b => {
-                if value & 0xf0 != 0 { panic!("invalid value for $212b: ${:02X}", value) }
+                if value & 0xf0 != 0 { once!(warn!("invalid value for $212b: ${:02X}", value)); }
                 self.wobjlog = value;
             }
             0x212c => {
-                if value & 0xe0 != 0 { panic!("invalid value for $212c: ${:02X}", value) }
+                if value & 0xe0 != 0 { once!(warn!("invalid value for $212c: ${:02X}", value)); }
                 self.tm = value;
             }
             0x212d => {
-                if value & 0xe0 != 0 { panic!("invalid value for $212d: ${:02X}", value) }
+                if value & 0xe0 != 0 { once!(warn!("invalid value for $212d: ${:02X}", value)); }
                 self.ts = value;
             }
             0x212e => {
-                if value & 0xe0 != 0 { panic!("invalid value for $212e: ${:02X}", value) }
+                if value & 0xe0 != 0 { once!(warn!("invalid value for $212e: ${:02X}", value)); }
                 self.tmw = value;
             }
             0x212f => {
-                if value & 0xe0 != 0 { panic!("invalid value for $212f: ${:02X}", value) }
+                if value & 0xe0 != 0 { once!(warn!("invalid value for $212f: ${:02X}", value)); }
                 self.tsw = value;
             }
             0x2130 => self.cgwsel = value,

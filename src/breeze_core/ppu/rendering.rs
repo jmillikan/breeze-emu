@@ -146,7 +146,16 @@ impl Ppu {
                 try_layer!(BG 1 tiles with priority 0);
                 try_layer!(Sprites with priority 0);
             }
-            7 => panic!("NYI: BG mode 7"),
+            7 => {
+                let extbg = self.setini & 0x40 != 0;
+                try_layer!(Sprites with priority 3);
+                try_layer!(Sprites with priority 2);
+                if extbg { try_layer!(BG 2 tiles with priority 1); }
+                try_layer!(Sprites with priority 1);
+                try_layer!(BG 1 tiles with priority 0);    // priority is ignored
+                try_layer!(Sprites with priority 0);
+                if extbg { try_layer!(BG 2 tiles with priority 0); }
+            }
             _ => unreachable!(),
         }
 
