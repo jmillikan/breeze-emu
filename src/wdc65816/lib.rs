@@ -121,11 +121,12 @@ impl<M: Mem> Cpu<M> {
         self.mem.store(bank, addr, value)
     }
     fn storew(&mut self, bank: u8, addr: u16, value: u16) {
-        assert!(addr < 0xffff, "storew on bank boundary");
-        // ^ if this should be supported, make sure to fix the potential overflow below
-
         self.storeb(bank, addr, value as u8);
-        self.storeb(bank, addr + 1, (value >> 8) as u8);
+        if addr == 0xffff {
+            self.storeb(bank + 1, 0, (value >> 8) as u8);
+        } else {
+            self.storeb(bank, addr + 1, (value >> 8) as u8);
+        }
     }
 
     /// Fetches the byte PC points at, then increments PC
@@ -1543,14 +1544,12 @@ impl<M: Mem> Cpu<M> {
     /// Clears the bits in the status register that are 1 in the argument (argument is interpreted
     /// as 8-bit)
     fn rep(&mut self, am: AddressingMode) {
-        assert!(!self.emulation);
         let p = self.p.0 & !am.loadb(self);
         self.set_p(p);
     }
 
     /// Set Processor Status Bits
     fn sep(&mut self, am: AddressingMode) {
-        assert!(!self.emulation);
         let p = self.p.0 | am.loadb(self);
         self.set_p(p);
     }
