@@ -180,7 +180,10 @@ impl Mem for Peripherals {
                 // Mirror of first 8k of WRAM
                 0x0000 ... 0x1fff => self.wram[addr as usize],
                 // PPU
-                0x2100 ... 0x2133 => panic!("read from write-only PPU register ${:04X}", addr),
+                0x2100 ... 0x2133 => {
+                    once!(warn!("read from write-only PPU register ${:04X}", addr));
+                    0
+                }
                 0x2134 ... 0x213f => self.ppu.load(addr),
                 // APU IO registers
                 0x2140 ... 0x217f => self.apu.read_port((addr & 0b11) as u8),
@@ -227,7 +230,10 @@ impl Mem for Peripherals {
                 // DMA channels (0x43xr, where x is the channel and r is the channel register)
                 0x4300 ... 0x43ff => self.dma[(addr as usize & 0x00f0) >> 4].load(addr as u8 & 0xf),
                 0x6000 ... 0xffff => self.rom.load(bank, addr),
-                _ => panic!("invalid/unimplemented load from ${:02X}:{:04X}", bank, addr)
+                _ => {
+                    once!(warn!("invalid/unimplemented load from ${:02X}:{:04X}", bank, addr));
+                    0
+                }
             },
             // WRAM banks. The first 8k are mapped into the start of all banks.
             0x7e | 0x7f => self.wram[(bank as usize - 0x7e) * 65536 + addr as usize],

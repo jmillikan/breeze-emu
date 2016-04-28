@@ -249,10 +249,9 @@ impl Ppu {
         // 3: Fill with tile 0
         let screen_over = self.m7sel >> 6;
 
-        let mut x = self.x;
         let y = self.scanline;
 
-        while x < super::SCREEN_WIDTH as u16 {
+        for x in self.x..super::SCREEN_WIDTH as u16 {
             // Code taken from http://problemkaputt.de/fullsnes.htm
             // FIXME: The above source also has a much faster way to render whole scanlines!
             let screen_x = x ^ if hflip { 0xff } else { 0x00 };
@@ -268,27 +267,36 @@ impl Ppu {
             vram_x += ((self.m7b as i16 as i32 * screen_y as i32) & !0x3f) + self.m7a as i16 as i32 * screen_x as i32;
             vram_y += ((self.m7d as i16 as i32 * screen_y as i32) & !0x3f) + self.m7c as i16 as i32 * screen_x as i32;
 
-            if vram_x & (1 << 18) != 0 || vram_y & (1 << 18) != 0 {
-                // FIXME
-                assert!(screen_over < 2, "NYI: mode7 screen_over handling");
-            }
+            let out_of_bounds = vram_x & (1 << 18) != 0 || vram_y & (1 << 18) != 0;
+            let palette_index = match screen_over {
+                2 if out_of_bounds => { // transparent
+                    0
+                },
+                _ => {
+                    let (tile_x, tile_y) = if screen_over == 3 && out_of_bounds {
+                        (0, 0)  // 3 -> use tile 0
+                    } else {
+                        let tile_x: u16 = ((vram_x as u32 >> 11) & 0x7f) as u16;
+                        let tile_y: u16 = ((vram_y as u32 >> 11) & 0x7f) as u16;
+                        (tile_x, tile_y)
+                    };
 
-            let tile_x: u16 = ((vram_x as u32 >> 11) & 0x7f) as u16;
-            let tile_y: u16 = ((vram_y as u32 >> 11) & 0x7f) as u16;
-            let off_x: u16 = (vram_x as u16 >> 8) & 0x07;
-            let off_y: u16 = (vram_y as u16 >> 8) & 0x07;
+                    let off_x: u16 = (vram_x as u16 >> 8) & 0x07;
+                    let off_y: u16 = (vram_y as u16 >> 8) & 0x07;
 
-            // Tilemap address for (7-bit) tile X/Y coordinates (BG1 is 128x128 tiles):
-            // `0yyyyyyy xxxxxxx0`
-            let tilemap_addr: u16 = (tile_y << 8) | (tile_x << 1);
-            // The "tilemap" in mode 7 just consists of "tile numbers" (or pixel addresses)
-            let tile_number = self.vram[tilemap_addr] as u16;
+                    // Tilemap address for (7-bit) tile X/Y coordinates (BG1 is 128x128 tiles):
+                    // `0yyyyyyy xxxxxxx0`
+                    let tilemap_addr: u16 = (tile_y << 8) | (tile_x << 1);
+                    // The "tilemap" in mode 7 just consists of "tile numbers" (or pixel addresses)
+                    let tile_number = self.vram[tilemap_addr] as u16;
 
-            // The CHR address is calculated like this (where `t` is `tile_number` and `x` and `y`
-            // are pixel offsets inside the tile):
-            // `tttttttt tyyyxxx1`
-            let chr_addr = (tile_number << 7) | (off_y << 4) | (off_x << 1) | 1;
-            let palette_index = self.vram[chr_addr];
+                    // The CHR address is calculated like this (where `t` is `tile_number` and `x` and `y`
+                    // are pixel offsets inside the tile):
+                    // `tttttttt tyyyxxx1`
+                    let chr_addr = (tile_number << 7) | (off_y << 4) | (off_x << 1) | 1;
+                    self.vram[chr_addr]
+                },
+            };
 
             let rgb = match palette_index {
                 0 => None,
@@ -299,8 +307,6 @@ impl Ppu {
                 priority: 0,    // Ignored anyways
                 color: rgb,
             };
-
-            x += 1;
         }
     }
 
