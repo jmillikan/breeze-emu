@@ -234,6 +234,9 @@ impl<M: Mem> Cpu<M> {
     /// return 0. An interrupt has to be caused to resume work.
     pub fn dispatch(&mut self) -> u16 {
         // CPU cycles each opcode takes (at the minimum).
+        // This table assumes that fetching a byte takes 1 CPU cycle. The `Mem` implementor can add
+        // additional wait state cycles externally.
+        // (FIXME: Is the above correct? Critical for timing!)
         static CYCLE_TABLE: [u8; 256] = [
             7,6,7,4,5,3,5,6, 3,2,2,4,6,4,6,5,   // $00 - $0f
             2,5,5,7,5,4,6,6, 2,4,2,2,6,4,7,5,   // $10 - $1f
