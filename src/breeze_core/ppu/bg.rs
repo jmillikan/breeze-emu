@@ -212,7 +212,7 @@ impl Ppu {
             (5, 1) => 4,
             (5, 2) => 2,
             (6, _) => 4,
-            (7, _) => panic!("NYI: color_count_for_bg for mode 7"),   // (make sure to handle EXTBG)
+            (7, _) => panic!("unreachable: color_count_for_bg for mode 7"),
             _ => unreachable!(),
         }
     }
@@ -231,7 +231,7 @@ impl Ppu {
             (4, 1) => 0,
             (4, 2) => palette_num * 4,
             (6, _) => palette_num * 16, // BG1 has 16 colors
-            (7, _) => panic!("NYI: palette_base_for_bg_tile for mode 7"),
+            (7, _) => panic!("unreachable: palette_base_for_bg_tile for mode 7"),
             _ => unreachable!(),
         }
     }
