@@ -545,7 +545,6 @@ impl<M: Mem> Cpu<M> {
     /// stack, sets the PBR to 0, loads the handler address from the given vector, and jumps to the
     /// handler.
     fn interrupt(&mut self, vector: u16) {
-        // FIXME: Does this need to set DBR/PBR?
         self.wai = false;
 
         if !self.emulation {
@@ -560,11 +559,15 @@ impl<M: Mem> Cpu<M> {
         self.pushb(p);
 
         // Interrupts clear the decimal flag (http://www.6502.org/tutorials/decimal_mode.html)
-        self.p.set_decimal(false);
+        // ...but only in native mode
+        if !self.emulation {
+            self.p.set_decimal(false);
+        }
 
         let handler = self.loadw(0, vector);
         self.pc = handler;
     }
+
     fn return_from_interrupt(&mut self) {
         let p = self.popb();
         self.p.0 = p;
