@@ -98,9 +98,6 @@ pub enum AddressingMode {
     /// "Stack Relative-d,s"
     /// (0, SP + <val>)
     StackRel(u8),
-
-    /// Move destbank, srcbank
-    BlockMove(/*dest*/ u8, /*src*/ u8),
 }
 
 impl AddressingMode {
@@ -262,7 +259,6 @@ impl AddressingMode {
                 let addr = cpu.s + offset as u16;
                 (0, addr)
             }
-            BlockMove(..) => panic!("don't call AddressingMode::address with `BlockMove`"),
             Immediate(_) | Immediate8(_) =>
                 panic!("attempted to take the address of an immediate value (attempted store to \
                     immediate?)")
@@ -296,7 +292,6 @@ impl fmt::Display for AddressingMode {
             DirectIndirectLong(offset) =>    write!(f, "[${:02X}]", offset),
             DirectIndirectLongIdx(offset) => write!(f, "[${:02X}],y", offset),
             StackRel(offset) =>              write!(f, "${:02X},s", offset),
-            BlockMove(dest, src) =>          write!(f, "${:02X} -> ${:02X}", src, dest),
         }
     }
 }
