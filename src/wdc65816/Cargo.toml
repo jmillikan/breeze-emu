@@ -12,4 +12,5 @@ path = "lib.rs"
 
 [dependencies]
 libsavestate = { version = "0.1", path = "../libsavestate" }
-log = "0.3"
+# The benchmark was improved by 50% when the log level was limited to "debug"
+log = { version = "0.3", features = ["release_max_level_debug"] }
