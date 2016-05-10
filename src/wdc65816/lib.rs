@@ -8,8 +8,10 @@ use libsavestate::SaveState;
 mod addressing;
 mod statusreg;
 
-use self::addressing::AddressingMode;
+use self::addressing::*;
 use self::statusreg::StatusReg;
+
+use std::fmt;
 
 /// Trait for devices attached to the 65816's address/data bus
 pub trait Mem {
@@ -204,7 +206,7 @@ impl<M: Mem> Cpu<M> {
         self.emulation = value;
     }
 
-    fn trace_op(&self, pc: u16, raw: u8, op: &str, am: Option<&AddressingMode>) {
+    fn trace_op(&self, pc: u16, raw: u8, op: &str, am: Option<&fmt::Display>) {
         use log::LogLevel::Trace;
         if !log_enabled!(Trace) || !self.trace { return }
 
@@ -232,6 +234,7 @@ impl<M: Mem> Cpu<M> {
     ///
     /// Note that in case a WAI instruction was executed, this will *not* execute anything and
     /// return 0. An interrupt has to be caused to resume work.
+    #[inline(always)]   // <- This roughly doubles benchmark performance ¯\_(ツ)_/¯
     pub fn dispatch(&mut self) -> u16 {
         // CPU cycles each opcode takes (at the minimum).
         // This table assumes that fetching a byte takes 1 CPU cycle. The `Mem` implementor can add
@@ -270,8 +273,8 @@ impl<M: Mem> Cpu<M> {
                 self.$name()
             }};
             ( $name:ident $am:ident ) => {{
-                let am = self.$am();
-                self.trace_op(pc, op, stringify!($name), Some(&am));
+                let am: $am = $am::build(self);
+                self.trace_op(pc, op, stringify!($name), Some(&am as &fmt::Display));
                 self.$name(am)
             }};
         }
@@ -291,8 +294,8 @@ impl<M: Mem> Cpu<M> {
             0xfa => instr!(plx),
             0x5a => instr!(phy),
             0x7a => instr!(ply),
-            0xf4 => instr!(pea absolute),
-            0x62 => instr!(per relative_long),
+            0xf4 => instr!(pea Absolute),
+            0x62 => instr!(per PcRelLong),
 
             // Processor status
             0x18 => instr!(clc),
@@ -303,91 +306,91 @@ impl<M: Mem> Cpu<M> {
             0xd8 => instr!(cld),
             0xf8 => instr!(sed),
             0xfb => instr!(xce),
-            0xc2 => instr!(rep immediate8),
-            0xe2 => instr!(sep immediate8),
+            0xc2 => instr!(rep Immediate8),
+            0xe2 => instr!(sep Immediate8),
 
             // Arithmetic
             0x0a => instr!(asl_a),
-            0x06 => instr!(asl direct),
-            0x16 => instr!(asl direct_indexed_x),
-            0x0e => instr!(asl absolute),
-            0x1e => instr!(asl absolute_indexed_x),
+            0x06 => instr!(asl Direct),
+            0x16 => instr!(asl DirectIndexedX),
+            0x0e => instr!(asl Absolute),
+            0x1e => instr!(asl AbsIndexedX),
             0x2a => instr!(rol_a),
-            0x26 => instr!(rol direct),
-            0x2e => instr!(rol absolute),
-            0x3e => instr!(rol absolute_indexed_x),
-            0x36 => instr!(rol direct_indexed_x),
+            0x26 => instr!(rol Direct),
+            0x2e => instr!(rol Absolute),
+            0x3e => instr!(rol AbsIndexedX),
+            0x36 => instr!(rol DirectIndexedX),
             0x4a => instr!(lsr_a),
-            0x46 => instr!(lsr direct),
-            0x4e => instr!(lsr absolute),
-            0x56 => instr!(lsr direct_indexed_x),
-            0x5e => instr!(lsr absolute_indexed_x),
-            0x66 => instr!(ror direct),
+            0x46 => instr!(lsr Direct),
+            0x4e => instr!(lsr Absolute),
+            0x56 => instr!(lsr DirectIndexedX),
+            0x5e => instr!(lsr AbsIndexedX),
+            0x66 => instr!(ror Direct),
             0x6a => instr!(ror_a),
-            0x6e => instr!(ror absolute),
-            0x76 => instr!(ror direct_indexed_x),
-            0x7e => instr!(ror absolute_indexed_x),
-            0x23 => instr!(and stack_rel),
-            0x25 => instr!(and direct),
-            0x21 => instr!(and direct_indexed_indirect),
-            0x29 => instr!(and immediate_acc),
-            0x2d => instr!(and absolute),
-            0x3d => instr!(and absolute_indexed_x),
-            0x39 => instr!(and absolute_indexed_y),
-            0x2f => instr!(and absolute_long),
-            0x3f => instr!(and absolute_long_indexed_x),
-            0x03 => instr!(ora stack_rel),
-            0x05 => instr!(ora direct),
-            0x15 => instr!(ora direct_indexed_x),
-            0x09 => instr!(ora immediate_acc),
-            0x12 => instr!(ora direct_indirect),
-            0x07 => instr!(ora direct_indirect_long),
-            0x17 => instr!(ora direct_indirect_long_idx),
-            0x0d => instr!(ora absolute),
-            0x1d => instr!(ora absolute_indexed_x),
-            0x19 => instr!(ora absolute_indexed_y),
-            0x0f => instr!(ora absolute_long),
-            0x1f => instr!(ora absolute_long_indexed_x),
-            0x45 => instr!(eor direct),
-            0x55 => instr!(eor direct_indexed_x),
-            0x49 => instr!(eor immediate_acc),
-            0x4d => instr!(eor absolute),
-            0x5d => instr!(eor absolute_indexed_x),
-            0x59 => instr!(eor absolute_indexed_y),
-            0x4f => instr!(eor absolute_long),
-            0x5f => instr!(eor absolute_long_indexed_x),
-            0x65 => instr!(adc direct),
-            0x75 => instr!(adc direct_indexed_x),
-            0x72 => instr!(adc direct_indirect),
-            0x71 => instr!(adc direct_indirect_indexed),
-            0x77 => instr!(adc direct_indirect_long_idx),
-            0x67 => instr!(adc direct_indirect_long),
-            0x69 => instr!(adc immediate_acc),
-            0x6d => instr!(adc absolute),
-            0x7d => instr!(adc absolute_indexed_x),
-            0x79 => instr!(adc absolute_indexed_y),
-            0x6f => instr!(adc absolute_long),
-            0x7f => instr!(adc absolute_long_indexed_x),
-            0xe5 => instr!(sbc direct),
-            0xf5 => instr!(sbc direct_indexed_x),
-            0xe9 => instr!(sbc immediate_acc),
-            0xed => instr!(sbc absolute),
-            0xf9 => instr!(sbc absolute_indexed_y),
-            0xfd => instr!(sbc absolute_indexed_x),
-            0xef => instr!(sbc absolute_long),
-            0xff => instr!(sbc absolute_long_indexed_x),
-            0xe6 => instr!(inc direct),
-            0xf6 => instr!(inc direct_indexed_x),
-            0xfe => instr!(inc absolute_indexed_x),
-            0xee => instr!(inc absolute),
+            0x6e => instr!(ror Absolute),
+            0x76 => instr!(ror DirectIndexedX),
+            0x7e => instr!(ror AbsIndexedX),
+            0x23 => instr!(and StackRel),
+            0x25 => instr!(and Direct),
+            0x21 => instr!(and DirectIndexedIndirect),
+            0x29 => instr!(and ImmediateAcc),
+            0x2d => instr!(and Absolute),
+            0x3d => instr!(and AbsIndexedX),
+            0x39 => instr!(and AbsIndexedY),
+            0x2f => instr!(and AbsoluteLong),
+            0x3f => instr!(and AbsLongIndexedX),
+            0x03 => instr!(ora StackRel),
+            0x05 => instr!(ora Direct),
+            0x15 => instr!(ora DirectIndexedX),
+            0x09 => instr!(ora ImmediateAcc),
+            0x12 => instr!(ora DirectIndirect),
+            0x07 => instr!(ora DirectIndirectLong),
+            0x17 => instr!(ora DirectIndirectLongIdx),
+            0x0d => instr!(ora Absolute),
+            0x1d => instr!(ora AbsIndexedX),
+            0x19 => instr!(ora AbsIndexedY),
+            0x0f => instr!(ora AbsoluteLong),
+            0x1f => instr!(ora AbsLongIndexedX),
+            0x45 => instr!(eor Direct),
+            0x55 => instr!(eor DirectIndexedX),
+            0x49 => instr!(eor ImmediateAcc),
+            0x4d => instr!(eor Absolute),
+            0x5d => instr!(eor AbsIndexedX),
+            0x59 => instr!(eor AbsIndexedY),
+            0x4f => instr!(eor AbsoluteLong),
+            0x5f => instr!(eor AbsLongIndexedX),
+            0x65 => instr!(adc Direct),
+            0x75 => instr!(adc DirectIndexedX),
+            0x72 => instr!(adc DirectIndirect),
+            0x71 => instr!(adc DirectIndirectIndexed),
+            0x77 => instr!(adc DirectIndirectLongIdx),
+            0x67 => instr!(adc DirectIndirectLong),
+            0x69 => instr!(adc ImmediateAcc),
+            0x6d => instr!(adc Absolute),
+            0x7d => instr!(adc AbsIndexedX),
+            0x79 => instr!(adc AbsIndexedY),
+            0x6f => instr!(adc AbsoluteLong),
+            0x7f => instr!(adc AbsLongIndexedX),
+            0xe5 => instr!(sbc Direct),
+            0xf5 => instr!(sbc DirectIndexedX),
+            0xe9 => instr!(sbc ImmediateAcc),
+            0xed => instr!(sbc Absolute),
+            0xf9 => instr!(sbc AbsIndexedY),
+            0xfd => instr!(sbc AbsIndexedX),
+            0xef => instr!(sbc AbsoluteLong),
+            0xff => instr!(sbc AbsLongIndexedX),
+            0xe6 => instr!(inc Direct),
+            0xf6 => instr!(inc DirectIndexedX),
+            0xfe => instr!(inc AbsIndexedX),
+            0xee => instr!(inc Absolute),
             0x1a => instr!(ina),
             0xe8 => instr!(inx),
             0xc8 => instr!(iny),
             0x3a => instr!(dea),
-            0xc6 => instr!(dec direct),
-            0xd6 => instr!(dec direct_indexed_x),
-            0xce => instr!(dec absolute),
-            0xde => instr!(dec absolute_indexed_x),
+            0xc6 => instr!(dec Direct),
+            0xd6 => instr!(dec DirectIndexedX),
+            0xce => instr!(dec Absolute),
+            0xde => instr!(dec AbsIndexedX),
             0xca => instr!(dex),
             0x88 => instr!(dey),
 
@@ -405,104 +408,104 @@ impl<M: Mem> Cpu<M> {
             0x98 => instr!(tya),
             0xbb => instr!(tyx),
             0xeb => instr!(xba),
-            0x83 => instr!(sta stack_rel),
-            0x85 => instr!(sta direct),
-            0x95 => instr!(sta direct_indexed_x),
-            0x92 => instr!(sta direct_indirect),
-            0x87 => instr!(sta direct_indirect_long),
-            0x97 => instr!(sta direct_indirect_long_idx),
-            0x8d => instr!(sta absolute),
-            0x8f => instr!(sta absolute_long),
-            0x9d => instr!(sta absolute_indexed_x),
-            0x99 => instr!(sta absolute_indexed_y),
-            0x9f => instr!(sta absolute_long_indexed_x),
-            0x86 => instr!(stx direct),
-            0x96 => instr!(stx direct_indexed_y),
-            0x8e => instr!(stx absolute),
-            0x84 => instr!(sty direct),
-            0x94 => instr!(sty direct_indexed_y),
-            0x8c => instr!(sty absolute),
-            0x64 => instr!(stz direct),
-            0x9c => instr!(stz absolute),
-            0x74 => instr!(stz direct_indexed_x),
-            0x9e => instr!(stz absolute_indexed_x),
-            0xa3 => instr!(lda stack_rel),
-            0xa5 => instr!(lda direct),
-            0xb5 => instr!(lda direct_indexed_x),
-            0xb1 => instr!(lda direct_indirect_indexed),
-            0xa9 => instr!(lda immediate_acc),
-            0xb2 => instr!(lda direct_indirect),
-            0xa7 => instr!(lda direct_indirect_long),
-            0xb7 => instr!(lda direct_indirect_long_idx),
-            0xad => instr!(lda absolute),
-            0xbd => instr!(lda absolute_indexed_x),
-            0xb9 => instr!(lda absolute_indexed_y),
-            0xaf => instr!(lda absolute_long),
-            0xbf => instr!(lda absolute_long_indexed_x),
-            0xa6 => instr!(ldx direct),
-            0xb6 => instr!(ldx direct_indexed_y),
-            0xa2 => instr!(ldx immediate_index),
-            0xae => instr!(ldx absolute),
-            0xbe => instr!(ldx absolute_indexed_y),
-            0xa4 => instr!(ldy direct),
-            0xb4 => instr!(ldy direct_indexed_x),
-            0xa0 => instr!(ldy immediate_index),
-            0xac => instr!(ldy absolute),
-            0xbc => instr!(ldy absolute_indexed_x),
+            0x83 => instr!(sta StackRel),
+            0x85 => instr!(sta Direct),
+            0x95 => instr!(sta DirectIndexedX),
+            0x92 => instr!(sta DirectIndirect),
+            0x87 => instr!(sta DirectIndirectLong),
+            0x97 => instr!(sta DirectIndirectLongIdx),
+            0x8d => instr!(sta Absolute),
+            0x8f => instr!(sta AbsoluteLong),
+            0x9d => instr!(sta AbsIndexedX),
+            0x99 => instr!(sta AbsIndexedY),
+            0x9f => instr!(sta AbsLongIndexedX),
+            0x86 => instr!(stx Direct),
+            0x96 => instr!(stx DirectIndexedY),
+            0x8e => instr!(stx Absolute),
+            0x84 => instr!(sty Direct),
+            0x94 => instr!(sty DirectIndexedY),
+            0x8c => instr!(sty Absolute),
+            0x64 => instr!(stz Direct),
+            0x9c => instr!(stz Absolute),
+            0x74 => instr!(stz DirectIndexedX),
+            0x9e => instr!(stz AbsIndexedX),
+            0xa3 => instr!(lda StackRel),
+            0xa5 => instr!(lda Direct),
+            0xb5 => instr!(lda DirectIndexedX),
+            0xb1 => instr!(lda DirectIndirectIndexed),
+            0xa9 => instr!(lda ImmediateAcc),
+            0xb2 => instr!(lda DirectIndirect),
+            0xa7 => instr!(lda DirectIndirectLong),
+            0xb7 => instr!(lda DirectIndirectLongIdx),
+            0xad => instr!(lda Absolute),
+            0xbd => instr!(lda AbsIndexedX),
+            0xb9 => instr!(lda AbsIndexedY),
+            0xaf => instr!(lda AbsoluteLong),
+            0xbf => instr!(lda AbsLongIndexedX),
+            0xa6 => instr!(ldx Direct),
+            0xb6 => instr!(ldx DirectIndexedY),
+            0xa2 => instr!(ldx ImmediateIndex),
+            0xae => instr!(ldx Absolute),
+            0xbe => instr!(ldx AbsIndexedY),
+            0xa4 => instr!(ldy Direct),
+            0xb4 => instr!(ldy DirectIndexedX),
+            0xa0 => instr!(ldy ImmediateIndex),
+            0xac => instr!(ldy Absolute),
+            0xbc => instr!(ldy AbsIndexedX),
             0x54 => instr!(mvn),    // FIXME These look bad in the trace, print src/dest banks!
             0x44 => instr!(mvp),
 
             // Bit operations
-            0x24 => instr!(bit direct),
-            0x2c => instr!(bit absolute),
-            0x34 => instr!(bit direct_indexed_x),
-            0x3c => instr!(bit absolute_indexed_x),
-            0x89 => instr!(bit immediate_acc),
-            0x04 => instr!(tsb direct),
-            0x0c => instr!(tsb absolute),
-            0x14 => instr!(trb direct),
-            0x1c => instr!(trb absolute),
+            0x24 => instr!(bit Direct),
+            0x2c => instr!(bit Absolute),
+            0x34 => instr!(bit DirectIndexedX),
+            0x3c => instr!(bit AbsIndexedX),
+            0x89 => instr!(bit ImmediateAcc),
+            0x04 => instr!(tsb Direct),
+            0x0c => instr!(tsb Absolute),
+            0x14 => instr!(trb Direct),
+            0x1c => instr!(trb Absolute),
 
             // Comparisons
-            0xc9 => instr!(cmp immediate_acc),
-            0xc5 => instr!(cmp direct),
-            0xd5 => instr!(cmp direct_indexed_x),
-            0xcd => instr!(cmp absolute),
-            0xdd => instr!(cmp absolute_indexed_x),
-            0xd9 => instr!(cmp absolute_indexed_y),
-            0xcf => instr!(cmp absolute_long),
-            0xdf => instr!(cmp absolute_long_indexed_x),
-            0xd2 => instr!(cmp direct_indirect),
-            0xd1 => instr!(cmp direct_indirect_indexed),
-            0xd7 => instr!(cmp direct_indirect_long_idx),
-            0xe0 => instr!(cpx immediate_index),
-            0xe4 => instr!(cpx direct),
-            0xec => instr!(cpx absolute),
-            0xc0 => instr!(cpy immediate_index),
-            0xc4 => instr!(cpy direct),
-            0xcc => instr!(cpy absolute),
+            0xc9 => instr!(cmp ImmediateAcc),
+            0xc5 => instr!(cmp Direct),
+            0xd5 => instr!(cmp DirectIndexedX),
+            0xcd => instr!(cmp Absolute),
+            0xdd => instr!(cmp AbsIndexedX),
+            0xd9 => instr!(cmp AbsIndexedY),
+            0xcf => instr!(cmp AbsoluteLong),
+            0xdf => instr!(cmp AbsLongIndexedX),
+            0xd2 => instr!(cmp DirectIndirect),
+            0xd1 => instr!(cmp DirectIndirectIndexed),
+            0xd7 => instr!(cmp DirectIndirectLongIdx),
+            0xe0 => instr!(cpx ImmediateIndex),
+            0xe4 => instr!(cpx Direct),
+            0xec => instr!(cpx Absolute),
+            0xc0 => instr!(cpy ImmediateIndex),
+            0xc4 => instr!(cpy Direct),
+            0xcc => instr!(cpy Absolute),
 
             // Branches
-            0x80 => instr!(bra rel),
-            0x82 => instr!(bra relative_long),  // BRL
-            0xf0 => instr!(beq rel),
-            0xd0 => instr!(bne rel),
-            0x10 => instr!(bpl rel),
-            0x30 => instr!(bmi rel),
-            0x50 => instr!(bvc rel),
-            0x70 => instr!(bvs rel),
-            0x90 => instr!(bcc rel),
-            0xb0 => instr!(bcs rel),
+            0x80 => instr!(bra PcRel),
+            0x82 => instr!(bra PcRelLong),  // BRL
+            0xf0 => instr!(beq PcRel),
+            0xd0 => instr!(bne PcRel),
+            0x10 => instr!(bpl PcRel),
+            0x30 => instr!(bmi PcRel),
+            0x50 => instr!(bvc PcRel),
+            0x70 => instr!(bvs PcRel),
+            0x90 => instr!(bcc PcRel),
+            0xb0 => instr!(bcs PcRel),
 
             // Jumps, calls and returns
-            0x4c => instr!(jmp absolute),   // DBR is ignored
-            0x5c => instr!(jml absolute_long),
-            0x6c => instr!(jmp absolute_indirect),
-            0x7c => instr!(jmp absolute_indexed_indirect),
-            0xdc => instr!(jml absolute_indirect_long),
-            0x20 => instr!(jsr absolute),
-            0x22 => instr!(jsl absolute_long),
-            0xfc => instr!(jsr absolute_indexed_indirect),
+            0x4c => instr!(jmp Absolute),   // DBR is ignored
+            0x5c => instr!(jml AbsoluteLong),
+            0x6c => instr!(jmp AbsoluteIndirect),
+            0x7c => instr!(jmp AbsIndexedIndirect),
+            0xdc => instr!(jml AbsoluteIndirectLong),
+            0x20 => instr!(jsr Absolute),
+            0x22 => instr!(jsl AbsoluteLong),
+            0xfc => instr!(jsr AbsIndexedIndirect),
             0x40 => instr!(rti),
             0x60 => instr!(rts),
             0x6b => instr!(rtl),
@@ -759,23 +762,23 @@ impl<M: Mem> Cpu<M> {
         }
     }
 
-    fn push_effective(&mut self, am: AddressingMode) {
-        let (_, addr) = am.address(self);
+    fn push_effective<AM: PcAddrMode>(&mut self, am: AM) {
+        let (_, addr) = am.jump_target(self);
         self.pushw(addr);
     }
     /// Push Effective Absolute Address
-    fn pea(&mut self, am: AddressingMode) {
+    fn pea<AM: PcAddrMode>(&mut self, am: AM) {
         // Pushes the address (16-bit, no bank) onto the stack. This is equivalent of pushing the
         // 2 bytes following the opcode onto the stack.
         self.push_effective(am)
     }
     /// Push Effective PC-Relative Address
-    fn per(&mut self, am: AddressingMode) {
+    fn per<AM: PcAddrMode>(&mut self, am: AM) {
         self.push_effective(am)
     }
 
     /// AND Accumulator with Memory (or immediate)
-    fn and(&mut self, am: AddressingMode) {
+    fn and<AM: ImmediateMode>(&mut self, am: AM) {
         // Sets N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
@@ -790,7 +793,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// OR Accumulator with Memory
-    fn ora(&mut self, am: AddressingMode) {
+    fn ora<AM: ImmediateMode>(&mut self, am: AM) {
         // Sets N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
@@ -805,7 +808,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Exclusive Or Accumulator with Memory
-    fn eor(&mut self, am: AddressingMode) {
+    fn eor<AM: ImmediateMode>(&mut self, am: AM) {
         // Sets N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
@@ -821,7 +824,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Add With Carry
-    fn adc(&mut self, am: AddressingMode) {
+    fn adc<AM: ImmediateMode>(&mut self, am: AM) {
         // Sets N, V, C and Z
         let c: u16 = if self.p.carry() { 1 } else { 0 };
 
@@ -872,7 +875,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Subtract with Borrow from Accumulator
-    fn sbc(&mut self, am: AddressingMode) {
+    fn sbc<AM: ImmediateMode>(&mut self, am: AM) {
         // Sets N, Z, C and V
         let c: i16 = if self.p.carry() { 1 } else { 0 };
 
@@ -934,7 +937,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Arithmetic left-shift: Shift a memory location left by 1 bit (Read-Modify-Write)
-    fn asl(&mut self, am: AddressingMode) {
+    fn asl<AM: AddrMode>(&mut self, am: AM) {
         // Sets N, Z and C. The rightmost bit is filled with 0.
         let (bank, addr) = am.address(self);
         if self.p.small_acc() {
@@ -967,16 +970,16 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Rotate Memory Left
-    fn rol(&mut self, am: AddressingMode) {
+    fn rol<AM: AddrMode>(&mut self, am: AM) {
         // Sets N, Z, and C. C is used to fill the rightmost bit.
         let c: u8 = if self.p.carry() { 1 } else { 0 };
         if self.p.small_acc() {
-            let a = am.clone().loadb(self);
+            let a = am.loadb(self);
             self.p.set_carry(a & 0x80 != 0);
             let res = self.p.set_nz_8((a << 1) | c);
             am.storeb(self, res);
         } else {
-            let a = am.clone().loadw(self);
+            let a = am.loadw(self);
             self.p.set_carry(a & 0x8000 != 0);
             let res = self.p.set_nz((a << 1) | c as u16);
             am.storew(self, res);
@@ -997,15 +1000,15 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Logical Shift Right
-    fn lsr(&mut self, am: AddressingMode) {
+    fn lsr<AM: AddrMode>(&mut self, am: AM) {
         // Sets N (always cleared), Z and C. The leftmost bit is filled with 0.
         if self.p.small_acc() {
-            let a = am.clone().loadb(self);
+            let a = am.loadb(self);
             self.p.set_carry(a & 0x01 != 0);
             let res = self.p.set_nz_8(a >> 1);
             am.storeb(self, res);
         } else {
-            let a = am.clone().loadw(self);
+            let a = am.loadw(self);
             self.p.set_carry(a & 0x0001 != 0);
             let res = self.p.set_nz(a >> 1);
             am.storew(self, res);
@@ -1028,9 +1031,9 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Rotate Memory Right
-    fn ror(&mut self, am: AddressingMode) {
+    fn ror<AM: AddrMode>(&mut self, am: AM) {
         // Sets N, Z, and C. C is used to fill the leftmost bit.
-        // The `AddressingMode` is used for both loading and storing the value (Read-Modify-Write
+        // The `AddrMode` is used for both loading and storing the value (Read-Modify-Write
         // instruction)
         let c: u8 = if self.p.carry() { 1 } else { 0 };
         let (bank, addr) = am.address(self);
@@ -1125,7 +1128,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Increment memory location
-    fn inc(&mut self, am: AddressingMode) {
+    fn inc<AM: AddrMode>(&mut self, am: AM) {
         let (bank, addr) = am.address(self);
         if self.p.small_acc() {
             let res = self.loadb(bank, addr).wrapping_add(1);
@@ -1178,7 +1181,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Decrement memory location
-    fn dec(&mut self, am: AddressingMode) {
+    fn dec<AM: AddrMode>(&mut self, am: AM) {
         let (bank, addr) = am.address(self);
         if self.p.small_acc() {
             let res = self.loadb(bank, addr).wrapping_sub(1);
@@ -1214,79 +1217,79 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Jump long. Changes the PBR.
-    fn jml(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn jml<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         self.branch(a);
     }
     /// Jump inside current program bank
-    fn jmp(&mut self, am: AddressingMode) {
-        let (_, addr) = am.address(self);
+    fn jmp<AM: PcAddrMode>(&mut self, am: AM) {
+        let (_, addr) = am.jump_target(self);
         self.pc = addr;
     }
     /// Branch always (inside current program bank, but this isn't checked)
-    fn bra(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bra<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         self.branch(a);
     }
     /// Branch if Plus (N = 0)
-    fn bpl(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bpl<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if !self.p.negative() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if Minus/Negative (N = 1)
-    fn bmi(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bmi<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if self.p.negative() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if Overflow Clear
-    fn bvc(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bvc<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if !self.p.overflow() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if Overflow Set
-    fn bvs(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bvs<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if self.p.overflow() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if carry clear
-    fn bcc(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bcc<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if !self.p.carry() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if carry set
-    fn bcs(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bcs<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if self.p.carry() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if Equal
-    fn beq(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn beq<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if self.p.zero() {
             self.branch(a);
             self.cy += 1;
         }
     }
     /// Branch if Not Equal (Branch if Z = 0)
-    fn bne(&mut self, am: AddressingMode) {
-        let a = am.address(self);
+    fn bne<AM: PcAddrMode>(&mut self, am: AM) {
+        let a = am.jump_target(self);
         if !self.p.zero() {
             self.branch(a);
             self.cy += 1;
@@ -1294,41 +1297,35 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Test memory bits against accumulator
-    fn bit(&mut self, am: AddressingMode) {
+    fn bit<AM: ImmediateMode>(&mut self, am: AM) {
         if self.p.small_acc() {
-            let val = am.clone().loadb(self);
+            let val = am.loadb(self);
             self.p.set_zero(val & self.a as u8 == 0);
-            match am {
-                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
-                _ => {
-                    self.p.set_negative(val & 0x80 != 0);
-                    self.p.set_overflow(val & 0x40 != 0);
-                }
+            if !AM::is_immediate() {
+                self.p.set_negative(val & 0x80 != 0);
+                self.p.set_overflow(val & 0x40 != 0);
             }
         } else {
-            let val = am.clone().loadw(self);
+            let val = am.loadw(self);
             self.p.set_zero(val & self.a == 0);
-            match am {
-                AddressingMode::Immediate(_) | AddressingMode::Immediate8(_) => {}
-                _ => {
-                    self.p.set_negative(val & 0x8000 != 0);
-                    self.p.set_overflow(val & 0x4000 != 0);
-                }
+            if !AM::is_immediate() {
+                self.p.set_negative(val & 0x8000 != 0);
+                self.p.set_overflow(val & 0x4000 != 0);
             }
             self.cy += 1;
         }
     }
     /// Test and set memory bits against accumulator
-    fn tsb(&mut self, am: AddressingMode) {
+    fn tsb<AM: AddrMode>(&mut self, am: AM) {
         // Sets Z
         // FIXME Is this correct?
         if self.p.small_index() {
-            let val = am.clone().loadb(self);
+            let val = am.loadb(self);
             self.p.set_zero(val & self.a as u8 == 0);
             let res = val | self.a as u8;
             am.storeb(self, res);
         } else {
-            let val = am.clone().loadw(self);
+            let val = am.loadw(self);
             self.p.set_zero(val & self.a == 0);
             let res = val | self.a;
             am.storew(self, res);
@@ -1337,16 +1334,16 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Test and reset memory bits against accumulator
-    fn trb(&mut self, am: AddressingMode) {
+    fn trb<AM: AddrMode>(&mut self, am: AM) {
         // Sets Z
         // FIXME Is this correct?
         if self.p.small_index() {
-            let val = am.clone().loadb(self);
+            let val = am.loadb(self);
             self.p.set_zero(val & self.a as u8 == 0);
             let res = val & !(self.a as u8);
             am.storeb(self, res);
         } else {
-            let val = am.clone().loadw(self);
+            let val = am.loadw(self);
             self.p.set_zero(val & self.a == 0);
             let res = val & !self.a;
             am.storew(self, res);
@@ -1356,7 +1353,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Compare Accumulator with Memory
-    fn cmp(&mut self, am: AddressingMode) {
+    fn cmp<AM: ImmediateMode>(&mut self, am: AM) {
         if self.p.small_acc() {
             let a = self.a as u8;
             let b = am.loadb(self);
@@ -1369,7 +1366,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Compare Index Register X with Memory
-    fn cpx(&mut self, am: AddressingMode) {
+    fn cpx<AM: ImmediateMode>(&mut self, am: AM) {
         if self.p.small_index() {
             let val = am.loadb(self);
             let x = self.x as u8;
@@ -1382,7 +1379,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Compare Index Register Y with Memory
-    fn cpy(&mut self, am: AddressingMode) {
+    fn cpy<AM: ImmediateMode>(&mut self, am: AM) {
         if self.p.small_index() {
             let val = am.loadb(self);
             let y = self.y as u8;
@@ -1404,17 +1401,17 @@ impl<M: Mem> Cpu<M> {
     /// 65x fashion – the first byte is stored at the location pointed to by the stack pointer, the
     /// stack pointer is decremented, the second byte is stored, and the stack pointer is
     /// decremented again."
-    fn jsr(&mut self, am: AddressingMode) {
+    fn jsr<AM: PcAddrMode>(&mut self, am: AM) {
         // Changes no flags
         let pc = self.pc - 1;
         self.pushb((pc >> 8) as u8);
         self.pushb(pc as u8);
 
-        self.pc = am.address(self).1;
+        self.pc = am.jump_target(self).1;
     }
     /// Long jump to subroutine. Additionally saves PBR on the stack and sets it to the bank
     /// returned by `am.address()`.
-    fn jsl(&mut self, am: AddressingMode) {
+    fn jsl<AM: PcAddrMode>(&mut self, am: AM) {
         // Changes no flags
         let pbr = self.pbr;
         self.pushb(pbr);
@@ -1422,7 +1419,7 @@ impl<M: Mem> Cpu<M> {
         self.pushb((pc >> 8) as u8);
         self.pushb(pc as u8);
 
-        let (pbr, pc) = am.address(self);
+        let (pbr, pc) = am.jump_target(self);
         self.pbr = pbr;
         self.pc = pc;
     }
@@ -1457,7 +1454,7 @@ impl<M: Mem> Cpu<M> {
     fn wai(&mut self) { self.wai = true; }
 
     /// Store 0 to memory
-    fn stz(&mut self, am: AddressingMode) {
+    fn stz<AM: AddrMode>(&mut self, am: AM) {
         if self.p.small_acc() {
             am.storeb(self, 0);
         } else {
@@ -1467,7 +1464,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Load accumulator from memory
-    fn lda(&mut self, am: AddressingMode) {
+    fn lda<AM: ImmediateMode>(&mut self, am: AM) {
         // Changes N and Z
         if self.p.small_acc() {
             let val = am.loadb(self);
@@ -1479,7 +1476,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Load X register from memory
-    fn ldx(&mut self, am: AddressingMode) {
+    fn ldx<AM: ImmediateMode>(&mut self, am: AM) {
         // Changes N and Z
         if self.p.small_index() {
             let val = am.loadb(self);
@@ -1491,7 +1488,7 @@ impl<M: Mem> Cpu<M> {
         }
     }
     /// Load Y register from memory
-    fn ldy(&mut self, am: AddressingMode) {
+    fn ldy<AM: ImmediateMode>(&mut self, am: AM) {
         // Changes N and Z
         if self.p.small_index() {
             let val = am.loadb(self);
@@ -1504,7 +1501,7 @@ impl<M: Mem> Cpu<M> {
     }
 
     /// Store accumulator to memory
-    fn sta(&mut self, am: AddressingMode) {
+    fn sta<AM: AddrMode>(&mut self, am: AM) {
         // Changes no flags
         if self.p.small_acc() {
             let b = self.a as u8;
@@ -1515,7 +1512,7 @@ impl<M: Mem> Cpu<M> {
             self.cy += 1;
         }
     }
-    fn stx(&mut self, am: AddressingMode) {
+    fn stx<AM: AddrMode>(&mut self, am: AM) {
         // Changes no flags
         if self.p.small_index() {
             let b = self.x as u8;
@@ -1526,7 +1523,7 @@ impl<M: Mem> Cpu<M> {
             self.cy += 1;
         }
     }
-    fn sty(&mut self, am: AddressingMode) {
+    fn sty<AM: AddrMode>(&mut self, am: AM) {
         // Changes no flags
         if self.p.small_index() {
             let b = self.y as u8;
@@ -1550,13 +1547,13 @@ impl<M: Mem> Cpu<M> {
     ///
     /// Clears the bits in the status register that are 1 in the argument (argument is interpreted
     /// as 8-bit)
-    fn rep(&mut self, am: AddressingMode) {
+    fn rep<AM: ImmediateMode>(&mut self, am: AM) {
         let p = self.p.0 & !am.loadb(self);
         self.set_p(p);
     }
 
     /// Set Processor Status Bits
-    fn sep(&mut self, am: AddressingMode) {
+    fn sep<AM: ImmediateMode>(&mut self, am: AM) {
         let p = self.p.0 | am.loadb(self);
         self.set_p(p);
     }
@@ -1597,91 +1594,4 @@ impl<M: Mem> Cpu<M> {
 
     fn nop(&mut self) {}
     fn ill(&mut self) {}
-}
-
-/// Addressing mode construction
-impl<M: Mem> Cpu<M> {
-    fn direct_indirect(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndirect(self.fetchb())
-    }
-    fn direct_indirect_long(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndirectLong(self.fetchb())
-    }
-    fn direct_indirect_long_idx(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndirectLongIdx(self.fetchb())
-    }
-    fn absolute(&mut self) -> AddressingMode {
-        AddressingMode::Absolute(self.fetchw())
-    }
-    fn absolute_indexed_x(&mut self) -> AddressingMode {
-        AddressingMode::AbsIndexedX(self.fetchw())
-    }
-    fn absolute_indexed_y(&mut self) -> AddressingMode {
-        AddressingMode::AbsIndexedY(self.fetchw())
-    }
-    fn absolute_indexed_indirect(&mut self) -> AddressingMode {
-        AddressingMode::AbsIndexedIndirect(self.fetchw())
-    }
-    fn absolute_long(&mut self) -> AddressingMode {
-        let addr = self.fetchw();
-        let bank = self.fetchb();
-        AddressingMode::AbsoluteLong(bank, addr)
-    }
-    fn absolute_long_indexed_x(&mut self) -> AddressingMode {
-        let addr = self.fetchw();
-        let bank = self.fetchb();
-        AddressingMode::AbsLongIndexedX(bank, addr)
-    }
-    fn absolute_indirect(&mut self) -> AddressingMode {
-        AddressingMode::AbsoluteIndirect(self.fetchw())
-    }
-    fn absolute_indirect_long(&mut self) -> AddressingMode {
-        AddressingMode::AbsoluteIndirectLong(self.fetchw())
-    }
-    fn rel(&mut self) -> AddressingMode {
-        AddressingMode::Rel(self.fetchb() as i8)
-    }
-    fn relative_long(&mut self) -> AddressingMode {
-        AddressingMode::RelLong(self.fetchw() as i16)
-    }
-    fn stack_rel(&mut self) -> AddressingMode {
-        AddressingMode::StackRel(self.fetchb())
-    }
-    fn direct(&mut self) -> AddressingMode {
-        AddressingMode::Direct(self.fetchb())
-    }
-    fn direct_indexed_x(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndexedX(self.fetchb())
-    }
-    fn direct_indexed_y(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndexedY(self.fetchb())
-    }
-    fn direct_indexed_indirect(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndexedIndirect(self.fetchb())
-    }
-    fn direct_indirect_indexed(&mut self) -> AddressingMode {
-        AddressingMode::DirectIndirectIndexed(self.fetchb())
-    }
-    /// Immediate value with accumulator size
-    fn immediate_acc(&mut self) -> AddressingMode {
-        if self.p.small_acc() {
-            AddressingMode::Immediate8(self.fetchb())
-        } else {
-            self.cy += 1;
-            AddressingMode::Immediate(self.fetchw())
-        }
-    }
-    /// Immediate value with index register size
-    fn immediate_index(&mut self) -> AddressingMode {
-        if self.p.small_index() {
-            AddressingMode::Immediate8(self.fetchb())
-        } else {
-            self.cy += 1;
-            AddressingMode::Immediate(self.fetchw())
-        }
-    }
-    /// Immediate value, one byte
-    fn immediate8(&mut self) -> AddressingMode {
-        AddressingMode::Immediate8(self.fetchb())
-    }
 }
