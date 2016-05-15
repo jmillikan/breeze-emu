@@ -11,9 +11,9 @@ matrix:
 sudo: false
 before_script:
   - |
+      export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH &&
       pip install 'travis-cargo<0.2' --user &&
-      cargo install cargo-local-pkgs --vers 0.2 &&
-      export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH
+      { which cargo-local-pkgs || cargo install cargo-local-pkgs --vers 0.2; }
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
