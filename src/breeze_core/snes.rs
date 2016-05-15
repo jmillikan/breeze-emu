@@ -10,7 +10,6 @@ use save::SaveStateFormat;
 use apu::Spc700;
 use cpu::{Cpu, Mem};
 use frontend::{FrontendAction, Renderer, AudioSink};
-use libsavestate::SaveState;
 
 use std::cmp;
 use std::env;
