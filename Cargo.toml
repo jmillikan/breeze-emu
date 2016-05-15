@@ -34,7 +34,7 @@ term = "0.4"
 # Disable PNG default features (PNG encoding) since that would depend on flate2
 # and thus C code (this is also the reason we depend directly on png instead of
 # the image crate)
-png = { version = "0.4.2", default-features = false }
+png = { version = "0.5", default-features = false }
 
 [features]
 # reexport frontends
