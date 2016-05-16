@@ -500,11 +500,15 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
                     trace
                 },
                 Err(_) => {
-                    panic!("invalid value for BREEZE_TRACE: {}", string);
+                    error!("ignoring invalid value for BREEZE_TRACE: {}", string);
+                    !0
                 },
             },
             Err(env::VarError::NotPresent) => !0,
-            Err(env::VarError::NotUnicode(_)) => panic!("BREEZE_TRACE value isn't valid unicode"),
+            Err(env::VarError::NotUnicode(_)) => {
+                error!("BREEZE_TRACE value isn't valid unicode, ignoring it");
+                !0
+            }
         };
 
         let mut snes = Snes::new(rom);
