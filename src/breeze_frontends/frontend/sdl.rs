@@ -96,7 +96,8 @@ impl Default for SdlRenderer {
             let texture = renderer.create_texture(
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,
-                (SCREEN_WIDTH, SCREEN_HEIGHT)).unwrap();
+                SCREEN_WIDTH,
+                SCREEN_HEIGHT).unwrap();
 
             let mut this = SdlRenderer {
                 renderer: renderer,
@@ -126,7 +127,7 @@ impl ::frontend_api::Renderer for SdlRenderer {
 
     fn set_rom_title(&mut self, title: &str) {
         match self.renderer.window_mut() {
-            Some(win) => win.set_title(title),
+            Some(win) => win.set_title(title).unwrap(),
             None => {},
         }
     }
@@ -137,8 +138,8 @@ impl SdlRenderer {
     fn resize_to(&mut self, w: u32, h: u32) {
         let Viewport { x, y, w, h } = viewport_for_window_size(w, h);
 
-        let viewport = Rect::new(x as i32, y as i32, w, h).unwrap();
-        self.renderer.set_viewport(viewport);
+        let viewport = Rect::new(x as i32, y as i32, w, h);
+        self.renderer.set_viewport(Some(viewport));
 
         info!("viewport: ({}, {}); {}x{}", x, y, w, h);
     }
