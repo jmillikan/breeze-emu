@@ -129,7 +129,7 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         debug!("PPU H={}, V={}",
             emu.peripherals().ppu.h_counter(),
             emu.peripherals().ppu.v_counter());
-        emu.snes.render_frame(|_framebuf| None);
+        try!(emu.snes.render_frame(|_framebuf| Ok(vec![])));
 
         info!("frame rendered. pausing emulation.");
 
@@ -137,14 +137,14 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         // Copy out the frame buffer because the damn borrow checker doesn't like it otherwise
         let framebuf = emu.peripherals().ppu.framebuf.clone();
         loop {
-            let action = emu.renderer.render(&*framebuf);
-            if let Some(a) = action {
+            let actions = try!(emu.renderer.render(&*framebuf));
+            for a in actions {
                 if emu.handle_action(a) { break }
             }
         }
     } else {
         // Run normally
-        emu.run();
+        try!(emu.run());
     }
 
     Ok(())

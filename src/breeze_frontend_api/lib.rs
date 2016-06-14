@@ -18,19 +18,14 @@ pub enum FrontendAction {
     LoadState,
 }
 
-/// Type returned by frontend methods on `Renderer` and `InputSource`.
-#[derive(Default)]
-pub struct FrontendResult<T> {
-    pub result: T,
-    /// An optional action to perform
-    pub action: Option<FrontendAction>,
-}
+/// Result with an erased error type.
+pub type FrontendResult<T> = Result<T, Box<Error>>;
 
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
 /// PPU and can then render this content in a frontend-specific way.
 pub trait Renderer {
     /// Creates a new renderer.
-    fn create() -> Result<Self, Box<Error>> where Self: Sized;
+    fn create() -> FrontendResult<Self> where Self: Sized;
 
     /// Render a frame produced by the PPU. For optimal experience, the `Renderer` implementation
     /// should make sure that the frame is visible as soon as possible.
@@ -44,7 +39,7 @@ pub trait Renderer {
     /// method returns, the input devices can be queried by the running program. This allows
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
-    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction>;
+    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>>;
 
     /// Set the ROM title. This usually sets the window title.
     fn set_rom_title(&mut self, title: &str);
@@ -52,11 +47,11 @@ pub trait Renderer {
 
 // XXX https://github.com/rust-lang/rust/issues/22194
 impl<T: Renderer + ?Sized> Renderer for Box<T> {
-    fn create() -> Result<Self, Box<Error>> where Self: Sized {
+    fn create() -> FrontendResult<Self> where Self: Sized {
         Err("attempted to instantiate erased Renderer type".into())
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
+    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
         (**self).render(frame_data)
     }
 
@@ -68,7 +63,7 @@ impl<T: Renderer + ?Sized> Renderer for Box<T> {
 /// Trait for audio frontends. Provides methods for writing to a stereo audio channel.
 pub trait AudioSink {
     /// Creates a new audio sink.
-    fn create() -> Result<Self, Box<Error>> where Self: Sized;
+    fn create() -> FrontendResult<Self> where Self: Sized;
 
     /// Write 32 kHz 16-bit data to the device.
     ///
@@ -77,7 +72,7 @@ pub trait AudioSink {
 }
 
 impl<T: AudioSink + ?Sized> AudioSink for Box<T> {
-    fn create() -> Result<Self, Box<Error>> where Self: Sized {
+    fn create() -> FrontendResult<Self> where Self: Sized {
         Err("attempted to instantiate erased AudioSink type".into())
     }
 

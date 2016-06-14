@@ -7,8 +7,10 @@ extern crate png;
 
 extern crate breeze_core;
 extern crate breeze_frontends;
+extern crate breeze_frontend_api;
 
 use breeze_frontends::frontend::dummy::{DummyRenderer, DummySink};
+use breeze_frontend_api::{AudioSink, Renderer};
 use breeze_core::rom::Rom;
 use breeze_core::snes::Emulator;
 
@@ -20,6 +22,7 @@ use std::io::{self, Write, Read};
 use std::fs::File;
 use std::process;
 use std::env;
+use std::error::Error;
 use std::iter;
 
 /// The test's data sections are separate from the code, and we can't do relocations (well, we
@@ -64,7 +67,16 @@ pub enum Preparation {
 // TODO ^ these are unimplemented
 
 /// Describes how a test has failed
-struct TestFailure;
+enum TestFailure {
+    EmuError(Box<Error>),
+    OutputMismatch,
+}
+
+impl From<Box<Error>> for TestFailure {
+    fn from(e: Box<Error>) -> Self {
+        TestFailure::EmuError(e)
+    }
+}
 
 macro_rules! include_tests {
     ( $( $test:ident, )+ ) => {
@@ -227,9 +239,9 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
 
     let rom = Rom::from_bytes(&rom).unwrap();
 
-    let mut emu = Emulator::new(rom, DummyRenderer::default(), DummySink::default());
+    let mut emu = Emulator::new(rom, try!(DummyRenderer::create()), try!(DummySink::create()));
     for _ in 0..test.frames {
-        emu.render_frame();
+        try!(emu.render_frame());
     }
 
     let mut exp_data = Vec::new();
@@ -255,7 +267,7 @@ fn run_test(name: &str, test: &Test) -> Result<(), TestFailure> {
     if exp_frame == got_frame {
         Ok(())
     } else {
-        Err(TestFailure)
+        Err(TestFailure::OutputMismatch)
     }
 }
 

@@ -2,7 +2,7 @@
 
 use viewport::*;
 
-use frontend_api::FrontendAction;
+use frontend_api::{FrontendAction, FrontendResult};
 use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
@@ -28,30 +28,30 @@ struct SdlManager {
 impl SdlManager {
     /// Updates all SDL-related state. Polls events and may terminate the process via
     /// `process::exit`. Should be called at least once per frame.
-    fn update(&mut self) -> Option<FrontendAction> {
+    fn update(&mut self) -> FrontendResult<Vec<FrontendAction>> {
         use sdl2::event::Event::*;
 
         for event in self.event_pump.poll_iter() {
             match event {
                 Quit { .. } => {
                     info!("quit event -> exiting");
-                    return Some(FrontendAction::Exit);
+                    return Ok(vec![FrontendAction::Exit]);
                 }
                 Window { win_event_id: WindowEventId::Resized, data1: w, data2: h, .. } => {
                     info!("window resized to {}x{}", w, h);
                     self.resized_to = Some((w as u32, h as u32));
                 }
                 KeyDown { scancode: Some(Scancode::F5), .. } => {
-                    return Some(FrontendAction::SaveState);
+                    return Ok(vec![FrontendAction::SaveState]);
                 }
                 KeyDown { scancode: Some(Scancode::F9), .. } => {
-                    return Some(FrontendAction::LoadState);
+                    return Ok(vec![FrontendAction::LoadState]);
                 }
                 _ => {}
             }
         }
 
-        None
+        Ok(vec![])
     }
 
     fn resized(&mut self) -> Option<(u32, u32)> { self.resized_to.take() }
@@ -108,7 +108,7 @@ impl ::frontend_api::Renderer for SdlRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
+    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)
         }

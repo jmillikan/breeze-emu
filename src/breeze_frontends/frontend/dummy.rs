@@ -1,8 +1,6 @@
 //! Dummy frontend that does nothing.
 
-use frontend_api::{FrontendAction, Renderer, AudioSink};
-
-use std::error::Error;
+use frontend_api::{FrontendAction, FrontendResult, Renderer, AudioSink};
 
 /// Renderer that just does nothing, apart from saving the PPU output for later use. This allows
 /// users to extract single rendered frames without having to implement `Renderer`.
@@ -17,16 +15,16 @@ impl DummyRenderer {
 }
 
 impl Renderer for DummyRenderer {
-    fn create() -> Result<Self, Box<Error>> where Self: Sized {
+    fn create() -> FrontendResult<Self> where Self: Sized {
         Ok(DummyRenderer {
             last_frame: Vec::new(),
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
+    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
         self.last_frame.clear();
         self.last_frame.extend_from_slice(frame_data);
-        None
+        Ok(vec![])
     }
 
     fn set_rom_title(&mut self, _title: &str) {}
@@ -36,6 +34,6 @@ impl Renderer for DummyRenderer {
 pub struct DummySink;
 
 impl AudioSink for DummySink {
-    fn create() -> Result<Self, Box<Error>> { Ok(DummySink) }
+    fn create() -> FrontendResult<Self> { Ok(DummySink) }
     fn write(&mut self, _data: &[(i16, i16)]) {}
 }

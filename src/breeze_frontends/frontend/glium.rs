@@ -2,7 +2,7 @@
 
 use viewport::*;
 
-use frontend_api::{FrontendAction, Renderer};
+use frontend_api::{FrontendAction, FrontendResult, Renderer};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 use glium::{DisplayBuild, Surface, Rect};
@@ -62,14 +62,14 @@ pub struct GliumRenderer {
 }
 
 impl GliumRenderer {
-    fn handle_events(&mut self) -> Option<FrontendAction> {
+    fn handle_events(&mut self) -> FrontendResult<Vec<FrontendAction>> {
         use glium::glutin::Event::*;
 
         for ev in self.display.poll_events() {
             match ev {
                 Closed => {
                     info!("quit event -> exiting");
-                    return Some(FrontendAction::Exit)
+                    return Ok(vec![FrontendAction::Exit]);
                 }
                 Resized(w, h) => {
                     resize(&mut self.vbuf, w, h);
@@ -77,7 +77,8 @@ impl GliumRenderer {
                 _ => {}
             }
         }
-        None
+
+        Ok(vec![])
     }
 }
 
@@ -123,7 +124,7 @@ impl Renderer for GliumRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
+    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
         // upload new texture data
         self.texture.write(Rect {
             left: 0,

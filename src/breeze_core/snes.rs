@@ -9,7 +9,7 @@ use save::SaveStateFormat;
 
 use apu::Spc700;
 use cpu::{Cpu, Mem};
-use frontend::{FrontendAction, Renderer, AudioSink};
+use frontend::{FrontendAction, FrontendResult, Renderer, AudioSink};
 
 use std::cmp;
 use std::env;
@@ -359,8 +359,8 @@ impl Snes {
     pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.cpu.mem }
 
     /// Runs emulation until the next frame is completed.
-    pub fn render_frame<F>(&mut self, mut render: F) -> Option<FrontendAction>
-    where F: FnMut(&FrameBuf) -> Option<FrontendAction> {
+    pub fn render_frame<F>(&mut self, mut render: F) -> FrontendResult<Vec<FrontendAction>>
+    where F: FnMut(&FrameBuf) -> FrontendResult<Vec<FrontendAction>> {
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
@@ -370,7 +370,7 @@ impl Snes {
 
         loop {
             // Store an action we should perform.
-            let mut action = None;
+            let mut actions = vec![];
             let mut frame_rendered = false;
 
             if self.master_cy >= self.trace_start {
@@ -416,8 +416,8 @@ impl Snes {
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
-                        if let Some(a) = render(&self.cpu.mem.ppu.framebuf) {
-                            if action.is_none() { action = Some(a); }
+                        for action in try!(render(&self.cpu.mem.ppu.framebuf)) {
+                            actions.push(action);
                         }
                         frame_rendered = true;
                     }
@@ -468,7 +468,7 @@ impl Snes {
                 }
             }
 
-            if frame_rendered { return action; }
+            if frame_rendered { return Ok(actions); }
 
             working_cy.set(self.master_cy);
         }
@@ -557,25 +557,25 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     /// by the frontend.
     ///
     /// Returns `true` if the frontend requested an exit, `false` otherwise.
-    pub fn render_frame(&mut self) -> bool {
-        let action;
-        {
+    pub fn render_frame(&mut self) -> FrontendResult<bool> {
+        let actions = {
             let renderer = &mut self.renderer;
-            action = self.snes.render_frame(|framebuf| renderer.render(&**framebuf));
+            self.snes.render_frame(|framebuf| renderer.render(&**framebuf))
+        };
+
+        for action in try!(actions) {
+            if self.handle_action(action) { return Ok(true); }
         }
 
-        if let Some(a) = action {
-            if self.handle_action(a) { return true; }
-        }
-
-        false
+        Ok(false)
     }
 
     /// Runs the emulator in a loop
     ///
     /// This will emulate the system and render frames until the frontend signals that the emulator
     /// should exit.
-    pub fn run(&mut self) {
-        while !self.render_frame() {}
+    pub fn run(&mut self) -> FrontendResult<()> {
+        while !try!(self.render_frame()) {}
+        Ok(())
     }
 }

@@ -4,11 +4,13 @@
 
 extern crate breeze_core;
 extern crate breeze_frontends;
+extern crate breeze_frontend_api;
 extern crate test;
 
 use breeze_core::snes::Emulator;
 use breeze_core::rom::Rom;
 use breeze_frontends::frontend::dummy::{DummyRenderer, DummySink};
+use breeze_frontend_api::Renderer;
 
 use test::Bencher;
 use std::iter;
@@ -85,8 +87,8 @@ fn dumb(b: &mut Bencher) {
     let rom = build_rom();
     let rom = Rom::from_bytes(&rom).unwrap();
 
-    let mut emu = Emulator::new(rom, DummyRenderer::default(), DummySink);
+    let mut emu = Emulator::new(rom, DummyRenderer::create().unwrap(), DummySink);
     b.iter(|| {
-        emu.snes.render_frame(|_| None);
+        emu.snes.render_frame(|_| Ok(vec![]));
     });
 }
