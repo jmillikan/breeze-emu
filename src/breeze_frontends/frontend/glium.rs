@@ -15,6 +15,7 @@ use glium::uniforms::MagnifySamplerFilter;
 use glium::vertex::VertexBuffer;
 
 use std::borrow::Cow;
+use std::error::Error;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -58,26 +59,6 @@ pub struct GliumRenderer {
     program: Program,
     /// This texture is updated with the PPU's data every frame
     texture: SrgbTexture2d,
-}
-
-impl Default for GliumRenderer {
-    fn default() -> Self {
-        let display = WindowBuilder::new()
-            .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
-            .with_title("breeze".to_owned())
-            .build_glium().unwrap();
-
-        let mut vbuf = VertexBuffer::empty_dynamic(&display, 4).unwrap();
-        resize(&mut vbuf, SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3);
-        GliumRenderer {
-            vbuf: vbuf,
-            program: Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
-                .unwrap(),
-            texture: SrgbTexture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)
-                .unwrap(),
-            display: display,
-        }
-    }
 }
 
 impl GliumRenderer {
@@ -124,6 +105,24 @@ fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
 }
 
 impl Renderer for GliumRenderer {
+    fn create() -> Result<Self, Box<Error>> {
+        let display = try!(WindowBuilder::new()
+            .with_dimensions(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
+            .with_title("breeze".to_owned())
+            .build_glium());
+
+        let mut vbuf = try!(VertexBuffer::empty_dynamic(&display, 4));
+        resize(&mut vbuf, SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3);
+
+        Ok(GliumRenderer {
+            vbuf: vbuf,
+            program: try!(
+                Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)),
+            texture: try!(SrgbTexture2d::empty(&display, SCREEN_WIDTH, SCREEN_HEIGHT)),
+            display: display,
+        })
+    }
+
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         // upload new texture data
         self.texture.write(Rect {

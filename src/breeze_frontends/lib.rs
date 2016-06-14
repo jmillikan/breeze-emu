@@ -26,9 +26,10 @@ extern crate cpal;
 use frontend_api::{AudioSink, Renderer};
 
 use std::collections::BTreeMap;
+use std::error::Error;
 
-pub type RendererMap = BTreeMap<&'static str, Option<fn() -> Box<Renderer>>>;
-pub type AudioMap = BTreeMap<&'static str, Option<fn() -> Box<AudioSink>>>;
+pub type RendererMap = BTreeMap<&'static str, Option<fn() -> Result<Box<Renderer>, Box<Error>>>>;
+pub type AudioMap = BTreeMap<&'static str, Option<fn() -> Result<Box<AudioSink>, Box<Error>>>>;
 
 #[allow(dead_code)]
 mod viewport;
@@ -36,25 +37,25 @@ mod viewport;
 pub mod frontend;
 
 macro_rules! make_fn {
-    ( $tr:ty: #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
+    ( $tr:ident: #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
         #[cfg($m)]
-        fn $name() -> Box<$tr> {
-            Box::new(frontend::$name::$tyname::default())
+        fn $name() -> Result<Box<$tr>, Box<Error>> {
+            <frontend::$name::$tyname as $tr>::create().map(|r| Box::new(r) as Box<_>)
         }
 
         #[cfg(not($m))]
-        fn $name() -> Box<$tr> {
+        fn $name() -> Result<Box<$tr>, Box<Error>> {
             unreachable!()
         }
 
-        if cfg!($m) { Some($name as fn() -> Box<$tr>) } else { None }
+        if cfg!($m) { Some($name as fn() -> Result<Box<$tr>, Box<Error>>) } else { None }
     }};
-    ( $tr:ty: $name:ident :: $tyname:ident ) => {{
-        fn $name() -> Box<$tr> {
-            Box::new(frontend::$name::$tyname::default())
+    ( $tr:ident: $name:ident :: $tyname:ident ) => {{
+        fn $name() -> Result<Box<$tr>, Box<Error>> {
+            <frontend::$name::$tyname as $tr>::create().map(|r| Box::new(r) as Box<_>)
         }
 
-        Some($name as fn() -> Box<$tr>)
+        Some($name as fn() -> Result<Box<$tr>, Box<Error>>)
     }};
 }
 

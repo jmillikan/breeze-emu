@@ -4,6 +4,8 @@
 pub mod input;
 pub mod ppu;
 
+use std::error::Error;
+
 /// An action that can be performed by the user, is detected by the frontend and executed by the
 /// emulator core.
 #[allow(dead_code)] // Variants may be dead, depending on which frontends are enabled
@@ -27,6 +29,9 @@ pub struct FrontendResult<T> {
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
 /// PPU and can then render this content in a frontend-specific way.
 pub trait Renderer {
+    /// Creates a new renderer.
+    fn create() -> Result<Self, Box<Error>> where Self: Sized;
+
     /// Render a frame produced by the PPU. For optimal experience, the `Renderer` implementation
     /// should make sure that the frame is visible as soon as possible.
     ///
@@ -45,7 +50,12 @@ pub trait Renderer {
     fn set_rom_title(&mut self, title: &str);
 }
 
+// XXX https://github.com/rust-lang/rust/issues/22194
 impl<T: Renderer + ?Sized> Renderer for Box<T> {
+    fn create() -> Result<Self, Box<Error>> where Self: Sized {
+        Err("attempted to instantiate erased Renderer type".into())
+    }
+
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         (**self).render(frame_data)
     }
@@ -57,6 +67,9 @@ impl<T: Renderer + ?Sized> Renderer for Box<T> {
 
 /// Trait for audio frontends. Provides methods for writing to a stereo audio channel.
 pub trait AudioSink {
+    /// Creates a new audio sink.
+    fn create() -> Result<Self, Box<Error>> where Self: Sized;
+
     /// Write 32 kHz 16-bit data to the device.
     ///
     /// The data contains 16-bit samples for the left and right channel.
@@ -64,6 +77,10 @@ pub trait AudioSink {
 }
 
 impl<T: AudioSink + ?Sized> AudioSink for Box<T> {
+    fn create() -> Result<Self, Box<Error>> where Self: Sized {
+        Err("attempted to instantiate erased AudioSink type".into())
+    }
+
     fn write(&mut self, data: &[(i16, i16)]) {
         (**self).write(data);
     }

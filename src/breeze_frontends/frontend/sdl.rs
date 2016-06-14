@@ -14,6 +14,7 @@ use sdl2::render::{Renderer, Texture, TextureAccess};
 use sdl2::rect::Rect;
 
 use std::cell::RefCell;
+use std::error::Error;
 use std::ops::Deref;
 
 /// Takes care of SDL (mainly used for event management). Owns an `EventPump`, which makes it
@@ -79,25 +80,23 @@ pub struct SdlRenderer {
     texture: Texture,
 }
 
-impl Default for SdlRenderer {
-    fn default() -> Self {
-        // FIXME: Support linear filtering and nearest neighbor
-
+impl ::frontend_api::Renderer for SdlRenderer {
+    fn create() -> Result<Self, Box<Error>> {
         SDL.with(|sdl_cell| {
             let sdl = sdl_cell.borrow_mut();
-            let video = sdl.video().unwrap();
-            let window = video.window("breeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
+            let video = try!(sdl.video());
+            let window = try!(video.window("breeze", SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3)
                 .resizable()
-                .build().unwrap();
-            let renderer = window.renderer()
+                .build());
+            let renderer = try!(window.renderer()
                 .accelerated()
                 .present_vsync()
-                .build().unwrap();
-            let texture = renderer.create_texture(
+                .build());
+            let texture = try!(renderer.create_texture(
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,
                 SCREEN_WIDTH,
-                SCREEN_HEIGHT).unwrap();
+                SCREEN_HEIGHT).map_err(|e| format!("{:?}", e)));
 
             let mut this = SdlRenderer {
                 renderer: renderer,
@@ -105,12 +104,10 @@ impl Default for SdlRenderer {
             };
             this.resize_to(SCREEN_WIDTH * 3, SCREEN_HEIGHT * 3);
 
-            this
+            Ok(this)
         })
     }
-}
 
-impl ::frontend_api::Renderer for SdlRenderer {
     fn render(&mut self, frame_data: &[u8]) -> Option<FrontendAction> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)

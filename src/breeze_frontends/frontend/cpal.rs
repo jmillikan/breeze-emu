@@ -4,31 +4,36 @@ use frontend_api::AudioSink;
 
 use cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
 
+use std::error::Error;
+
 pub struct CpalAudio {
     voice: Voice,
 }
 
-impl Default for CpalAudio {
-    fn default() -> Self {
-        // FIXME Don't panic (we need fallible creation)
-        let endpoint = get_default_endpoint().expect("Failed to get default endpoint");
-        let mut formats = endpoint.get_supported_formats_list().unwrap();
-        let format = formats.find(|fmt| {
+impl AudioSink for CpalAudio {
+    fn create() -> Result<Self, Box<Error>> {
+        let endpoint = match get_default_endpoint() {
+            Some(ep) => ep,
+            None => return Err("Failed to get default endpoint".into()),
+        };
+        let mut formats = try!(endpoint.get_supported_formats_list());
+        let format = match formats.find(|fmt| {
             fmt.data_type == SampleFormat::I16 && fmt.samples_rate == SamplesRate(32000) &&
             fmt.channels.len() == 2
-        }).expect("no support for signed 16-bit data");
+        }) {
+            Some(fmt) => fmt,
+            None => return Err("no support for signed 16-bit data".into()),
+        };
 
         info!("audio format: {:?}", format);
 
-        let voice = Voice::new(&endpoint, &format).expect("Failed to create a channel");
+        let voice = try!(Voice::new(&endpoint, &format));
 
-        CpalAudio {
+        Ok(CpalAudio {
             voice: voice,
-        }
+        })
     }
-}
 
-impl AudioSink for CpalAudio {
     fn write(&mut self, mut data: &[(i16, i16)]) {
         while !data.is_empty() {
             match self.voice.append_data(data.len() * 2) {
