@@ -1,8 +1,10 @@
 //! CPAL (Cross-Platform Audio Library) audio frontend
 
+extern crate cpal;
+
 use frontend_api::{FrontendResult, AudioSink};
 
-use cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
+use self::cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
 
 pub struct CpalAudio {
     voice: Voice,

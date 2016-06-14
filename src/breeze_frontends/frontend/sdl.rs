@@ -1,21 +1,55 @@
 //! Render to an SDL window
 
+extern crate sdl2;
+extern crate libc;
+
 use viewport::*;
 
 use frontend_api::{FrontendAction, FrontendResult};
 use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
 use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
-use sdl2::{EventPump, Sdl};
-use sdl2::event::WindowEventId;
-use sdl2::keyboard::Scancode;
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::render::{Renderer, Texture, TextureAccess};
-use sdl2::rect::Rect;
+use self::sdl2::{EventPump, Sdl};
+use self::sdl2::event::WindowEventId;
+use self::sdl2::keyboard::Scancode;
+use self::sdl2::pixels::PixelFormatEnum;
+use self::sdl2::render::{Renderer, Texture, TextureAccess};
+use self::sdl2::rect::Rect;
 
 use std::cell::RefCell;
 use std::error::Error;
 use std::ops::Deref;
+
+/// Signal handler saving/restoring when initializing SDL
+mod signal {
+    use super::libc::*;
+
+    #[cfg(unix)]
+    pub type SavedSignals = [sighandler_t; 2];
+    #[cfg(not(unix))]
+    pub type SavedSignals = ();
+
+    #[cfg(unix)]
+    pub fn save_handlers() -> SavedSignals {
+        let sigint = unsafe { signal(SIGINT, SIG_DFL) };
+        let sigterm = unsafe { signal(SIGTERM, SIG_DFL) };
+        [sigint, sigterm]
+    }
+
+    #[cfg(not(unix))]
+    pub fn save_handlers() -> SavedSignals {}
+
+    #[cfg(unix)]
+    pub fn restore_handlers(saved: SavedSignals) {
+        unsafe {
+            signal(SIGINT, saved[0]);
+            signal(SIGTERM, saved[1]);
+        }
+    }
+
+    #[cfg(not(unix))]
+    pub fn restore_handlers(_: SavedSignals) {}
+}
 
 /// Takes care of SDL (mainly used for event management). Owns an `EventPump`, which makes it
 /// unavailable for other code. Initialized when the emulator uses an SDL frontend.
@@ -29,7 +63,7 @@ impl SdlManager {
     /// Updates all SDL-related state. Polls events and may terminate the process via
     /// `process::exit`. Should be called at least once per frame.
     fn update(&mut self) -> FrontendResult<Vec<FrontendAction>> {
-        use sdl2::event::Event::*;
+        use self::sdl2::event::Event::*;
 
         for event in self.event_pump.poll_iter() {
             match event {
@@ -64,8 +98,10 @@ impl Deref for SdlManager {
 
 thread_local! {
     static SDL: RefCell<SdlManager> = {
-        let sdl = ::sdl2::init().unwrap();
+        let signals = signal::save_handlers();
+        let sdl = sdl2::init().unwrap();
         let pump = sdl.event_pump().unwrap();
+        signal::restore_handlers(signals);
 
         RefCell::new(SdlManager {
             sdl: sdl,
@@ -96,7 +132,7 @@ impl ::frontend_api::Renderer for SdlRenderer {
                 PixelFormatEnum::RGB24,
                 TextureAccess::Static,
                 SCREEN_WIDTH,
-                SCREEN_HEIGHT).map_err(|e| format!("{:?}", e)));
+                SCREEN_HEIGHT).map_err(|e| format!("{:?}", e)));    // FIXME missing Error impl
 
             let mut this = SdlRenderer {
                 renderer: renderer,
@@ -147,7 +183,7 @@ pub struct KeyboardInput;
 
 impl JoypadImpl for KeyboardInput {
     fn update_state(&mut self) -> JoypadState {
-        use sdl2::keyboard::Scancode::*;
+        use self::sdl2::keyboard::Scancode::*;
 
         SDL.with(|sdl_cell| {
             let mut joypad = JoypadState::new();

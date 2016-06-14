@@ -14,14 +14,9 @@ extern crate breeze_frontend_api as frontend_api;
 #[macro_use] #[no_link] extern crate lazy_static;
 #[macro_use] extern crate log;
 
-#[cfg(feature = "sdl2")]
-extern crate sdl2;
-
+// XXX an `extern crate` loading macros must be at the crate root [E0468]
 #[cfg(feature = "glium")]
 #[macro_use] extern crate glium;
-
-#[cfg(feature = "cpal")]
-extern crate cpal;
 
 use frontend_api::{AudioSink, Renderer};
 
