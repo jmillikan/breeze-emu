@@ -21,12 +21,7 @@ use self::bg::BgCache;
 use self::oam::Oam;
 use self::cgram::Cgram;
 
-/// Physical screen width
-/// (this is the width of a field, or a half-frame)
-pub const SCREEN_WIDTH: u32 = 256;
-/// Physical screen height
-/// (this is the height of a field, or a half-frame)
-pub const SCREEN_HEIGHT: u32 = 224;     // 224px for 60 Hz NTSC, 264 for 50 Hz PAL
+pub use frontend::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 /// VRAM size in Bytes
 pub const VRAM_SIZE: usize = 64 * 1024;
