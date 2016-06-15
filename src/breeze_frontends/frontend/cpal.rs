@@ -16,12 +16,12 @@ impl AudioSink for CpalAudio {
             Some(ep) => ep,
             None => return Err("Failed to get default endpoint".into()),
         };
-        let mut formats = try!(endpoint.get_supported_formats_list());
+        let formats = try!(endpoint.get_supported_formats_list()).collect::<Vec<_>>();
         for fmt in &formats {
             debug!("supported format: {:?}", fmt);
         }
 
-        let format = match formats.find(|fmt| {
+        let format = match formats.iter().find(|fmt| {
             fmt.data_type == SampleFormat::I16 && fmt.samples_rate == SamplesRate(32000) &&
             fmt.channels.len() == 2
         }) {
