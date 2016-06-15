@@ -22,6 +22,7 @@ use std::ops::Deref;
 
 /// Signal handler saving/restoring when initializing SDL
 mod signal {
+    #[cfg(unix)]
     use super::libc::*;
 
     #[cfg(unix)]
