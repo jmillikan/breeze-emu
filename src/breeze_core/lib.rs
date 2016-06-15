@@ -6,9 +6,9 @@ extern crate byteorder;
 
 #[macro_use] #[no_link] extern crate byte_array;
 #[macro_use] extern crate libsavestate;
-extern crate wdc65816 as cpu;
-extern crate spc700 as apu;
-extern crate breeze_backend as backend;
+extern crate wdc65816;
+extern crate spc700;
+extern crate breeze_backend;
 
 #[macro_use] mod log_util;
 pub mod dma;

@@ -13,7 +13,7 @@
 
 use snes::Peripherals;
 
-use cpu::Mem;
+use wdc65816::Mem;
 
 /// The configuration of a DMA channel
 #[derive(Clone, Copy)]

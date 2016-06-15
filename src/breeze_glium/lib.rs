@@ -2,11 +2,11 @@
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate glium;
-extern crate breeze_backend as backend_api;
+extern crate breeze_backend;
 
-use backend_api::{BackendAction, BackendResult, Renderer};
-use backend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
-use backend_api::viewport::{Viewport, viewport_for_window_size};
+use breeze_backend::{BackendAction, BackendResult, Renderer};
+use breeze_backend::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use breeze_backend::viewport::{Viewport, viewport_for_window_size};
 
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;

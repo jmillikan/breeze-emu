@@ -7,9 +7,9 @@ use ppu::{FrameBuf, Ppu};
 use rom::Rom;
 use save::SaveStateFormat;
 
-use apu::Spc700;
-use cpu::{Cpu, Mem};
-use backend::{BackendAction, BackendResult, Renderer, AudioSink};
+use spc700::Spc700;
+use wdc65816::{Cpu, Mem};
+use breeze_backend::{BackendAction, BackendResult, Renderer, AudioSink};
 
 use std::cmp;
 use std::env;

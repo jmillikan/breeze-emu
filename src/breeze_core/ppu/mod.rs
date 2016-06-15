@@ -21,7 +21,7 @@ use self::bg::BgCache;
 use self::oam::Oam;
 use self::cgram::Cgram;
 
-pub use backend::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
+pub use breeze_backend::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 /// VRAM size in Bytes
 pub const VRAM_SIZE: usize = 64 * 1024;

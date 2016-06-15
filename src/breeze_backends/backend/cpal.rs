@@ -2,7 +2,7 @@
 
 extern crate cpal;
 
-use backend_api::{BackendResult, AudioSink};
+use breeze_backend::{BackendResult, AudioSink};
 
 use self::cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
 

@@ -5,16 +5,16 @@
 extern crate clap;
 extern crate env_logger;
 
-extern crate breeze_core as breeze;
-extern crate breeze_backends as backends;
-extern crate breeze_backend as backend_api;
+extern crate breeze_core;
+extern crate breeze_backends;
+extern crate breeze_backend;
 
-use breeze::rom::Rom;
-use breeze::snes::Emulator;
-use breeze::input::Input;
-use breeze::save::SaveStateFormat;
-use breeze::record::{RecordingFormat, create_recorder, create_replayer};
-use backend_api::Renderer;
+use breeze_core::rom::Rom;
+use breeze_core::snes::Emulator;
+use breeze_core::input::Input;
+use breeze_core::save::SaveStateFormat;
+use breeze_core::record::{RecordingFormat, create_recorder, create_replayer};
+use breeze_backend::Renderer;
 
 use clap::ArgMatches;
 
@@ -26,8 +26,8 @@ use std::io::{BufReader, Read};
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
-    use breeze::input::Peripheral;
-    use backends::breeze_sdl::KeyboardInput;
+    use breeze_core::input::Peripheral;
+    use breeze_backends::breeze_sdl::KeyboardInput;
 
     input.ports.0 = Some(Peripheral::new_joypad(Box::new(KeyboardInput)));
 }
@@ -41,13 +41,13 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         return Err("`record` and `replay` may not be specified together!".into());
     }
 
-    let renderer_name = args.value_of("renderer").unwrap_or(&*backends::DEFAULT_RENDERER);
+    let renderer_name = args.value_of("renderer").unwrap_or(&*breeze_backends::DEFAULT_RENDERER);
 
-    let renderer_fn = match backends::RENDERER_MAP.get(renderer_name) {
+    let renderer_fn = match breeze_backends::RENDERER_MAP.get(renderer_name) {
         None => {
             println!("error: unknown renderer: {}", renderer_name);
-            println!("{} renderers known:", backends::RENDERER_MAP.len());
-            for (name, opt_fn) in backends::RENDERER_MAP.iter() {
+            println!("{} renderers known:", breeze_backends::RENDERER_MAP.len());
+            for (name, opt_fn) in breeze_backends::RENDERER_MAP.iter() {
                 println!("\t{}\t{}", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",
@@ -68,12 +68,12 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         }
     };
 
-    let audio_name = args.value_of("audio").unwrap_or(&*backends::DEFAULT_AUDIO);
-    let audio_fn = match backends::AUDIO_MAP.get(audio_name) {
+    let audio_name = args.value_of("audio").unwrap_or(&*breeze_backends::DEFAULT_AUDIO);
+    let audio_fn = match breeze_backends::AUDIO_MAP.get(audio_name) {
         None => {
             println!("error: unknown audio sink: {}", audio_name);
-            println!("{} audio sinks known:", backends::AUDIO_MAP.len());
-            for (name, opt_fn) in backends::AUDIO_MAP.iter() {
+            println!("{} audio sinks known:", breeze_backends::AUDIO_MAP.len());
+            for (name, opt_fn) in breeze_backends::AUDIO_MAP.iter() {
                 println!("\t{}\t{}", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",

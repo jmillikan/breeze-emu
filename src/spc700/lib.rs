@@ -21,11 +21,11 @@ mod ipl;
 mod statusreg;
 mod timer;
 
-use self::addressing::AddressingMode;
-use self::dsp::Dsp;
-use self::ipl::IPL_ROM;
-use self::statusreg::StatusReg;
-use self::timer::Timer;
+use addressing::AddressingMode;
+use dsp::Dsp;
+use ipl::IPL_ROM;
+use statusreg::StatusReg;
+use timer::Timer;
 
 
 const RAM_SIZE: usize = 65536;

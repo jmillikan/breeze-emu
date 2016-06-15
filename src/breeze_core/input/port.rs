@@ -11,7 +11,7 @@
 //! `libinput` support), and yet is true to the hardware, since emulation is performed on a very low
 //! level.
 
-use backend::input::joypad::{JoypadImpl, JoypadState};
+use breeze_backend::input::joypad::{JoypadImpl, JoypadState};
 
 /// Enumeration of things that can be plugged into a controller port on the SNES.
 pub enum Peripheral {

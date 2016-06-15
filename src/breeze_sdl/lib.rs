@@ -1,14 +1,14 @@
 //! Render to an SDL window
 
 #[macro_use] extern crate log;
-extern crate breeze_backend as backend_api;
+extern crate breeze_backend;
 extern crate sdl2;
 extern crate libc;
 
-use backend_api::{BackendAction, BackendResult};
-use backend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
-use backend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
-use backend_api::viewport::*;
+use breeze_backend::{BackendAction, BackendResult};
+use breeze_backend::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
+use breeze_backend::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use breeze_backend::viewport::*;
 
 use sdl2::{EventPump, Sdl};
 use sdl2::event::WindowEventId;
@@ -118,7 +118,7 @@ pub struct SdlRenderer {
     texture: Texture,
 }
 
-impl ::backend_api::Renderer for SdlRenderer {
+impl ::breeze_backend::Renderer for SdlRenderer {
     fn create() -> Result<Self, Box<Error>> {
         SDL.with(|sdl_cell| {
             let sdl = sdl_cell.borrow_mut();

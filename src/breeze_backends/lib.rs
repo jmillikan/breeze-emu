@@ -9,7 +9,7 @@
 #![deny(warnings)]
 #![deny(unused_import_braces, unused_qualifications)]
 
-extern crate breeze_backend as backend_api;
+extern crate breeze_backend;
 
 #[macro_use] #[no_link] extern crate lazy_static;
 #[macro_use] extern crate log;
@@ -21,9 +21,9 @@ extern crate breeze_glium;
 pub extern crate breeze_sdl;    // FIXME pub because of the input hack
 #[cfg(feature = "sdl")]
 
-use backend_api::{AudioSink, Renderer};
-use backend_api::dummy::{DummyRenderer, DummySink};
-pub use backend_api::viewport::{self, Viewport};
+use breeze_backend::{AudioSink, Renderer};
+use breeze_backend::dummy::{DummyRenderer, DummySink};
+pub use breeze_backend::viewport::{self, Viewport};
 
 use std::collections::BTreeMap;
 use std::error::Error;

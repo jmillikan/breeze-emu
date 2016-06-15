@@ -8,8 +8,8 @@ use libsavestate::SaveState;
 mod addressing;
 mod statusreg;
 
-use self::addressing::AddressingMode;
-use self::statusreg::StatusReg;
+use addressing::AddressingMode;
+use statusreg::StatusReg;
 
 /// Trait for devices attached to the 65816's address/data bus
 pub trait Mem {
