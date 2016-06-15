@@ -10,6 +10,7 @@ use save::SaveStateFormat;
 use apu::Spc700;
 use cpu::{Cpu, Mem};
 use frontend::{FrontendAction, FrontendResult, Renderer, AudioSink};
+use frontend::ppu::PixelData;
 
 use std::cmp;
 use std::env;
@@ -360,7 +361,7 @@ impl Snes {
 
     /// Runs emulation until the next frame is completed.
     pub fn render_frame<F>(&mut self, mut render: F) -> FrontendResult<Vec<FrontendAction>>
-    where F: FnMut(&FrameBuf) -> FrontendResult<Vec<FrontendAction>> {
+    where F: FnMut(&FrameBuf, &[PixelData]) -> FrontendResult<Vec<FrontendAction>> {
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
@@ -416,7 +417,7 @@ impl Snes {
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
-                        for action in try!(render(&self.cpu.mem.ppu.framebuf)) {
+                        for action in try!(render(&self.cpu.mem.ppu.framebuf, &*self.cpu.mem.ppu.pixeldata)) {
                             actions.push(action);
                         }
                         frame_rendered = true;
@@ -560,7 +561,7 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     pub fn render_frame(&mut self) -> FrontendResult<bool> {
         let actions = {
             let renderer = &mut self.renderer;
-            self.snes.render_frame(|framebuf| renderer.render(&**framebuf))
+            self.snes.render_frame(|framebuf, pixdata| renderer.render(&**framebuf, pixdata))
         };
 
         for action in try!(actions) {

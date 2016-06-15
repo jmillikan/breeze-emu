@@ -4,6 +4,8 @@
 pub mod input;
 pub mod ppu;
 
+use self::ppu::PixelData;
+
 use std::error::Error;
 
 /// An action that can be performed by the user, is detected by the frontend and executed by the
@@ -39,7 +41,7 @@ pub trait Renderer {
     /// method returns, the input devices can be queried by the running program. This allows
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>>;
+    fn render(&mut self, framebuf: &[u8], aux: &[PixelData]) -> FrontendResult<Vec<FrontendAction>>;
 
     /// Set the ROM title. This usually sets the window title.
     fn set_rom_title(&mut self, title: &str);
@@ -51,8 +53,8 @@ impl<T: Renderer + ?Sized> Renderer for Box<T> {
         Err("attempted to instantiate erased Renderer type".into())
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
-        (**self).render(frame_data)
+    fn render(&mut self, frame: &[u8], aux: &[PixelData]) -> FrontendResult<Vec<FrontendAction>> {
+        (**self).render(frame, aux)
     }
 
     fn set_rom_title(&mut self, title: &str) {

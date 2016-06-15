@@ -3,7 +3,7 @@
 use viewport::*;
 
 use frontend_api::{FrontendAction, FrontendResult, Renderer};
-use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT, PixelData};
 
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
@@ -97,6 +97,7 @@ fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
 
 /// Build 4 Vertices spanning up a rectangle. Bottom-Left corner = (-1, -1).
 fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
+    // FIXME Just use a matrix instead of regenerating the mesh on every resize
     [
         Vertex { position: [x, y + h], tex_coords: [0.0, 0.0] },
         Vertex { position: [x + w, y + h], tex_coords: [1.0, 0.0] },
@@ -124,7 +125,7 @@ impl Renderer for GliumRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame: &[u8], _aux: &[PixelData]) -> FrontendResult<Vec<FrontendAction>> {
         // upload new texture data
         self.texture.write(Rect {
             left: 0,
@@ -132,7 +133,7 @@ impl Renderer for GliumRenderer {
             width: SCREEN_WIDTH,
             height: SCREEN_HEIGHT,
         }, RawImage2d {
-            data: Cow::Borrowed(frame_data),
+            data: Cow::Borrowed(frame),
             width: SCREEN_WIDTH,
             height: SCREEN_HEIGHT,
             format: ClientFormat::U8U8U8,

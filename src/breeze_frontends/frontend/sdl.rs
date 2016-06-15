@@ -7,7 +7,7 @@ use viewport::*;
 
 use frontend_api::{FrontendAction, FrontendResult};
 use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
-use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT, PixelData};
 
 use self::sdl2::{EventPump, Sdl};
 use self::sdl2::event::WindowEventId;
@@ -145,13 +145,13 @@ impl ::frontend_api::Renderer for SdlRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame: &[u8], _aux: &[PixelData]) -> FrontendResult<Vec<FrontendAction>> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)
         }
 
         // FIXME Can this be done with fewer copies?
-        self.texture.update(None, frame_data, SCREEN_WIDTH as usize * 3).unwrap();
+        self.texture.update(None, frame, SCREEN_WIDTH as usize * 3).unwrap();
         self.renderer.clear();
         self.renderer.copy(&self.texture, None, None);
         self.renderer.present();

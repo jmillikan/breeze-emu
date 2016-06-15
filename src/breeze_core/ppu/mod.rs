@@ -22,12 +22,14 @@ use self::oam::Oam;
 use self::cgram::Cgram;
 
 pub use frontend::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use frontend::ppu::PixelData;
 
 /// VRAM size in Bytes
 pub const VRAM_SIZE: usize = 64 * 1024;
 const FRAME_BUF_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize * 3;
 byte_array!(pub Vram[VRAM_SIZE] with u16 indexing, save state please);
 byte_array!(pub FrameBuf[FRAME_BUF_SIZE]);
+make_array!(pub FragBuf[PixelData; FRAME_BUF_SIZE]);
 
 #[derive(Default)]
 pub struct Ppu {
@@ -39,6 +41,8 @@ pub struct Ppu {
     // FIXME The size can change depending on the PPU config, make sure all frames fit in
     // FIXME How would this work in high resolution modes?
     pub framebuf: FrameBuf,
+
+    pub pixeldata: FragBuf,
 
     /// Opaque state object used by the render code. This value may change between frames/scanlines
     /// and is used as a cache between pixels.
@@ -425,7 +429,7 @@ impl_save_state!(Ppu {
     setini, ophct, ophct_high, opvct, opvct_high, can_latch_counters, scanline, x, time_over,
     range_over, interlace_field, ext_latch
 } ignore {
-    framebuf, sprite_render_state, bg_cache
+    framebuf, pixeldata, sprite_render_state, bg_cache
 });
 
 impl Ppu {

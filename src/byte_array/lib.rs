@@ -20,18 +20,18 @@
 
 #[macro_export]
 #[doc = "hidden"]
-macro_rules! impl_byte_array_extra {
-    ( $name:ident | u16 indexing $($rest:tt)* ) => {
+macro_rules! impl_array_extra {
+    ( $name:ident, $t:ty | u16 indexing $($rest:tt)* ) => {
         impl ::std::ops::Index<u16> for $name {
-            type Output = u8;
-            fn index(&self, index: u16) -> &u8 { &self.0[index as usize] }
+            type Output = $t;
+            fn index(&self, index: u16) -> &$t { &self.0[index as usize] }
         }
         impl ::std::ops::IndexMut<u16> for $name {
-            fn index_mut(&mut self, index: u16) -> &mut u8 { &mut self.0[index as usize] }
+            fn index_mut(&mut self, index: u16) -> &mut $t { &mut self.0[index as usize] }
         }
-        impl_byte_array_extra!( $name | $($rest)* );
+        impl_array_extra!( $name, $t | $($rest)* );
     };
-    ( $name:ident | save state $($rest:tt)* ) => {
+    ( $name:ident, $t:ty | save state $($rest:tt)* ) => {
         impl ::libsavestate::SaveState for $name {
             fn save_state<W: ::std::io::Write + ?Sized>(&self, w: &mut W) -> ::std::io::Result<()> {
                 w.write_all(&self.0)
@@ -40,21 +40,21 @@ macro_rules! impl_byte_array_extra {
                 ::libsavestate::read_exact(r, &mut self.0)
             }
         }
-        impl_byte_array_extra!( $name | $($rest)* );
+        impl_array_extra!( $name, $t | $($rest)* );
     };
 
-    ( $name:ident | with $($rest:tt)+ ) => { impl_byte_array_extra!( $name | $($rest)* ); };
-    ( $name:ident | , $($rest:tt)+ ) => { impl_byte_array_extra!( $name | $($rest)* ); };
-    ( $name:ident | please ) => {};
-    ( $name:ident | ) => {};
+    ( $name:ident, $t:ty | with $($rest:tt)+ ) => { impl_array_extra!( $name, $t | $($rest)* ); };
+    ( $name:ident, $t:ty | , $($rest:tt)+ ) => { impl_array_extra!( $name, $t | $($rest)* ); };
+    ( $name:ident, $t:ty | please ) => {};
+    ( $name:ident, $t:ty | ) => {};
 }
 
 #[macro_export]
 #[doc = "hidden"]
-macro_rules! impl_byte_array {
-    ( $name:ident [$size:expr] $($extra:tt)* ) => {
+macro_rules! impl_array {
+    ( $name:ident [$t:ty; $size:expr] $($extra:tt)* ) => {
         impl ::std::default::Default for $name {
-            fn default() -> Self { $name([0; $size]) }
+            fn default() -> Self { $name([<$t as Default>::default(); $size]) }
         }
         impl ::std::clone::Clone for $name {
             fn clone(&self) -> Self {
@@ -62,13 +62,29 @@ macro_rules! impl_byte_array {
             }
         }
         impl ::std::ops::Deref for $name {
-            type Target = [u8; $size];
-            fn deref(&self) -> &[u8; $size] { &self.0 }
+            type Target = [$t; $size];
+            fn deref(&self) -> &[$t; $size] { &self.0 }
         }
         impl ::std::ops::DerefMut for $name {
-            fn deref_mut(&mut self) -> &mut [u8; $size] { &mut self.0 }
+            fn deref_mut(&mut self) -> &mut [$t; $size] { &mut self.0 }
         }
-        impl_byte_array_extra!($name | $($extra)*);
+        impl_array_extra!($name, $t | $($extra)*);
+    };
+}
+
+/// Create a newtype wrapper for `[$t; $size]` that implements `Deref`, `DerefMut` and `Default`.
+///
+/// Just to make my life a little bit easier, `Index<u16>` and `IndexMut<u16>` can optionally be
+/// implemented if you say please (this can save a few mildly annoying `usize` casts).
+#[macro_export]
+macro_rules! make_array {
+    ( $name:ident [$t:ty; $size:expr] $($extra:tt)* ) => {
+        struct $name([$t; $size]);
+        impl_array!($name[$t; $size] $($extra)*);
+    };
+    ( pub $name:ident [$t:ty; $size:expr] $($extra:tt)* ) => {
+        pub struct $name([$t; $size]);
+        impl_array!($name[$t; $size] $($extra)*);
     };
 }
 
@@ -79,11 +95,9 @@ macro_rules! impl_byte_array {
 #[macro_export]
 macro_rules! byte_array {
     ( $name:ident [$size:expr] $($extra:tt)* ) => {
-        struct $name([u8; $size]);
-        impl_byte_array!($name[$size] $($extra)*);
+        make_array!($name [u8; $size] $($extra)*);
     };
     ( pub $name:ident [$size:expr] $($extra:tt)* ) => {
-        pub struct $name([u8; $size]);
-        impl_byte_array!($name[$size] $($extra)*);
+        make_array!(pub $name [u8; $size] $($extra)*);
     };
 }

@@ -1,6 +1,7 @@
 //! Dummy frontend that does nothing.
 
 use frontend_api::{FrontendAction, FrontendResult, Renderer, AudioSink};
+use frontend_api::ppu::PixelData;
 
 /// Renderer that just does nothing, apart from saving the PPU output for later use. This allows
 /// users to extract single rendered frames without having to implement `Renderer`.
@@ -21,9 +22,9 @@ impl Renderer for DummyRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame: &[u8], _aux: &[PixelData]) -> FrontendResult<Vec<FrontendAction>> {
         self.last_frame.clear();
-        self.last_frame.extend_from_slice(frame_data);
+        self.last_frame.extend_from_slice(frame);
         Ok(vec![])
     }
 
