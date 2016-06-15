@@ -11,6 +11,3 @@ Provides an API to be implemented by Breeze backends.
 
 [lib]
 path = "lib.rs"
-
-[dependencies]
-libsavestate = { version = "0.1", path = "../libsavestate" }
