@@ -15,7 +15,6 @@ path = "lib.rs"
 breeze_backend = { version = "0.1", path = "../breeze_backend" }
 log = "0.3"
 lazy_static = "0.1"
-libc = "0.2"
 
 [dependencies.breeze_glium]
 path = "../breeze_glium"
@@ -25,10 +24,11 @@ optional = true
 path = "../breeze_sdl"
 optional = true
 
-[dependencies.cpal]
-version = "0.2"
+[dependencies.breeze_cpal]
+path = "../breeze_cpal"
 optional = true
 
 [features]
 glium = ["breeze_glium"]
 sdl = ["breeze_sdl"]
+cpal = ["breeze_cpal"]

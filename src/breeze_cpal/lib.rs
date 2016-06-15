@@ -1,10 +1,12 @@
 //! CPAL (Cross-Platform Audio Library) audio backend
 
+#[macro_use] extern crate log;
+extern crate breeze_backend;
 extern crate cpal;
 
 use breeze_backend::{BackendResult, AudioSink};
 
-use self::cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
+use cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
 
 pub struct CpalAudio {
     voice: Voice,

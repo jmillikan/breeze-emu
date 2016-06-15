@@ -3,8 +3,7 @@
 //! The "Backend" is everything that sits between the emulator core and the user: Video output
 //! (Window management), Input handling, Audio output.
 
-// TODO We could easily do render tests with a custom `Renderer`, and even supply scripted input
-// with an `InputSource`
+// TODO We could easily do render tests with a custom `Renderer`, and even supply recorded input
 
 #![deny(warnings)]
 #![deny(unused_import_braces, unused_qualifications)]
@@ -19,7 +18,9 @@ extern crate breeze_glium;
 
 #[cfg(feature = "sdl")]
 pub extern crate breeze_sdl;    // FIXME pub because of the input hack
-#[cfg(feature = "sdl")]
+
+#[cfg(feature = "cpal")]
+extern crate breeze_cpal;
 
 use breeze_backend::{AudioSink, Renderer};
 use breeze_backend::dummy::{DummyRenderer, DummySink};
@@ -30,32 +31,6 @@ use std::error::Error;
 
 pub type RendererMap = BTreeMap<&'static str, Option<fn() -> Result<Box<Renderer>, Box<Error>>>>;
 pub type AudioMap = BTreeMap<&'static str, Option<fn() -> Result<Box<AudioSink>, Box<Error>>>>;
-
-pub mod backend;
-
-// FIXME I'd love to get rid of this... feels like too much magic.
-macro_rules! make_fn {
-    ( $tr:ident: #[cfg($m:meta)] $name:ident :: $tyname:ident ) => {{
-        #[cfg($m)]
-        fn $name() -> Result<Box<$tr>, Box<Error>> {
-            <backend::$name::$tyname as $tr>::create().map(|r| Box::new(r) as Box<_>)
-        }
-
-        #[cfg(not($m))]
-        fn $name() -> Result<Box<$tr>, Box<Error>> {
-            unreachable!()
-        }
-
-        if cfg!($m) { Some($name as fn() -> Result<Box<$tr>, Box<Error>>) } else { None }
-    }};
-    ( $tr:ident: $name:ident :: $tyname:ident ) => {{
-        fn $name() -> Result<Box<$tr>, Box<Error>> {
-            <backend::$name::$tyname as $tr>::create().map(|r| Box::new(r) as Box<_>)
-        }
-
-        Some($name as fn() -> Result<Box<$tr>, Box<Error>>)
-    }};
-}
 
 lazy_static! {
     pub static ref RENDERER_MAP: RendererMap = {
@@ -98,8 +73,15 @@ lazy_static! {
             A::create().map(|r| Box::new(r) as Box<_>)
         }
 
+        type MapEntry = Option<fn() -> Result<Box<AudioSink>, Box<Error>>>;
+
+        #[cfg(feature = "cpal")]
+        const BUILD_CPAL: MapEntry = Some(make::<breeze_cpal::CpalAudio>);
+        #[cfg(not(feature = "cpal"))]
+        const BUILD_CPAL: MapEntry = None;
+
         let mut map = AudioMap::new();
-        map.insert("cpal", make_fn!(AudioSink: #[cfg(feature = "cpal")] cpal::CpalAudio));
+        map.insert("cpal", BUILD_CPAL);
         map.insert("dummy", Some(make::<DummySink>));
         map
     };
