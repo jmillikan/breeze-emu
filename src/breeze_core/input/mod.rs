@@ -2,7 +2,7 @@
 //!
 //! Our input emulation is modeled directly after the SNES hardware: We emulate the 2 controller
 //! ports separately, down to the individual wires. `Peripheral`s can be plugged into each and
-//! emulate a specific kind of device plugged into the port. The frontends provide the actual input
+//! emulate a specific kind of device plugged into the port. The backends provide the actual input
 //! reading implementation.
 //!
 //! This flexible setup should allow emulating all available peripherals: From the standard joypad
@@ -10,7 +10,7 @@
 //!
 //! However, nothing is stopping the user from building unusable configurations, such as plugging a
 //! light gun into port 1 (this doesn't work because the `IOBit` line of port 1 isn't connected to
-//! the PPUs counter latch line). The frontend should warn on these.
+//! the PPUs counter latch line). The backend should warn on these.
 
 mod port;
 

@@ -2,14 +2,16 @@
 #![deny(unused_import_braces, unused_qualifications, unused_extern_crates)]
 
 pub mod input;
+pub mod dummy;
 pub mod ppu;
+pub mod viewport;
 
 use std::error::Error;
 
-/// An action that can be performed by the user, is detected by the frontend and executed by the
+/// An action that can be performed by the user, is detected by the backend and executed by the
 /// emulator core.
-#[allow(dead_code)] // Variants may be dead, depending on which frontends are enabled
-pub enum FrontendAction {
+#[allow(dead_code)] // Variants may be dead, depending on which backends are enabled
+pub enum BackendAction {
     /// Exit the emulator
     Exit,
     /// Create a save state
@@ -19,13 +21,13 @@ pub enum FrontendAction {
 }
 
 /// Result with an erased error type.
-pub type FrontendResult<T> = Result<T, Box<Error>>;
+pub type BackendResult<T> = Result<T, Box<Error>>;
 
 /// Trait for screen renderers. Once per frame, they are given the raw screen data produced by the
-/// PPU and can then render this content in a frontend-specific way.
+/// PPU and can then render this content in a backend-specific way.
 pub trait Renderer {
     /// Creates a new renderer.
-    fn create() -> FrontendResult<Self> where Self: Sized;
+    fn create() -> BackendResult<Self> where Self: Sized;
 
     /// Render a frame produced by the PPU. For optimal experience, the `Renderer` implementation
     /// should make sure that the frame is visible as soon as possible.
@@ -39,7 +41,7 @@ pub trait Renderer {
     /// method returns, the input devices can be queried by the running program. This allows
     /// intricate timing mechanisms for better input latency and makes support for dynamic refresh
     /// easier. If the renderer returns immediately, the emulator will run at maximum speed.
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>>;
+    fn render(&mut self, frame_data: &[u8]) -> BackendResult<Vec<BackendAction>>;
 
     /// Set the ROM title. This usually sets the window title.
     fn set_rom_title(&mut self, title: &str);
@@ -47,11 +49,11 @@ pub trait Renderer {
 
 // XXX https://github.com/rust-lang/rust/issues/22194
 impl<T: Renderer + ?Sized> Renderer for Box<T> {
-    fn create() -> FrontendResult<Self> where Self: Sized {
+    fn create() -> BackendResult<Self> where Self: Sized {
         Err("attempted to instantiate erased Renderer type".into())
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame_data: &[u8]) -> BackendResult<Vec<BackendAction>> {
         (**self).render(frame_data)
     }
 
@@ -60,10 +62,10 @@ impl<T: Renderer + ?Sized> Renderer for Box<T> {
     }
 }
 
-/// Trait for audio frontends. Provides methods for writing to a stereo audio channel.
+/// Trait for audio backends. Provides methods for writing to a stereo audio channel.
 pub trait AudioSink {
     /// Creates a new audio sink.
-    fn create() -> FrontendResult<Self> where Self: Sized;
+    fn create() -> BackendResult<Self> where Self: Sized;
 
     /// Write 32 kHz 16-bit data to the device.
     ///
@@ -72,7 +74,7 @@ pub trait AudioSink {
 }
 
 impl<T: AudioSink + ?Sized> AudioSink for Box<T> {
-    fn create() -> FrontendResult<Self> where Self: Sized {
+    fn create() -> BackendResult<Self> where Self: Sized {
         Err("attempted to instantiate erased AudioSink type".into())
     }
 

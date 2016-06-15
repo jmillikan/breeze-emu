@@ -19,8 +19,8 @@ harness = false
 
 [dependencies]
 breeze_core = { version = "0.1", path = "src/breeze_core" }
-breeze_frontends = { version = "0.1", path = "src/breeze_frontends" }
-breeze_frontend_api = { version = "0.1", path = "src/breeze_frontend_api" }
+breeze_backends = { version = "0.1", path = "src/breeze_backends" }
+breeze_backend = { version = "0.1", path = "src/breeze_backend" }
 libsavestate = { version = "0.1", path = "src/libsavestate" }
 log = "0.3"
 env_logger = "0.3"
@@ -37,11 +37,11 @@ term = "0.4"
 png = { version = "0.5", default-features = false }
 
 [features]
-# reexport frontends
+# reexport backends
 default = ["sdl", "glium", "cpal"]
-sdl = ["breeze_frontends/sdl2"]
-glium = ["breeze_frontends/glium"]
-cpal = ["breeze_frontends/cpal"]
+sdl = ["breeze_backends/sdl"]
+glium = ["breeze_backends/glium"]
+cpal = ["breeze_backends/cpal"]
 
 # Run render tests optimized (the unoptimized emulator is just too slow for that
 # to scale well)

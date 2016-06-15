@@ -1,11 +1,13 @@
 [package]
-name = "breeze_frontend_api"
-description = "Breeze Emulator Frontend API"
+name = "breeze_backend"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonas@schievink.net>"]
 license = "Apache-2.0/MIT"
-documentation = "http://jonas-schievink.github.io/breeze-emu/breeze_frontend_api/"
+documentation = "http://jonas-schievink.github.io/breeze-emu/breeze_backend/"
 repository = "https://github.com/jonas-schievink/breeze-emu"
+description = """
+Provides an API to be implemented by Breeze backends.
+"""
 
 [lib]
 path = "lib.rs"

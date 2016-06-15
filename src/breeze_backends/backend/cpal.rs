@@ -1,8 +1,8 @@
-//! CPAL (Cross-Platform Audio Library) audio frontend
+//! CPAL (Cross-Platform Audio Library) audio backend
 
 extern crate cpal;
 
-use frontend_api::{FrontendResult, AudioSink};
+use backend_api::{BackendResult, AudioSink};
 
 use self::cpal::{get_default_endpoint, Voice, SampleFormat, SamplesRate, UnknownTypeBuffer};
 
@@ -11,7 +11,7 @@ pub struct CpalAudio {
 }
 
 impl AudioSink for CpalAudio {
-    fn create() -> FrontendResult<Self> {
+    fn create() -> BackendResult<Self> {
         let endpoint = match get_default_endpoint() {
             Some(ep) => ep,
             None => return Err("Failed to get default endpoint".into()),

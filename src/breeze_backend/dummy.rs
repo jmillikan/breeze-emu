@@ -1,6 +1,6 @@
-//! Dummy frontend that does nothing.
+//! Dummy backend that does nothing.
 
-use frontend_api::{FrontendAction, FrontendResult, Renderer, AudioSink};
+use {BackendAction, BackendResult, Renderer, AudioSink};
 
 /// Renderer that just does nothing, apart from saving the PPU output for later use. This allows
 /// users to extract single rendered frames without having to implement `Renderer`.
@@ -15,13 +15,13 @@ impl DummyRenderer {
 }
 
 impl Renderer for DummyRenderer {
-    fn create() -> FrontendResult<Self> where Self: Sized {
+    fn create() -> BackendResult<Self> where Self: Sized {
         Ok(DummyRenderer {
             last_frame: Vec::new(),
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame_data: &[u8]) -> BackendResult<Vec<BackendAction>> {
         self.last_frame.clear();
         self.last_frame.extend_from_slice(frame_data);
         Ok(vec![])
@@ -34,6 +34,6 @@ impl Renderer for DummyRenderer {
 pub struct DummySink;
 
 impl AudioSink for DummySink {
-    fn create() -> FrontendResult<Self> { Ok(DummySink) }
+    fn create() -> BackendResult<Self> { Ok(DummySink) }
     fn write(&mut self, _data: &[(i16, i16)]) {}
 }

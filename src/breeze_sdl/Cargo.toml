@@ -1,0 +1,19 @@
+[package]
+name = "breeze_sdl"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+license = "Apache-2.0/MIT"
+repository = "https://github.com/jonas-schievink/breeze-emu"
+description = """
+SDL Breeze backend
+"""
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+breeze_backend = { version = "0.1", path = "../breeze_backend" }
+log = "0.3"
+lazy_static = "0.1"
+libc = "0.2"
+sdl2 = "0.20"

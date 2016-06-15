@@ -1,6 +1,6 @@
 //! Provides a utility method for calculating native viewport size when the window is resized.
 
-use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 /// A simple rectangle
 pub struct Viewport {
@@ -16,6 +16,7 @@ pub struct Viewport {
 /// least one axis. Basically, this calculates the black bars to apply to the window to make the
 /// center have the native SNES ratio.
 pub fn viewport_for_window_size(w: u32, h: u32) -> Viewport {
+    // FIXME why the hell is this not an assoc. function?!
     // FIXME Not sure if floats are a good idea here
     let w = w as f32;
     let h = h as f32;

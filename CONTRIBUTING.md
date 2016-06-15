@@ -16,6 +16,6 @@ This project is split up into multiple crates for reusability and to make compil
 * `libsavestate`: A library for emulator save states. Provides a few traits, impls and macros to help implementing save states. They basically work like binary (de-)serialization, but can overwrite existing values (while leaving parts of them intact)
 * `byte_array`: A small utility crate that provides a macro to allow easily implementing `[u8; N]` newtypes which implement several traits. These arrays are frequently used for the numerous types of memory inside the SNES.
 * `breeze_core`: This is the heart of this project. This crate contains the PPU emulation, DMA routines, ROM loading code, and the main emulation coordination.
-* `breeze_frontend_api`: Contains traits used by `breeze_core`, which must be provided by the frontend. Putting these in another crate allows parallel and independent compilation of `breeze_core` and `breeze_frontends`.
-* `breeze_frontends`: Contains frontend implementations. Currently, frontends only handle controller input, rendering and window creation, but will eventually handle audio device access as well.
-* `breeze`: A small CLI frontend that invokes the main emulator. This is what you'll use to actually run this thing.
+* `breeze_backend`: Contains traits used by `breeze_core`, which must be provided by the backend. Also contains a dummy implementation of these. Putting this in another crate allows parallel and independent compilation of `breeze_core` and `breeze_backends`.
+* `breeze_backends`: Contains backend implementations. Currently, backends only handle controller input, rendering and window creation, but will eventually handle audio device access as well.
+* `breeze`: A small CLI backend that invokes the main emulator. This is what you'll use to actually run this thing.

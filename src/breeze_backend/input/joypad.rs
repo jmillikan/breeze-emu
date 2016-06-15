@@ -57,7 +57,7 @@ impl JoypadState {
 
 /// Trait for joypad implementations.
 ///
-/// This should be implemented by the frontend, and is a simple abstraction from the bit-level
+/// This should be implemented by the backend, and is a simple abstraction from the bit-level
 /// trickery at the controller port made for joysticks.
 pub trait JoypadImpl {
     /// Called to "latch" the current joypad state.

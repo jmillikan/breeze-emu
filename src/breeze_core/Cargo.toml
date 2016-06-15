@@ -11,7 +11,7 @@ repository = "https://github.com/jonas-schievink/breeze-emu"
 path = "lib.rs"
 
 [dependencies]
-breeze_frontend_api = { version = "0.1", path = "../breeze_frontend_api" }
+breeze_backend = { version = "0.1", path = "../breeze_backend" }
 wdc65816 = { version = "0.1", path = "../wdc65816" }
 spc700 = { version = "0.1", path = "../spc700" }
 byte_array = { version = "0.1", path = "../byte_array" }

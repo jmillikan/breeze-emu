@@ -1,9 +1,12 @@
 //! Render to a window created by Glutin, using Glium's OpenGL functions
 
-use viewport::*;
+#[macro_use] extern crate log;
+#[macro_use] extern crate glium;
+extern crate breeze_backend as backend_api;
 
-use frontend_api::{FrontendAction, FrontendResult, Renderer};
-use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use backend_api::{BackendAction, BackendResult, Renderer};
+use backend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use backend_api::viewport::{Viewport, viewport_for_window_size};
 
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
@@ -62,14 +65,14 @@ pub struct GliumRenderer {
 }
 
 impl GliumRenderer {
-    fn handle_events(&mut self) -> FrontendResult<Vec<FrontendAction>> {
+    fn handle_events(&mut self) -> BackendResult<Vec<BackendAction>> {
         use glium::glutin::Event::*;
 
         for ev in self.display.poll_events() {
             match ev {
                 Closed => {
                     info!("quit event -> exiting");
-                    return Ok(vec![FrontendAction::Exit]);
+                    return Ok(vec![BackendAction::Exit]);
                 }
                 Resized(w, h) => {
                     resize(&mut self.vbuf, w, h);
@@ -124,7 +127,7 @@ impl Renderer for GliumRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame_data: &[u8]) -> BackendResult<Vec<BackendAction>> {
         // upload new texture data
         self.texture.write(Rect {
             left: 0,

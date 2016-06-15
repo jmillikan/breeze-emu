@@ -1,20 +1,21 @@
 //! Render to an SDL window
 
+#[macro_use] extern crate log;
+extern crate breeze_backend as backend_api;
 extern crate sdl2;
 extern crate libc;
 
-use viewport::*;
+use backend_api::{BackendAction, BackendResult};
+use backend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
+use backend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use backend_api::viewport::*;
 
-use frontend_api::{FrontendAction, FrontendResult};
-use frontend_api::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
-use frontend_api::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
-
-use self::sdl2::{EventPump, Sdl};
-use self::sdl2::event::WindowEventId;
-use self::sdl2::keyboard::Scancode;
-use self::sdl2::pixels::PixelFormatEnum;
-use self::sdl2::render::{Renderer, Texture, TextureAccess};
-use self::sdl2::rect::Rect;
+use sdl2::{EventPump, Sdl};
+use sdl2::event::WindowEventId;
+use sdl2::keyboard::Scancode;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::render::{Renderer, Texture, TextureAccess};
+use sdl2::rect::Rect;
 
 use std::cell::RefCell;
 use std::error::Error;
@@ -53,7 +54,7 @@ mod signal {
 }
 
 /// Takes care of SDL (mainly used for event management). Owns an `EventPump`, which makes it
-/// unavailable for other code. Initialized when the emulator uses an SDL frontend.
+/// unavailable for other code. Initialized when the emulator uses an SDL backend.
 struct SdlManager {
     sdl: Sdl,
     event_pump: EventPump,
@@ -63,24 +64,24 @@ struct SdlManager {
 impl SdlManager {
     /// Updates all SDL-related state. Polls events and may terminate the process via
     /// `process::exit`. Should be called at least once per frame.
-    fn update(&mut self) -> FrontendResult<Vec<FrontendAction>> {
+    fn update(&mut self) -> BackendResult<Vec<BackendAction>> {
         use self::sdl2::event::Event::*;
 
         for event in self.event_pump.poll_iter() {
             match event {
                 Quit { .. } => {
                     info!("quit event -> exiting");
-                    return Ok(vec![FrontendAction::Exit]);
+                    return Ok(vec![BackendAction::Exit]);
                 }
                 Window { win_event_id: WindowEventId::Resized, data1: w, data2: h, .. } => {
                     info!("window resized to {}x{}", w, h);
                     self.resized_to = Some((w as u32, h as u32));
                 }
                 KeyDown { scancode: Some(Scancode::F5), .. } => {
-                    return Ok(vec![FrontendAction::SaveState]);
+                    return Ok(vec![BackendAction::SaveState]);
                 }
                 KeyDown { scancode: Some(Scancode::F9), .. } => {
-                    return Ok(vec![FrontendAction::LoadState]);
+                    return Ok(vec![BackendAction::LoadState]);
                 }
                 _ => {}
             }
@@ -117,7 +118,7 @@ pub struct SdlRenderer {
     texture: Texture,
 }
 
-impl ::frontend_api::Renderer for SdlRenderer {
+impl ::backend_api::Renderer for SdlRenderer {
     fn create() -> Result<Self, Box<Error>> {
         SDL.with(|sdl_cell| {
             let sdl = sdl_cell.borrow_mut();
@@ -145,7 +146,7 @@ impl ::frontend_api::Renderer for SdlRenderer {
         })
     }
 
-    fn render(&mut self, frame_data: &[u8]) -> FrontendResult<Vec<FrontendAction>> {
+    fn render(&mut self, frame_data: &[u8]) -> BackendResult<Vec<BackendAction>> {
         if let Some((w, h)) = SDL.with(|sdl| sdl.borrow_mut().resized()) {
             self.resize_to(w, h)
         }

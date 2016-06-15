@@ -9,7 +9,7 @@ use save::SaveStateFormat;
 
 use apu::Spc700;
 use cpu::{Cpu, Mem};
-use frontend::{FrontendAction, FrontendResult, Renderer, AudioSink};
+use backend::{BackendAction, BackendResult, Renderer, AudioSink};
 
 use std::cmp;
 use std::env;
@@ -359,8 +359,8 @@ impl Snes {
     pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.cpu.mem }
 
     /// Runs emulation until the next frame is completed.
-    pub fn render_frame<F>(&mut self, mut render: F) -> FrontendResult<Vec<FrontendAction>>
-    where F: FnMut(&FrameBuf) -> FrontendResult<Vec<FrontendAction>> {
+    pub fn render_frame<F>(&mut self, mut render: F) -> BackendResult<Vec<BackendAction>>
+    where F: FnMut(&FrameBuf) -> BackendResult<Vec<BackendAction>> {
         /// Approximated APU clock divider. It's actually somewhere around 20.9..., which is why we
         /// can't directly use `MASTER_CLOCK_FREQ / APU_CLOCK_FREQ` (it would round down, which
         /// might not be critical, but better safe than sorry).
@@ -528,17 +528,17 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     /// Get a mutable reference to the `Peripherals` instance
     pub fn peripherals_mut(&mut self) -> &mut Peripherals { &mut self.snes.cpu.mem }
 
-    /// Handles a `FrontendAction`. Returns `true` if the emulator should exit.
-    pub fn handle_action(&mut self, action: FrontendAction) -> bool {
+    /// Handles a `BackendAction`. Returns `true` if the emulator should exit.
+    pub fn handle_action(&mut self, action: BackendAction) -> bool {
         match action {
-            FrontendAction::Exit => return true,
-            FrontendAction::SaveState => {
+            BackendAction::Exit => return true,
+            BackendAction::SaveState => {
                 let path = "breeze.sav";
                 let mut file = File::create(path).unwrap();
                 self.snes.create_save_state(SaveStateFormat::default(), &mut file).unwrap();
                 info!("created a save state in '{}'", path);
             }
-            FrontendAction::LoadState => {
+            BackendAction::LoadState => {
                 if self.snes.cpu.mem.input.is_recording() || self.snes.cpu.mem.input.is_replaying() {
                     error!("cannot load a save state while recording or replaying input!");
                 } else {
@@ -554,10 +554,10 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
     }
 
     /// Runs emulation until a frame is completed, renders the frame and handles an action dictated
-    /// by the frontend.
+    /// by the backend.
     ///
-    /// Returns `true` if the frontend requested an exit, `false` otherwise.
-    pub fn render_frame(&mut self) -> FrontendResult<bool> {
+    /// Returns `true` if the backend requested an exit, `false` otherwise.
+    pub fn render_frame(&mut self) -> BackendResult<bool> {
         let actions = {
             let renderer = &mut self.renderer;
             self.snes.render_frame(|framebuf| renderer.render(&**framebuf))
@@ -572,9 +572,9 @@ impl<R: Renderer, A: AudioSink> Emulator<R, A> {
 
     /// Runs the emulator in a loop
     ///
-    /// This will emulate the system and render frames until the frontend signals that the emulator
+    /// This will emulate the system and render frames until the backend signals that the emulator
     /// should exit.
-    pub fn run(&mut self) -> FrontendResult<()> {
+    pub fn run(&mut self) -> BackendResult<()> {
         while !try!(self.render_frame()) {}
         Ok(())
     }

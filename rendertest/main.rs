@@ -6,11 +6,11 @@ extern crate term;
 extern crate png;
 
 extern crate breeze_core;
-extern crate breeze_frontends;
-extern crate breeze_frontend_api;
+extern crate breeze_backends;
+extern crate breeze_backend;
 
-use breeze_frontends::frontend::dummy::{DummyRenderer, DummySink};
-use breeze_frontend_api::{AudioSink, Renderer};
+use breeze_backend::{AudioSink, Renderer};
+use breeze_backend::dummy::{DummyRenderer, DummySink};
 use breeze_core::rom::Rom;
 use breeze_core::snes::Emulator;
 

@@ -6,15 +6,15 @@ extern crate clap;
 extern crate env_logger;
 
 extern crate breeze_core as breeze;
-extern crate breeze_frontends as frontends;
-extern crate breeze_frontend_api as frontend_api;
+extern crate breeze_backends as backends;
+extern crate breeze_backend as backend_api;
 
 use breeze::rom::Rom;
 use breeze::snes::Emulator;
 use breeze::input::Input;
 use breeze::save::SaveStateFormat;
 use breeze::record::{RecordingFormat, create_recorder, create_replayer};
-use frontend_api::Renderer;
+use backend_api::Renderer;
 
 use clap::ArgMatches;
 
@@ -27,7 +27,7 @@ use std::io::{BufReader, Read};
 #[cfg(feature = "sdl")]
 fn attach_default_input(input: &mut Input) {
     use breeze::input::Peripheral;
-    use frontends::frontend::sdl::KeyboardInput;
+    use backends::breeze_sdl::KeyboardInput;
 
     input.ports.0 = Some(Peripheral::new_joypad(Box::new(KeyboardInput)));
 }
@@ -41,13 +41,13 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         return Err("`record` and `replay` may not be specified together!".into());
     }
 
-    let renderer_name = args.value_of("renderer").unwrap_or(&*frontends::DEFAULT_RENDERER);
+    let renderer_name = args.value_of("renderer").unwrap_or(&*backends::DEFAULT_RENDERER);
 
-    let renderer_fn = match frontends::RENDERER_MAP.get(renderer_name) {
+    let renderer_fn = match backends::RENDERER_MAP.get(renderer_name) {
         None => {
             println!("error: unknown renderer: {}", renderer_name);
-            println!("{} renderers known:", frontends::RENDERER_MAP.len());
-            for (name, opt_fn) in frontends::RENDERER_MAP.iter() {
+            println!("{} renderers known:", backends::RENDERER_MAP.len());
+            for (name, opt_fn) in backends::RENDERER_MAP.iter() {
                 println!("\t{}\t{}", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",
@@ -68,12 +68,12 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         }
     };
 
-    let audio_name = args.value_of("audio").unwrap_or(&*frontends::DEFAULT_AUDIO);
-    let audio_fn = match frontends::AUDIO_MAP.get(audio_name) {
+    let audio_name = args.value_of("audio").unwrap_or(&*backends::DEFAULT_AUDIO);
+    let audio_fn = match backends::AUDIO_MAP.get(audio_name) {
         None => {
             println!("error: unknown audio sink: {}", audio_name);
-            println!("{} audio sinks known:", frontends::AUDIO_MAP.len());
-            for (name, opt_fn) in frontends::AUDIO_MAP.iter() {
+            println!("{} audio sinks known:", backends::AUDIO_MAP.len());
+            for (name, opt_fn) in backends::AUDIO_MAP.iter() {
                 println!("\t{}\t{}", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",
@@ -83,7 +83,7 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
             return Err("exiting".into());
         }
         Some(&None) => {
-            println!("error: audio frontend '{}' not compiled in", audio_name);
+            println!("error: audio backend '{}' not compiled in", audio_name);
             println!("(compile with `cargo build --features {}` to enable)", audio_name);
             // NOTE: Make sure that renderer name always matches feature name!
             return Err("exiting".into());
@@ -173,7 +173,7 @@ fn main() {
             .short("A")
             .long("audio")
             .takes_value(true)
-            .help("The audio frontend to use"))
+            .help("The audio backend to use"))
         .arg(clap::Arg::with_name("savestate")
             .long("savestate")
             .takes_value(true)

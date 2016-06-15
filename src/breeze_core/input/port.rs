@@ -5,21 +5,21 @@
 //!
 //! More specifically, this module defines all types of peripherals that can be plugged into the
 //! controller ports, implements the low-level details of each peripheral, and invokes a few simple
-//! methods provided by the frontend, which implements the actual input querying logic.
+//! methods provided by the backend, which implements the actual input querying logic.
 //!
-//! This makes it very easy to implement new controller support in the frontend (for example,
+//! This makes it very easy to implement new controller support in the backend (for example,
 //! `libinput` support), and yet is true to the hardware, since emulation is performed on a very low
 //! level.
 
-use frontend::input::joypad::{JoypadImpl, JoypadState};
+use backend::input::joypad::{JoypadImpl, JoypadState};
 
 /// Enumeration of things that can be plugged into a controller port on the SNES.
 pub enum Peripheral {
     /// The standard SNES joypad: A, B, X, Y, L, R, Start, Select, D-Pad
     Joypad {
-        /// The actual implementation (provided by the frontend)
+        /// The actual implementation (provided by the backend)
         imp: Box<JoypadImpl>,
-        /// Current joypad state. When the latch is active, this is updated by asking the frontend
+        /// Current joypad state. When the latch is active, this is updated by asking the backend
         /// for the current state.
         state: JoypadState,
     },
