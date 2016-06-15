@@ -8,7 +8,7 @@ extern crate libc;
 use breeze_backend::{BackendAction, BackendResult};
 use breeze_backend::input::joypad::{JoypadImpl, JoypadState, JoypadButton};
 use breeze_backend::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
-use breeze_backend::viewport::*;
+use breeze_backend::viewport::Viewport;
 
 use sdl2::{EventPump, Sdl};
 use sdl2::event::WindowEventId;
@@ -171,7 +171,7 @@ impl ::breeze_backend::Renderer for SdlRenderer {
 impl SdlRenderer {
     /// Handle a window resize to `w, h`
     fn resize_to(&mut self, w: u32, h: u32) {
-        let Viewport { x, y, w, h } = viewport_for_window_size(w, h);
+        let Viewport { x, y, w, h } = Viewport::for_window_size(w, h);
 
         let viewport = Rect::new(x as i32, y as i32, w, h);
         self.renderer.set_viewport(Some(viewport));

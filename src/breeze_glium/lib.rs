@@ -6,7 +6,7 @@ extern crate breeze_backend;
 
 use breeze_backend::{BackendAction, BackendResult, Renderer};
 use breeze_backend::ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
-use breeze_backend::viewport::{Viewport, viewport_for_window_size};
+use breeze_backend::viewport::Viewport;
 
 use glium::{DisplayBuild, Surface, Rect};
 use glium::backend::glutin_backend::GlutinFacade;
@@ -86,7 +86,7 @@ impl GliumRenderer {
 }
 
 fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
-    let Viewport { x, y, w, h } = viewport_for_window_size(win_w, win_h);
+    let Viewport { x, y, w, h } = Viewport::for_window_size(win_w, win_h);
     let (win_w, win_h) = (win_w as f32, win_h as f32);
     let (x, y, w, h) = (x as f32 / win_w, y as f32 / win_h, w as f32 / win_w, h as f32 / win_h);
 
@@ -100,6 +100,7 @@ fn resize(vbuf: &mut VertexBuffer<Vertex>, win_w: u32, win_h: u32) {
 
 /// Build 4 Vertices spanning up a rectangle. Bottom-Left corner = (-1, -1).
 fn make_rect(x: f32, y: f32, w: f32, h: f32) -> [Vertex; 4] {
+    // FIXME Use a matrix instead of rebuilding the geometry on every resize
     [
         Vertex { position: [x, y + h], tex_coords: [0.0, 0.0] },
         Vertex { position: [x + w, y + h], tex_coords: [1.0, 0.0] },

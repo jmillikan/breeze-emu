@@ -10,42 +10,43 @@ pub struct Viewport {
     pub h: u32,
 }
 
-/// Calculates a viewport to use for a window of the given size.
-///
-/// The returned viewport will have the native SNES aspect ratio and still fill the window on at
-/// least one axis. Basically, this calculates the black bars to apply to the window to make the
-/// center have the native SNES ratio.
-pub fn viewport_for_window_size(w: u32, h: u32) -> Viewport {
-    // FIXME why the hell is this not an assoc. function?!
-    // FIXME Not sure if floats are a good idea here
-    let w = w as f32;
-    let h = h as f32;
+impl Viewport {
+    /// Calculates a viewport to use for a window of the given size.
+    ///
+    /// The returned viewport will have the native SNES aspect ratio and still fill the window on at
+    /// least one axis. Basically, this calculates the black bars to apply to the window to make the
+    /// center have the native SNES ratio.
+    pub fn for_window_size(w: u32, h: u32) -> Self {
+        // FIXME Not sure if floats are a good idea here
+        let w = w as f32;
+        let h = h as f32;
 
-    const NATIVE_RATIO: f32 = SCREEN_WIDTH as f32 / SCREEN_HEIGHT as f32;
-    let ratio = w / h;
+        const NATIVE_RATIO: f32 = SCREEN_WIDTH as f32 / SCREEN_HEIGHT as f32;
+        let ratio = w / h;
 
-    let view_w;
-    let view_h;
+        let view_w;
+        let view_h;
 
-    if ratio > NATIVE_RATIO {
-        // Too wide
-        view_h = h;
-        view_w = h * NATIVE_RATIO;
-    } else {
-        // Too high
-        view_w = w;
-        view_h = w / NATIVE_RATIO;
-    }
+        if ratio > NATIVE_RATIO {
+            // Too wide
+            view_h = h;
+            view_w = h * NATIVE_RATIO;
+        } else {
+            // Too high
+            view_w = w;
+            view_h = w / NATIVE_RATIO;
+        }
 
-    let border_x = (w - view_w).round() as u32 / 2;
-    let border_y = (h - view_h).round() as u32 / 2;
-    let view_w = view_w.round() as u32;
-    let view_h = view_h.round() as u32;
+        let border_x = (w - view_w).round() as u32 / 2;
+        let border_y = (h - view_h).round() as u32 / 2;
+        let view_w = view_w.round() as u32;
+        let view_h = view_h.round() as u32;
 
-    Viewport {
-        x: border_x as u32,
-        y: border_y as u32,
-        w: view_w,
-        h: view_h,
+        Viewport {
+            x: border_x as u32,
+            y: border_y as u32,
+            w: view_w,
+            h: view_h,
+        }
     }
 }
