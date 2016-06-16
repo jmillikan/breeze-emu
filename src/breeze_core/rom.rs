@@ -228,7 +228,7 @@ impl Rom {
             checksum = checksum.wrapping_add(byte as u16);
         }
 
-        debug!("computed checksum: ${:04X}", checksum);
+        info!("computed checksum: ${:04X}", checksum);
 
         if header.checksum != checksum {
             warn!("incorrect checksum: computed ${:04X}, expected ${:04X}",
