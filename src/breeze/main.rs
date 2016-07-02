@@ -9,9 +9,12 @@ extern crate breeze_core;
 extern crate breeze_backends;
 extern crate breeze_backend;
 
+mod input;
+
+use input::attach_default_input;
+
 use breeze_core::rom::Rom;
 use breeze_core::snes::Emulator;
-use breeze_core::input::Input;
 use breeze_core::save::SaveStateFormat;
 use breeze_core::record::{RecordingFormat, create_recorder, create_replayer};
 use breeze_backend::Renderer;
@@ -24,18 +27,6 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::process;
 
-// FIXME Replace this hack with input detection
-#[cfg(feature = "sdl")]
-fn attach_default_input(input: &mut Input) {
-    use breeze_core::input::Peripheral;
-    use breeze_backends::breeze_sdl::KeyboardInput;
-
-    input.ports.0 = Some(Peripheral::new_joypad(Box::new(KeyboardInput)));
-}
-#[cfg(not(feature = "sdl"))]
-fn attach_default_input(_: &mut Input) {
-    warn!("`sdl` feature not enabled, input will not work");
-}
 
 fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
     if args.value_of("record").is_some() && args.value_of("replay").is_some() {
@@ -120,7 +111,7 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
 
     // Put everything together in the emulator
     let mut emu = Emulator::new(rom, renderer, audio);
-    attach_default_input(&mut emu.peripherals_mut().input);
+    attach_default_input(&mut emu.peripherals_mut().input, renderer_name);
 
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
