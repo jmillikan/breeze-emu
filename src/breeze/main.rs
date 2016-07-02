@@ -22,6 +22,7 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::process;
 
 // FIXME Replace this hack with input detection
 #[cfg(feature = "sdl")]
@@ -45,25 +46,28 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
 
     let renderer_fn = match breeze_backends::RENDERER_MAP.get(renderer_name) {
         None => {
-            println!("error: unknown renderer: {}", renderer_name);
-            println!("{} renderers known:", breeze_backends::RENDERER_MAP.len());
+            let mut message = format!("unknown renderer: {}\n", renderer_name);
+            message.push_str(&format!("{} renderers known:\n",
+                breeze_backends::RENDERER_MAP.len()));
+
             for (name, opt_fn) in breeze_backends::RENDERER_MAP.iter() {
-                println!("\t{}\t{}", name, match *opt_fn {
+                message.push_str(&format!("\t{}\t{}\n", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",
-                });
+                }));
             }
+
+            return Err(message.into());
+        }
+        Some(&None) => {
+            let mut message = format!("renderer '{}' not compiled in", renderer_name);
+            message.push_str(&format!("(compile with `cargo build --features {}` to enable)",
+                renderer_name));
+            // NOTE: Make sure that renderer name always matches feature name!
 
             return Err("exiting".into());
         }
-        Some(&None) => {
-            println!("error: renderer '{}' not compiled in", renderer_name);
-            println!("(compile with `cargo build --features {}` to enable)", renderer_name);
-            // NOTE: Make sure that renderer name always matches feature name!
-            return Err("exiting".into());
-        }
         Some(&Some(renderer_fn)) => {
-            info!("using {} renderer", renderer_name);
             renderer_fn
         }
     };
@@ -71,44 +75,53 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
     let audio_name = args.value_of("audio").unwrap_or(&*breeze_backends::DEFAULT_AUDIO);
     let audio_fn = match breeze_backends::AUDIO_MAP.get(audio_name) {
         None => {
-            println!("error: unknown audio sink: {}", audio_name);
-            println!("{} audio sinks known:", breeze_backends::AUDIO_MAP.len());
+            let mut message = format!("unknown audio sink: {}\n", audio_name);
+            message.push_str(&format!("{} audio sinks known:\n", breeze_backends::AUDIO_MAP.len()));
+
             for (name, opt_fn) in breeze_backends::AUDIO_MAP.iter() {
-                println!("\t{}\t{}", name, match *opt_fn {
+                message.push_str(&format!("\t{}\t{}\n", name, match *opt_fn {
                     Some(_) => "available",
                     None => "not compiled in",
-                });
+                }));
             }
 
-            return Err("exiting".into());
+            return Err(message.into());
         }
         Some(&None) => {
-            println!("error: audio backend '{}' not compiled in", audio_name);
-            println!("(compile with `cargo build --features {}` to enable)", audio_name);
-            // NOTE: Make sure that renderer name always matches feature name!
-            return Err("exiting".into());
+            let mut message = format!("audio backend '{0}' not compiled in\n", audio_name);
+            message.push_str(&format!("(compile with `cargo build --features {0}` to enable)",
+                audio_name));
+            // NOTE: Make sure that audio sink name always matches feature name!
+
+            return Err(message.into());
         }
         Some(&Some(audio_fn)) => {
-            info!("using {} audio sink", audio_name);
             audio_fn
         }
     };
 
+    // Load the ROM into memory
     let filename = args.value_of("rom").unwrap();
     let mut file = try!(File::open(&filename));
     let mut buf = Vec::new();
     try!(file.read_to_end(&mut buf));
 
     let rom = try!(Rom::from_bytes(&buf));
+
+    // Create the backend parts
+    info!("using {} renderer", renderer_name);
     let mut renderer = try!(renderer_fn());
     if let Some(title) = rom.get_title() {
         renderer.set_rom_title(title);
     }
 
+    info!("using {} audio sink", audio_name);
     let audio = try!(audio_fn());
 
+    // Put everything together in the emulator
     let mut emu = Emulator::new(rom, renderer, audio);
     attach_default_input(&mut emu.peripherals_mut().input);
+
     if let Some(record_file) = args.value_of("record") {
         let writer = Box::new(File::create(record_file).unwrap());
         let recorder = create_recorder(RecordingFormat::default(), writer, &emu.snes).unwrap();
@@ -199,8 +212,10 @@ fn main() {
         Ok(()) => {},
         Err(e) => {
             // FIXME: Glium swallows useful information when using {} instead of {:?}
-            error!("{:?}", e);
+            // I should fix this upstream when I have time.
+            debug!("error: {:?}", e);
             println!("error: {}", e);
+            process::exit(1);
         }
     }
 }
