@@ -62,8 +62,9 @@ struct SdlManager {
 }
 
 impl SdlManager {
-    /// Updates all SDL-related state. Polls events and may terminate the process via
-    /// `process::exit`. Should be called at least once per frame.
+    /// Updates all SDL-related state. Polls the event loop.
+    ///
+    /// Should be called at least once per frame.
     fn update(&mut self) -> BackendResult<Vec<BackendAction>> {
         use self::sdl2::event::Event::*;
 
@@ -180,7 +181,6 @@ impl SdlRenderer {
     }
 }
 
-#[allow(dead_code)]
 pub struct KeyboardInput;
 
 impl JoypadImpl for KeyboardInput {
