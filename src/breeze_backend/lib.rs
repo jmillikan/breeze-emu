@@ -10,7 +10,6 @@ use std::error::Error;
 
 /// An action that can be performed by the user, is detected by the backend and executed by the
 /// emulator core.
-#[allow(dead_code)] // Variants may be dead, depending on which backends are enabled
 pub enum BackendAction {
     /// Exit the emulator
     Exit,

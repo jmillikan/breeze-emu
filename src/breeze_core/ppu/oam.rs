@@ -20,7 +20,6 @@ pub struct OamEntry {
     /// 0-7. The first palette entry is `128+ppp*16`.
     pub palette: u8,
     pub hflip: bool,
-    #[allow(dead_code)] // FIXME up-down flipping not implemented
     pub vflip: bool,
     pub size_toggle: bool,
 }
