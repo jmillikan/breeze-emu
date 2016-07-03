@@ -26,7 +26,7 @@ pub enum JoypadButton {
 ///
 /// Bits (`HIGH | LOW`, returned on Data1 from high to low, or left to right):
 /// `B Y Select Start Up Down Left Right | A X L R 0 0 0 0`
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct JoypadState(u16);
 
 impl JoypadState {
@@ -35,10 +35,12 @@ impl JoypadState {
 
     /// Set a button's state
     pub fn set(&mut self, button: JoypadButton, pressed: bool) -> &mut Self {
-        match pressed {
-            true => self.0 |= 1 << button as u8,
-            false => self.0 &= !(1 << button as u8),
-        };
+        if pressed {
+            self.0 |= 1 << button as u8;
+        } else {
+            self.0 &= !(1 << button as u8);
+        }
+
         self
     }
 

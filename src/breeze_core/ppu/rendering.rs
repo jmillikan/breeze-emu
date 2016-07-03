@@ -282,7 +282,7 @@ impl Ppu {
             let bitplane_bits = self.read_2_bitplanes(
                 start_addr + i as u16 * 16, // 16 Bytes per pair of bitplanes
                 (x, y));
-            palette_index = palette_index | (bitplane_bits << (2 * i));
+            palette_index |= bitplane_bits << (2 * i);
         }
 
         palette_index

@@ -37,9 +37,10 @@ impl StatusReg {
     pub fn carry(&self) -> bool       { self.0 & CARRY_FLAG != 0 }
 
     fn set(&mut self, flag: u8, value: bool) {
-        match value {
-            true => self.0 |= flag,
-            false => self.0 &= !flag,
+        if value {
+            self.0 |= flag;
+        } else {
+            self.0 &= !flag;
         }
     }
 

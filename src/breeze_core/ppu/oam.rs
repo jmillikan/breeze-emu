@@ -51,7 +51,7 @@ impl Oam {
         if byte & msb_mask != 0 {
             // MSb of `x` is set, so `x` is negative. Since `x` is a signed 9-bit value, we have to
             // sign-extend it to 16 bits by setting all bits starting from the MSb to 1.
-            x = 0xff00 | x;
+            x |= 0xff00;
         }
 
         OamEntry {

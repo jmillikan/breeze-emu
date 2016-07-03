@@ -162,9 +162,8 @@ impl ::breeze_backend::Renderer for SdlRenderer {
     }
 
     fn set_rom_title(&mut self, title: &str) {
-        match self.renderer.window_mut() {
-            Some(win) => win.set_title(title).unwrap(),
-            None => {},
+        if let Some(win) = self.renderer.window_mut() {
+            win.set_title(title).unwrap();
         }
     }
 }

@@ -30,8 +30,8 @@ impl Cgram {
         // -bbbbbgg gggrrrrr (16-bit big endian value! (high byte, high address first))
         let lo = self[color as u16 * 2] as u16;
         let hi = self[color as u16 * 2 + 1] as u16;
-        let val = (hi << 8) | lo;
-        val
+
+        (hi << 8) | lo
     }
 
     /// Set a raw color value

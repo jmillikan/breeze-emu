@@ -428,9 +428,9 @@ impl Ppu {
         // Cache must be valid now, so we can access the pixel we need:
         let pixel = &self.bg_cache.layers[bg_num as usize - 1].scanline[self.x as usize];
         if pixel.priority == prio {
-            return pixel.color;
+            pixel.color
         } else {
-            return None;
+            None
         }
     }
 }

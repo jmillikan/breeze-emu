@@ -30,12 +30,6 @@ impl<'a, T> FlexVec<'a, T> {
         }
     }
 
-    /// Returns the number of elements currently stored in this `FlexVec`.
-    #[allow(dead_code)] // currently unused
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
     /// Returns the maximum number of elements that can be stored in this vector. This is equal to
     /// the length of the backing storage passed at creation of this `FlexVec`.
     pub fn capacity(&self) -> usize {

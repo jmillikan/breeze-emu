@@ -210,7 +210,7 @@ impl<M: Mem> Cpu<M> {
 
         let opstr = match am {
             Some(am) => format!("{} {}", op, am),
-            None => format!("{}", op),
+            None => op.to_string(),
         };
         trace!("${:02X}:{:04X} {:02X}  {:14} a:{:04X} x:{:04X} y:{:04X} s:{:04X} d:{:04X} dbr:{:02X} emu:{} {}",
             self.pbr,

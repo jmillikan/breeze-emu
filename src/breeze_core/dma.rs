@@ -260,10 +260,11 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 
             // FIXME Decrement the channel's `dma_size` field
             let mut read_byte = |p: &mut Peripherals, b_addr| -> u8 {
-                if bytes.get() == 0 { return 0 }
-                let (src_bank, src_addr) = match write_to_a {
-                    true => (0, b_addr),
-                    false => (a_bank, a_addr.get()),
+                if bytes.get() == 0 { return 0; }
+                let (src_bank, src_addr) = if write_to_a {
+                    (0, b_addr)
+                } else {
+                    (a_bank, a_addr.get())
                 };
                 let byte = p.load(src_bank, src_addr);
                 if !write_to_a {
@@ -274,9 +275,10 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
             };
             let mut write_byte = |p: &mut Peripherals, byte, b_addr| {
                 if bytes.get() == 0 { return }
-                let (dest_bank, dest_addr) = match write_to_a {
-                    true => (a_bank, a_addr.get()),
-                    false => (0, b_addr),
+                let (dest_bank, dest_addr) = if write_to_a {
+                    (a_bank, a_addr.get())
+                } else {
+                    (0, b_addr)
                 };
                 p.store(dest_bank, dest_addr, byte);
                 bytes.set(bytes.get() - 1);
@@ -311,9 +313,8 @@ pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
     // 24 master cycles for each channel set for indirect HDMA."
     let mut cy = 18;
 
-    for i in 0..8 {
+    for (i, mut chan) in channels.iter_mut().enumerate() {
         if channel_mask & (1 << i) != 0 {
-            let mut chan = channels[i];
             chan.hdma_addr = chan.a_addr;
             chan.hdma_do_transfer = true;
             if chan.params & 0x40 != 0 {

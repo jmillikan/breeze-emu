@@ -33,7 +33,7 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         return Err("`record` and `replay` may not be specified together!".into());
     }
 
-    let renderer_name = args.value_of("renderer").unwrap_or(&*breeze_backends::DEFAULT_RENDERER);
+    let renderer_name = args.value_of("renderer").unwrap_or(&breeze_backends::DEFAULT_RENDERER);
 
     let renderer_fn = match breeze_backends::RENDERER_MAP.get(renderer_name) {
         None => {
@@ -63,7 +63,7 @@ fn process_args(args: &ArgMatches) -> Result<(), Box<Error>> {
         }
     };
 
-    let audio_name = args.value_of("audio").unwrap_or(&*breeze_backends::DEFAULT_AUDIO);
+    let audio_name = args.value_of("audio").unwrap_or(&breeze_backends::DEFAULT_AUDIO);
     let audio_fn = match breeze_backends::AUDIO_MAP.get(audio_name) {
         None => {
             let mut message = format!("unknown audio sink: {}\n", audio_name);

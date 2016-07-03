@@ -73,11 +73,10 @@ impl Ppu {
         for i in first_sprite..first_sprite+128 {
             let index = (i & 0x7f) as u8;   // limit to 127 and wrap back around
             let entry = self.oam.get_sprite(index);
-            if self.sprite_on_scanline(&entry) {
-                if visible_sprites.push(entry).is_err() {
-                    self.range_over = true;
-                    break;
-                }
+
+            if self.sprite_on_scanline(&entry) && visible_sprites.push(entry).is_err() {
+                self.range_over = true;
+                break;
             }
         }
 
@@ -174,18 +173,15 @@ impl Ppu {
                     // on-screen pixel (can write to buffer)
                     let color = self.read_sprite_tile_pixel(tile, x_off);
                     let buffer = &mut self.sprite_render_state.sprite_scanline;
-                    match color {
-                        Some(rgb) => {
-                            buffer[screen_x as usize] = Some(SpritePixel {
-                                color: rgb,
-                                prio: tile.sprite().priority,
-                                // Sprites with palettes 0-3 are opaque
-                                opaque: tile.sprite().palette <= 3,
-                            });
-                        }
-                        None => {
-                            // do nothing (don't overwrite visible pixels with transparent ones)
-                        }
+
+                    if let Some(rgb) = color {
+                        // Write non-transparent pixel
+                        buffer[screen_x as usize] = Some(SpritePixel {
+                            color: rgb,
+                            prio: tile.sprite().priority,
+                            // Sprites with palettes 0-3 are opaque
+                            opaque: tile.sprite().palette <= 3,
+                        });
                     }
                 }
             }
