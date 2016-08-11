@@ -13,8 +13,7 @@ before_script:
   - |
       export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH &&
       pip install 'travis-cargo<0.2' --user &&
-      { which cargo-local-pkgs && cargo uninstall cargo-local-pkgs; } &&
-      cargo install cargo-local-pkgs --vers 0.3
+      cargo install cargo-local-pkgs --vers 0.3 --force
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
@@ -23,10 +22,7 @@ env:
     - CARGO_ARGS="--no-default-features --features=glium"
     # SDL can't be easily tested, sadly :(
 script:
-  - |
-      echo "rust is: $TRAVIS_RUST_VERSION" &&
-      travis-cargo build -- $CARGO_ARGS &&
-      cargo local-pkgs test $CARGO_ARGS
+  - cargo local-pkgs test $CARGO_ARGS
 after_success:
   - |
       test -n "$UPLOAD_DOCS" &&
