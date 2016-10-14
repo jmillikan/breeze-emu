@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Cpu` struct in crate `wdc65816`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Cpu">
+
+    <title>wdc65816::Cpu - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>wdc65816</a></p><script>window.sidebarCurrent = {name: 'Cpu', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>wdc65816</a>::<wbr><a class='struct' href=''>Cpu</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-388' class='srclink' href='../src/wdc65816/lib.rs.html#39-65' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Cpu&lt;M:&nbsp;<a class='trait' href='../wdc65816/trait.Mem.html' title='wdc65816::Mem'>Mem</a>&gt; {
+    pub a: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub x: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub y: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub s: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub dbr: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>,
+    pub pbr: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>,
+    pub d: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub pc: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a>,
+    pub trace: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>,
+    pub mem: M,
+    // some fields omitted
+}</pre><h2 class='fields'>Fields</h2><span id='structfield.a' class='structfield'><code>a: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><span id='structfield.x' class='structfield'><code>x: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><span id='structfield.y' class='structfield'><code>y: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><span id='structfield.s' class='structfield'><code>s: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><div class='docblock'><p>Stack pointer</p>
+</div><span id='structfield.dbr' class='structfield'><code>dbr: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a></code>
+                           </span><span class='stab '></span><div class='docblock'><p>Data bank register. Bank for all memory accesses.</p>
+</div><span id='structfield.pbr' class='structfield'><code>pbr: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a></code>
+                           </span><span class='stab '></span><div class='docblock'><p>Program bank register. Opcodes are fetched from this bank.</p>
+</div><span id='structfield.d' class='structfield'><code>d: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><div class='docblock'><p>Direct (page) register. Address offset for all instruction using &quot;direct addressing&quot; mode.</p>
+</div><span id='structfield.pc' class='structfield'><code>pc: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code>
+                           </span><span class='stab '></span><div class='docblock'><p>Program counter. Note that PBR is not changed on pc overflow, so code can not span
+multiple banks (without <code>jml</code> or <code>jsr</code>).</p>
+</div><span id='structfield.trace' class='structfield'><code>trace: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code>
+                           </span><span class='stab '></span><span id='structfield.mem' class='structfield'><code>mem: M</code>
+                           </span><span class='stab '></span><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;M:&nbsp;<a class='trait' href='../wdc65816/trait.Mem.html' title='wdc65816::Mem'>Mem</a>&gt; <a class='struct' href='../wdc65816/struct.Cpu.html' title='wdc65816::Cpu'>Cpu</a>&lt;M&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-490' class='srclink' href='../src/wdc65816/lib.rs.html#74-618' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(mem: M) -&gt; <a class='struct' href='../wdc65816/struct.Cpu.html' title='wdc65816::Cpu'>Cpu</a>&lt;M&gt;</code></h4>
+<div class='docblock'><p>Creates a new CPU and executes a reset. This will fetch the RESET vector from memory and
+put the CPU in emulation mode.</p>
+</div><h4 id='method.dispatch' class='method'><code>fn <a href='#method.dispatch' class='fnname'>dispatch</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a></code></h4>
+<div class='docblock'><p>Executes a single opcode and returns the number of CPU clock cycles used.</p>
+
+<p>Note that in case a WAI instruction was executed, this will <em>not</em> execute anything and
+return 0. An interrupt has to be caused to resume work.</p>
+</div><h4 id='method.trigger_nmi' class='method'><code>fn <a href='#method.trigger_nmi' class='fnname'>trigger_nmi</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Invokes the NMI handler.</p>
+</div><h4 id='method.trigger_irq' class='method'><code>fn <a href='#method.trigger_irq' class='fnname'>trigger_irq</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<div class='docblock'><p>Invokes the IRQ handler if interrupts are enabled. Returns whether the interrupt was
+generated.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl&lt;M:&nbsp;<a class='trait' href='../wdc65816/trait.Mem.html' title='wdc65816::Mem'>Mem</a> + <a class='trait' href='../libsavestate/trait.SaveState.html' title='libsavestate::SaveState'>SaveState</a>&gt; <a class='trait' href='../libsavestate/trait.SaveState.html' title='libsavestate::SaveState'>SaveState</a> for <a class='struct' href='../wdc65816/struct.Cpu.html' title='wdc65816::Cpu'>Cpu</a>&lt;M&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-404' class='srclink' href='../src/wdc65816/lib.rs.html#68-72' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.save_state' class='method'><code>fn <a href='../libsavestate/trait.SaveState.html#tymethod.save_state' class='fnname'>save_state</a>&lt;W:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a> + ?<a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Sized.html' title='core::marker::Sized'>Sized</a>&gt;(&amp;self, w: &amp;mut W) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<h4 id='method.restore_state' class='method'><code>fn <a href='../libsavestate/trait.SaveState.html#tymethod.restore_state' class='fnname'>restore_state</a>&lt;R:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + ?<a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Sized.html' title='core::marker::Sized'>Sized</a>&gt;(&amp;mut self, r: &amp;mut R) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "wdc65816";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>
