@@ -10,7 +10,7 @@
 
 extern crate breeze_backend;
 
-#[macro_use] #[no_link] extern crate lazy_static;
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 
 #[cfg(feature = "glium")]

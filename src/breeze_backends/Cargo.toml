@@ -14,7 +14,7 @@ path = "lib.rs"
 [dependencies]
 breeze_backend = { version = "0.1", path = "../breeze_backend" }
 log = "0.3"
-lazy_static = "0.1"
+lazy_static = "0.2"
 
 [dependencies.breeze_glium]
 path = "../breeze_glium"

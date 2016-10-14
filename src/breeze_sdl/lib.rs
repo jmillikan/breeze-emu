@@ -155,7 +155,7 @@ impl ::breeze_backend::Renderer for SdlRenderer {
         // FIXME Can this be done with fewer copies?
         self.texture.update(None, frame_data, SCREEN_WIDTH as usize * 3).unwrap();
         self.renderer.clear();
-        self.renderer.copy(&self.texture, None, None);
+        self.renderer.copy(&self.texture, None, None).unwrap();
         self.renderer.present();
 
         SDL.with(|sdl| sdl.borrow_mut().update())
