@@ -525,13 +525,13 @@ impl Ppu {
                     self.cgadd = self.cgadd.wrapping_add(1);
                 }
             },
-            0x2123 => self.w12sel = value,
-            0x2124 => self.w34sel = value,
-            0x2125 => self.wobjsel = value,
-            0x2126 => self.wh0 = value,
-            0x2127 => self.wh1 = value,
-            0x2128 => self.wh2 = value,
-            0x2129 => self.wh3 = value,
+            0x2123 => { self.w12sel = value; once!(warn!("NYI: Windowing ($2123-$2129)")); },
+            0x2124 => { self.w34sel = value; once!(warn!("NYI: Windowing ($2123-$2129)")); },
+            0x2125 => { self.wobjsel = value; once!(warn!("NYI: Windowing ($2123-$2129)")); },
+            0x2126 => { self.wh0 = value; once!(warn!("NYI: Windowing ($2123-$2129)")); }
+            0x2127 => { self.wh1 = value; once!(warn!("NYI: Windowing ($2123-$2129)")); }
+            0x2128 => { self.wh2 = value; once!(warn!("NYI: Windowing ($2123-$2129)")); }
+            0x2129 => { self.wh3 = value; once!(warn!("NYI: Windowing ($2123-$2129)")); }
             0x212a => self.wbglog = value,
             0x212b => {
                 if value & 0xf0 != 0 { once!(warn!("invalid value for $212b: ${:02X}", value)); }
@@ -618,7 +618,7 @@ impl Ppu {
     }
 
     pub fn in_h_blank(&self) -> bool { self.x >= 256 }
-    pub fn in_v_blank(&self) -> bool { self.scanline as u32 >= SCREEN_HEIGHT }
+    pub fn in_v_blank(&self) -> bool { self.scanline == 0 || self.scanline as u32 >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }
 

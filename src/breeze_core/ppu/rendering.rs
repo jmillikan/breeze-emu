@@ -235,6 +235,8 @@ impl Ppu {
             main_pix_color
         };
 
+        // TODO: Window registers
+
         let brightness = self.brightness() as u16;
         let final_color = if brightness == 0 {
             // This isn't actually correct: The image is still (barely) visible. So barely that this
