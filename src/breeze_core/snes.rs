@@ -412,7 +412,7 @@ impl Snes {
                         self.cpu.mem.cy += init_hdma(&mut self.cpu.mem, channels);
                         self.cpu.mem.cy += do_hdma(&mut self.cpu.mem, channels);
                     }
-                    (1 ... 224, 278) => {
+                    (0 ... 224, 278) => {
                         // FIXME: 224 or 239, depending on overscan
                         let channels = self.cpu.mem.hdmaen;
                         self.cpu.mem.cy += do_hdma(&mut self.cpu.mem, channels);
