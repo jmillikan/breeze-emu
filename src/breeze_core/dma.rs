@@ -11,6 +11,8 @@
 //! `do_hdma`. DMA is simpler: It is started by calling `do_dma` when the CPU writes to `$420B` and
 //! doesn't need periodic callbacks.
 
+use std::cell::Cell;
+
 use snes::Peripherals;
 
 use wdc65816::Mem;
@@ -52,7 +54,7 @@ pub struct DmaChannel {
 }
 
 impl_save_state!(DmaChannel { params, a_addr, a_addr_bank, b_addr, dma_size, hdma_indirect_bank,
-    hdma_addr, hdma_flags, hdma_do_transfer } ignore {});
+                              hdma_addr, hdma_flags, hdma_do_transfer } ignore {});
 
 impl Default for DmaChannel {
     fn default() -> Self {
@@ -172,8 +174,8 @@ fn dma_transfer<R, W>(p: &mut Peripherals,
                       b_addr: u16,
                       read_byte: &mut R,
                       write_byte: &mut W)
-                      where R: FnMut(&mut Peripherals, u16) -> u8,
-                            W: FnMut(&mut Peripherals, u8, u16) {
+    where R: FnMut(&mut Peripherals, u16) -> u8,
+          W: FnMut(&mut Peripherals, u8, u16) {
     match mode {
         Single => {
             let b = read_byte(p, b_addr);
@@ -228,8 +230,6 @@ fn dma_transfer<R, W>(p: &mut Peripherals,
 /// Performs all DMA transactions enabled by the given `channels` bitmask. Returns the number of
 /// master cycles spent.
 pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
-    use std::cell::Cell;
-
     if channels == 0 { return 0 }
 
     // FIXME: "Now, after the pause, wait 2-8 master cycles to reach a whole multiple of 8 master
@@ -249,14 +249,15 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
             let mode = chan.transfer_mode();
             let bytes = Cell::new(chan.transfer_size());
             let a_bank = chan.a_addr_bank;
+            
             let a_addr = Cell::new(chan.a_addr);
             let a_addr_inc = chan.a_addr_increment();
             let b_addr = 0x2100 + chan.b_addr as u16;
 
             trace!("DMA on channel {} with {} bytes in mode {:?}, inc {} ({}), \
-                A-Bus ${:02X}:{:04X}, B-Bus $00:{:04X}",
-                i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"}, a_bank,
-                a_addr.get(), b_addr);
+                    A-Bus ${:02X}:{:04X}, B-Bus $00:{:04X}",
+                   i, bytes.get(), mode, a_addr_inc, if write_to_a {"B->A"} else {"A->B"}, a_bank,
+                   a_addr.get(), b_addr);
 
             // FIXME Decrement the channel's `dma_size` field
             let mut read_byte = |p: &mut Peripherals, b_addr| -> u8 {
@@ -308,24 +309,44 @@ pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
 /// See http://wiki.superfamicom.org/snes/show/DMA+%26+HDMA for more info.
 ///
 /// Returns the number of cycles the setup needed.
-pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
+pub fn init_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
     // "Overhead is ~18 master cycles, plus 8 master cycles for each channel set for direct HDMA and
     // 24 master cycles for each channel set for indirect HDMA."
-    let mut cy = 18;
 
-    for (i, mut chan) in channels.iter_mut().enumerate() {
+    // FIXME: See do_dma about do_io_cycle affecting master cy
+    let mut cy = 0; 
+
+    for i in 0..8 {
         if channel_mask & (1 << i) != 0 {
-            chan.hdma_addr = chan.a_addr;
-            chan.hdma_do_transfer = true;
-            if chan.params & 0x40 != 0 {
-                // indirect HDMA
-                cy += 24;
-            } else {
-                // direct HDMA
-                cy += 8;
+            // Set address = aaddress
+            p.dma[i].hdma_addr = p.dma[i].a_addr;
+
+            // Get line count & repeat from table
+            let (i_bank, i_addr) = (p.dma[i].a_addr_bank, p.dma[i].hdma_addr);
+            let repeat_and_count = p.load(i_bank, i_addr);
+
+            // and bump table address to first entry
+            p.dma[i].hdma_addr += 1;
+
+            // HDMA should terminate if .hdma_flags is 0 here or below.
+            // Assuming the mechanism is just .hdma_flags itself, checked per scanline.
+            p.dma[i].hdma_flags = repeat_and_count;
+
+            cy += 8;
+
+            // If indirect, load first value address and bump table address to next line count.
+            if p.dma[i].params & 0x40 != 0 {
+                let addr_low = p.load(i_bank, i_addr + 1);
+                let addr_high = p.load(i_bank, i_addr + 2);
+
+                p.dma[i].hdma_addr += 2;
+                
+                p.dma[i].dma_size = ((addr_high as u16) << 8) | (addr_low as u16);
+
+                cy += 16;
             }
 
-            // FIXME Do correct setup (this isn't everything)
+            p.dma[i].hdma_do_transfer = true;
         }
     }
 
@@ -333,10 +354,90 @@ pub fn init_hdma(channels: &mut [DmaChannel; 8], channel_mask: u8) -> u32 {
 }
 
 /// Performs one H-Blank worth of HDMA transfers (at most 8, if all channels are enabled).
-pub fn do_hdma(channels: u8) -> u32 {
-    if channels == 0 { return 0 }
+pub fn do_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
 
-    once!(warn!("NYI: HDMA (attempted with channel mask b{:08b})", channels));
+    if channel_mask == 0 { return 0 }
 
-    0
+    // FIXME: See do_dma about do_io_cycle affecting master cy
+    let mut cy = 18;
+
+    for i in 0..8 {
+        if channel_mask & (1 << i) != 0 {
+            cy += 8;
+            
+            // Halt HDMA if line count/repeat is 0.
+            // This may be wrong.
+            if p.dma[i].hdma_flags == 0 { continue; }
+
+            let indirect = p.dma[i].params & 0x40 != 0;
+            
+            let chan = p.dma[i];
+            let mode = chan.transfer_mode();
+
+            // Need a new abstraction for this, assuming I understand it right.
+            let a_bank = if indirect { chan.hdma_indirect_bank } else { chan.a_addr_bank };
+            let a_addr = Cell::new(if indirect { chan.dma_size } else { chan.hdma_addr });
+
+            let b_addr = 0x2100 + chan.b_addr as u16;
+
+            // Each round is a full round, so no counting. A->B only.
+            let mut read_byte = |p: &mut Peripherals, _| -> u8 {
+                let byte = p.load(a_bank, a_addr.get());
+                a_addr.set((a_addr.get() as i32 + 1 as i32) as u16);
+
+                byte
+            };
+            
+            let mut write_byte = |p: &mut Peripherals, byte, b_addr| {
+                p.store(0, b_addr, byte);
+
+                cy += 8;
+            };
+
+            if p.dma[i].hdma_do_transfer {
+                dma_transfer(p, mode, b_addr, &mut read_byte, &mut write_byte);
+
+                // ...and now .hdma_addr or .dma_size is behind a_addr, so catch up.
+                if indirect {
+                    p.dma[i].dma_size = a_addr.get();
+                }
+                else {
+                    p.dma[i].hdma_addr = a_addr.get();
+                }
+            }
+
+            // Decrement line counter
+            p.dma[i].hdma_flags -= 1;
+
+            // Set do_transfer to repeat bit
+            p.dma[i].hdma_do_transfer = p.dma[i].hdma_flags & 0b10000000 != 0;
+
+            // If line counter is 0...
+            if p.dma[i].hdma_flags & 0b01111111 == 0 {
+                let bank = p.dma[i].a_addr_bank;
+                
+                let addr = p.dma[i].hdma_addr;
+                
+                p.dma[i].hdma_flags = p.load(bank, addr);
+                // Next scanline will not occur if hdma_flags == 0
+
+                if indirect {
+                    // Apparently, we do this even if hdma_flags == 0 and we're about to stop HDMA.
+                    let low_byte = p.load(bank, addr + 1);
+                    let high_byte = p.load(bank, addr + 2);
+                    
+                    p.dma[i].dma_size = ((high_byte as u16) << 8) | (low_byte as u16);
+
+                    p.dma[i].hdma_addr += 3;
+                }
+                else {
+                    p.dma[i].hdma_addr += 1;
+                }
+
+                p.dma[i].hdma_do_transfer = true;
+            }
+        }
+    }
+
+    cy
 }

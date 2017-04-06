@@ -408,11 +408,13 @@ impl Snes {
                 match (v, h) {
                     (0, 0) => self.cpu.mem.nmi = false,
                     (0, 6) => {
-                        self.cpu.mem.cy += init_hdma(&mut self.cpu.mem.dma, self.cpu.mem.hdmaen);
+                        let channels = self.cpu.mem.hdmaen;
+                        self.cpu.mem.cy += init_hdma(&mut self.cpu.mem, channels);
                     }
                     (0 ... 224, 278) => {
                         // FIXME: 224 or 239, depending on overscan
-                        self.cpu.mem.cy += do_hdma(self.cpu.mem.hdmaen);
+                        let channels = self.cpu.mem.hdmaen;
+                        self.cpu.mem.cy += do_hdma(&mut self.cpu.mem, channels);
                     }
                     (224, 256) => {
                         // Last pixel in the current frame was rendered
