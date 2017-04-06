@@ -618,6 +618,7 @@ impl Ppu {
     }
 
     pub fn in_h_blank(&self) -> bool { self.x >= 256 }
+    // Scanline 0 is displayed, but not rendered (usually cut off by TVs)
     pub fn in_v_blank(&self) -> bool { self.scanline == 0 || self.scanline as u32 >= SCREEN_HEIGHT }
     pub fn forced_blank(&self) -> bool { self.inidisp & 0x80 != 0 }
     fn brightness(&self) -> u8 { self.inidisp & 0xf }

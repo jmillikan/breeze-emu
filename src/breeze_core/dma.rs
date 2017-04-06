@@ -11,6 +11,8 @@
 //! `do_hdma`. DMA is simpler: It is started by calling `do_dma` when the CPU writes to `$420B` and
 //! doesn't need periodic callbacks.
 
+use std::cell::Cell;
+
 use snes::Peripherals;
 
 use wdc65816::Mem;
@@ -228,8 +230,6 @@ fn dma_transfer<R, W>(p: &mut Peripherals,
 /// Performs all DMA transactions enabled by the given `channels` bitmask. Returns the number of
 /// master cycles spent.
 pub fn do_dma(p: &mut Peripherals, channels: u8) -> u32 {
-    use std::cell::Cell;
-
     if channels == 0 { return 0 }
 
     // FIXME: "Now, after the pause, wait 2-8 master cycles to reach a whole multiple of 8 master
@@ -325,7 +325,7 @@ pub fn init_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
             let (i_bank, i_addr) = (p.dma[i].a_addr_bank, p.dma[i].hdma_addr);
             let repeat_and_count = p.load(i_bank, i_addr);
 
-            // The ancient scrolls don't mention this, but it's moderately obvious.
+            // and bump table address to first entry
             p.dma[i].hdma_addr += 1;
 
             // HDMA should terminate if .hdma_flags is 0 here or below.
@@ -333,14 +333,14 @@ pub fn init_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
             p.dma[i].hdma_flags = repeat_and_count;
 
             cy += 8;
-            
+
+            // If indirect, load first value address and bump table address to next line count.
             if p.dma[i].params & 0x40 != 0 {
                 let addr_low = p.load(i_bank, i_addr + 1);
                 let addr_high = p.load(i_bank, i_addr + 2);
 
                 p.dma[i].hdma_addr += 2;
                 
-                // Set indirect address
                 p.dma[i].dma_size = ((addr_high as u16) << 8) | (addr_low as u16);
 
                 cy += 16;
@@ -355,7 +355,6 @@ pub fn init_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
 
 /// Performs one H-Blank worth of HDMA transfers (at most 8, if all channels are enabled).
 pub fn do_hdma(p: &mut Peripherals, channel_mask: u8) -> u32 {
-    use std::cell::Cell;
 
     if channel_mask == 0 { return 0 }
 
