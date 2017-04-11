@@ -38,6 +38,55 @@ enum Layer {
     Backdrop,
 }
 
+enum WindowOp { And, Or, Xor, XNor }
+use self::WindowOp::{And,Or,Xor,XNor};
+
+/// Masking data per layer
+struct Mask {
+    w1_en: bool,
+    w2_en: bool,
+    w1_inv: bool,
+    w2_inv: bool,
+    wop: WindowOp
+}
+
+impl Mask {
+    fn new(mask_reg: u8, mask_offset: usize, op_reg: u8, op_offset: usize) -> Self {
+        let mask_bits = (mask_reg >> mask_offset) & 0b1111;
+        let op_bits = (op_reg >> op_offset) & 0b11;
+        
+        Mask {
+            w1_en: mask_bits & 0b0010 != 0,
+            w2_en: mask_bits & 0b1000 != 0,
+            w1_inv: mask_bits & 0b0001 != 0,
+            w2_inv: mask_bits & 0b0100 != 0,
+            wop: match op_bits {
+                0b00 => Or,
+                0b01 => And,
+                0b10 => Xor,
+                _ => XNor
+            }
+        }
+    }
+    
+    /// Determine masking result based on windows.
+    fn check(&self, in_w1: bool, in_w2: bool) -> bool {
+        let (w1, w2) = (in_w1 ^ self.w1_inv, in_w2 ^ self.w2_inv);
+        
+        match (self.w1_en, self.w2_en) {
+            (false, false) => false,
+            (true, false) => w1,
+            (false, true) => w2,
+            (true, true) => match self.wop {
+                And => w1 && w2,
+                Or => w1 || w2,
+                Xor => w1 ^ w2,
+                XNor => !(w1 ^ w2)
+            }
+        }
+    }
+}
+
 /// Rendering
 impl Ppu {
     /// Get the configured sprite size in pixels. If `size_toggle` is `false`, gets the size of
@@ -81,6 +130,47 @@ impl Ppu {
             ( 4 ) => { Layer::Bg4 };
         }
 
+        // Enable/disable masking for each mask based (except color)
+        // Color math & color window settings are read from CGWSEL below
+        let enable_mask_reg = if subscreen { self.tsw } else { self.tmw };
+        let enable_bg_1_mask = (enable_mask_reg & 0b00001) != 0;
+        let enable_bg_2_mask = (enable_mask_reg & 0b00010) != 0;
+        let enable_bg_3_mask = (enable_mask_reg & 0b00100) != 0;
+        let enable_bg_4_mask = (enable_mask_reg & 0b01000) != 0;
+        let enable_sprite_mask = (enable_mask_reg & 0b10000) != 0;
+
+        // Set up all six masks from mask configurations
+        let mask_bg_1 = Mask::new(self.w12sel, 0, self.wbglog, 0);
+        let mask_bg_2 = Mask::new(self.w12sel, 4, self.wbglog, 2);
+        let mask_bg_3 = Mask::new(self.w34sel, 0, self.wbglog, 4);
+        let mask_bg_4 = Mask::new(self.w34sel, 4, self.wbglog, 6);
+        let mask_sprites = Mask::new(self.wobjsel, 0, self.wobjlog, 0);
+        let mask_color = Mask::new(self.wobjsel, 4, self.wobjlog, 2);
+
+        // Check current pixel to get W1 and W2
+        let in_w1 = self.x >= (self.wh0 as u16) && self.x < (self.wh1 as u16);
+        let in_w2 = self.x >= (self.wh2 as u16) && self.x < (self.wh3 as u16);
+
+        macro_rules! mask_layer {
+            ( 1 ) => { enable_bg_1_mask && mask_bg_1.check(in_w1, in_w2) };
+            ( 2 ) => { enable_bg_2_mask && mask_bg_2.check(in_w1, in_w2) };
+            ( 3 ) => { enable_bg_3_mask && mask_bg_3.check(in_w1, in_w2) };
+            ( 4 ) => { enable_bg_4_mask && mask_bg_4.check(in_w1, in_w2) };
+            ( sprites ) => { enable_sprite_mask && mask_sprites.check(in_w1, in_w2) };
+        }
+        
+        // Clip main screen to color 0. 
+        // Using backdrop_color as a stand-in for color 0.
+        // But keep the source layer.
+        let clip_color = {
+            match (self.cgwsel >> 6, mask_color.check(in_w1, in_w2)) {
+                (0b11, _) => true,
+                (0b01, false) => true,
+                (0b10, true) => true,
+                _ => false
+            }
+        };
+
         // This macro gets the current pixel from a tile with given priority in the given layer.
         // If the pixel is non-transparent, it will return its RGB value (after applying color
         // math). If it is transparent, it will do nothing (ie. the code following this macro is
@@ -88,12 +178,16 @@ impl Ppu {
         macro_rules! try_layer {
             ( Sprites with priority $prio:tt ) => {
                 if let Some((rgb, opaque)) = self.maybe_draw_sprite_pixel(e!($prio), subscreen) {
-                    return (rgb, Layer::Obj { opaque: opaque });
+                    if !mask_layer!(sprites) {
+                        return (if !clip_color { rgb } else { self.backdrop_color() }, Layer::Obj { opaque: opaque });
+                    }
                 }
             };
             ( BG $bg:tt tiles with priority $prio:tt ) => {
                 if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio), subscreen) {
-                    return (rgb, bglayer!($bg));
+                    if !mask_layer!($bg) {
+                        return (if !clip_color { rgb } else { self.backdrop_color() }, bglayer!($bg));
+                    }
                 }
             };
         }
@@ -163,7 +257,6 @@ impl Ppu {
     }
 
     fn color_math_enabled(&self, layer: Layer) -> bool {
-        // FIXME Take color window and CGWSEL into account
         let bit = match layer {
             Layer::Bg1 => 0,
             Layer::Bg2 => 1,
@@ -174,7 +267,22 @@ impl Ppu {
             Layer::Backdrop => 5,
         };
 
-        self.cgadsub & (1 << bit) != 0
+        if (self.cgadsub & (1 << bit)) == 0 {
+            return false;
+        }
+
+        let in_w1 = self.x >= (self.wh0 as u16) && self.x < (self.wh1 as u16);
+        let in_w2 = self.x >= (self.wh2 as u16) && self.x < (self.wh3 as u16);
+
+        let mask = Mask::new(self.wobjsel, 4, self.wobjlog, 2);
+        
+        // Apply color mask & settings in cgwsel
+        match ((self.cgwsel >> 4) & 0b11, mask.check(in_w1, in_w2)) {
+            (0b11, _) => false,     // Always
+            (0b01, false) => false, // Outside window
+            (0b10, true) => false,  // Inside window
+            _ => true
+        }
     }
 
     /// Main rendering entry point. Renders the current pixel and returns its color. Assumes that
@@ -194,10 +302,10 @@ impl Ppu {
             self.time_over = false;
 
             trace!("New frame. BG mode {}, layers enabled: {:05b}, sprites are {:?} or {:?}",
-                self.bg_mode(),
-                self.tm & 0x1f,
-                self.obj_size(false),
-                self.obj_size(true));
+                   self.bg_mode(),
+                   self.tm & 0x1f,
+                   self.obj_size(false),
+                   self.obj_size(true));
         }
 
         if self.x == 0 {
