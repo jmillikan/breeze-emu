@@ -39,7 +39,7 @@ enum Layer {
 }
 
 enum WindowOp { And, Or, Xor, XNor }
-use self::WindowOp::{And,Or,Xor,XNor};
+use self::WindowOp::{ And, Or, Xor, XNor };
 
 /// Masking data per layer
 struct Mask {
@@ -130,7 +130,7 @@ impl Ppu {
             ( 4 ) => { Layer::Bg4 };
         }
 
-        // Enable/disable masking for each mask based (except color)
+        // Enable/disable masking for each mask (except color)
         // Color math & color window settings are read from CGWSEL below
         let enable_mask_reg = if subscreen { self.tsw } else { self.tmw };
         let enable_bg_1_mask = (enable_mask_reg & 0b00001) != 0;
@@ -158,35 +158,42 @@ impl Ppu {
             ( 4 ) => { enable_bg_4_mask && mask_bg_4.check(in_w1, in_w2) };
             ( sprites ) => { enable_sprite_mask && mask_sprites.check(in_w1, in_w2) };
         }
-        
-        // Clip main screen to color 0. 
-        // Using backdrop_color as a stand-in for color 0.
-        // But keep the source layer.
+
+        // Enable/disable color clipping using mask settings, masks and cgwsel.
         let clip_color = {
             match (self.cgwsel >> 6, mask_color.check(in_w1, in_w2)) {
-                (0b11, _) => true,
-                (0b01, false) => true,
-                (0b10, true) => true,
+                (0b11, _) => true,     // Always clip
+                (0b01, false) => true, // Clip outside window
+                (0b10, true) => true,  // Clip inside window
                 _ => false
             }
         };
 
         // This macro gets the current pixel from a tile with given priority in the given layer.
-        // If the pixel is non-transparent, it will return its RGB value (after applying color
-        // math). If it is transparent, it will do nothing (ie. the code following this macro is
-        // executed).
+        // If the pixel is non-transparent and non-masked, it will return its RGB value (after
+        // color clipping). If it is transparent or masked, it will do nothing (ie. the code
+        // following this macro is executed).
+
+        // FIXME: It's not clear whether colors should clip to black or color 0. I've seen both indicated.
+        // Clip to color 0 for now.
+        let clip_to_color = self.backdrop_color();
+        
         macro_rules! try_layer {
             ( Sprites with priority $prio:tt ) => {
                 if let Some((rgb, opaque)) = self.maybe_draw_sprite_pixel(e!($prio), subscreen) {
                     if !mask_layer!(sprites) {
-                        return (if !clip_color { rgb } else { self.backdrop_color() }, Layer::Obj { opaque: opaque });
+                        let rgb_post_clip = if !clip_color { rgb } else { clip_to_color };
+                        
+                        return (rgb_post_clip, Layer::Obj { opaque: opaque });
                     }
                 }
             };
             ( BG $bg:tt tiles with priority $prio:tt ) => {
                 if let Some(rgb) = self.lookup_bg_color(e!($bg), e!($prio), subscreen) {
                     if !mask_layer!($bg) {
-                        return (if !clip_color { rgb } else { self.backdrop_color() }, bglayer!($bg));
+                        let rgb_post_clip = if !clip_color { rgb } else { clip_to_color };
+                        
+                        return (rgb_post_clip, bglayer!($bg));
                     }
                 }
             };
@@ -331,6 +338,7 @@ impl Ppu {
                 }
             };
 
+            // FIXME: Disable half-math when color is clipped.
             if self.cgadsub & 0x80 == 0 {
                 // Add
                 main_pix_color.saturating_add(&math_color)
@@ -342,8 +350,6 @@ impl Ppu {
             // No color math
             main_pix_color
         };
-
-        // TODO: Window registers
 
         let brightness = self.brightness() as u16;
         let final_color = if brightness == 0 {
