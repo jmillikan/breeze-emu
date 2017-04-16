@@ -117,6 +117,9 @@ impl DmaChannel {
             0x5 => self.dma_size as u8,
             0x6 => (self.dma_size >> 8) as u8,
             0x7 => self.hdma_indirect_bank,
+            0x8 => self.hdma_addr as u8,
+            0x9 => (self.hdma_addr >> 8) as u8,
+            0xA => self.hdma_flags,
             _ => panic!("invalid DMA channel register ${:02X}", reg),
         }
     }
@@ -131,6 +134,9 @@ impl DmaChannel {
             0x5 => self.dma_size = (self.dma_size & 0xff00) | val as u16,
             0x6 => self.dma_size = (self.dma_size & 0x00ff) | ((val as u16) << 8),
             0x7 => self.hdma_indirect_bank = val,
+            0x8 => self.hdma_addr = (self.hdma_addr & 0xff00) | val as u16,
+            0x9 => self.hdma_addr = (self.hdma_addr & 0x00ff) | ((val as u16) << 8),
+            0xA => self.hdma_flags = val,
             _ => panic!("invalid DMA channel register ${:02X}", reg),
         }
     }

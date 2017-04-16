@@ -529,7 +529,7 @@ impl<M: Mem> Cpu<M> {
     /// Invokes the IRQ handler if interrupts are enabled. Returns whether the interrupt was
     /// generated.
     pub fn trigger_irq(&mut self) -> bool {
-        if !self.p.irq_disable() {
+        if self.p.irq_disable() {
             false
         } else {
             if self.emulation {

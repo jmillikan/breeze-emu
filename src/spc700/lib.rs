@@ -548,6 +548,7 @@ impl Spc700 {
             0xd6 => instr!(_ mov a abs_indexed_y),
             0xc6 => instr!(_ mov a indirect_x),
             0xd7 => instr!(_ mov a indirect_indexed_y),
+            0xc7 => instr!(_ mov a indexed_x_indirect),
             0x7d => instr!(_ mov x a),
             0xd8 => instr!(_ mov x direct),
             0xd9 => instr!(_ mov x direct_indexed_x),
